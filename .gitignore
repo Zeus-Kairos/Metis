@@ -72,6 +72,9 @@ __pycache__/
 # Index files
 index/
 
+# LangGraph API cache directory
+.langgraph_api/
+
 # Environment variables
 .env
 .env.local

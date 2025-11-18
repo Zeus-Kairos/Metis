@@ -2,9 +2,12 @@ import os
 import sys
 import warnings
 from src.agent.rag_agent import RAGAgent, RAGType
+from src.utils.logging_config import setup_logging
 from dotenv import load_dotenv
 
 load_dotenv()
+
+log_level = setup_logging()
 
 # Ignore all UserWarnings
 warnings.filterwarnings("ignore", category=UserWarning)

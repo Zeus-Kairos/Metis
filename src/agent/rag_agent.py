@@ -1,4 +1,5 @@
 from enum import Enum
+import logging
 from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 
 from langchain_core.documents import Document
@@ -12,6 +13,8 @@ from src.agent.prompts import classify_intent_prompt, format_answer_prompt, hand
 from src.rag.rag_flow import RAGFlow
 from src.agent.llm import LLMRunner
 from src.utils.knowledge_base_reader import KnowledgeBaseItem, KnowledgeBaseReader
+
+logger = logging.getLogger(__name__)
 
 class RAGType(Enum):
     """
@@ -36,14 +39,15 @@ class AgentState(TypedDict):
     knowledge_base_item: KnowledgeBaseItem = None
 
 class RAGAgent:
-    def __init__(self, rag_type: RAGType = RAGType.SIMPLE, rag_k: int = 10):
+    def __init__(self, rag_type: RAGType = RAGType.SIMPLE, rag_k: int = 10, on_langgraph_server: bool = False):
         """
         Initialize the agent.
         """
         self.rag_type = rag_type
         self.llm_runner = LLMRunner()
         self.rag_k = rag_k
-
+        self.on_langgraph_server = on_langgraph_server
+        
         self.graph = self._build_graph(rag_type)
 
         self.update_dict = {
@@ -64,12 +68,18 @@ class RAGAgent:
                 graph = self._build_base_graph()
             case _:
                 raise ValueError(f"Unknown RAG type: {rag_type}")
-        return graph.compile(checkpointer=InMemorySaver())
+
+        logger.info(f"graph: {graph}")
+        if self.on_langgraph_server:
+            return graph.compile()
+        else:
+            return graph.compile(checkpointer=InMemorySaver())
 
     def _classify_intent(self, state: AgentState) -> AgentState:
         """
         Classify the intent of the user query.
-        """
+        """     
+
         prompt = classify_intent_prompt(state)
 
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
@@ -77,6 +87,14 @@ class RAGAgent:
         if intent not in ["rag", "chat"]:
             intent = "chat"
 
+        # For debugging with LangGraph server
+        if self.on_langgraph_server:
+            return {
+                "intent": intent,
+                "messages": [{"role": "user", "content": state["query"]}],
+                "knowledge_base_item": KnowledgeBaseReader().get_knowledge_base_item(1),
+            }
+            
         return {
             "intent": intent,
         }
@@ -160,10 +178,14 @@ class RAGAgent:
         """
         Chat with the agent.
         """
+
+        knowledge_base_item = KnowledgeBaseReader().get_knowledge_base_item(knowledge_base_id)
+        logger.info(f"Knowledge base: {knowledge_base_item.path}")
+
         initial_state = {
             "query": query,
             "messages": [{"role": "user", "content": query}],
-            "knowledge_base_item": KnowledgeBaseReader().get_knowledge_base_item(knowledge_base_id),
+            "knowledge_base_item": knowledge_base_item,
         }
 
         config = {"configurable": {"thread_id": 1}}

@@ -77,9 +77,10 @@ def refine_query_prompt(state: TypedDict) -> str:
     knowledge_base_item = state["knowledge_base_item"]
 
     return f"""
-    You are a helpful assistant to help users refine their questions about the knowledge base.   
+    You are a helpful assistant to help users refine their queries about the knowledge base.   
     Based on the conversation history, refine the user query.
     The refined query should be clear, concise, relevant to the user's intent and best for the RAG purpose.
+    Only return the refined query, without any additional explanations.
 
     Knowledge Base: {knowledge_base_item.description}
 
