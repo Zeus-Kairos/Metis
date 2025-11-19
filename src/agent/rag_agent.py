@@ -22,7 +22,7 @@ class RAGType(Enum):
     """
     SIMPLE = "simple"
     QUERY_REFINED = "query_refined"
-    HYBRID = "hybrid"
+    FUSION = "fusion"
 
 class AgentState(TypedDict):
     """
@@ -64,7 +64,7 @@ class RAGAgent:
                 graph = self._build_base_graph()
             case RAGType.QUERY_REFINED:
                 graph = self._build_base_graph()
-            case RAGType.HYBRID:
+            case RAGType.FUSION:
                 graph = self._build_base_graph()
             case _:
                 raise ValueError(f"Unknown RAG type: {rag_type}")
@@ -123,8 +123,8 @@ class RAGAgent:
             refined_query = response.content.strip()
             
         rag_flow = RAGFlow(state["knowledge_base_item"].path)
-        if self.rag_type == RAGType.HYBRID:
-            results = rag_flow.hybrid_retrieve(refined_query, k=self.rag_k)
+        if self.rag_type == RAGType.FUSION:
+            results = rag_flow.fusion_retrieve(refined_query, k=self.rag_k)
             return {
                 "refined_query": refined_query,
                 "ranked_documents": results,

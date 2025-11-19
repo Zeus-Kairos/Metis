@@ -54,7 +54,7 @@ def setup_logging(log_level: Optional[str] = None):
             },
             "file": {
                 "class": "logging.FileHandler",
-                "filename": os.path.join(logs_dir, f"legal_api_{logging.Formatter().formatTime(logging.LogRecord('','','','','','','',''), '%Y-%m-%d')}.log"),
+                "filename": os.path.join(logs_dir, f"metis_{logging.Formatter().formatTime(logging.LogRecord('','','','','','','',''), '%Y-%m-%d')}.log"),
                 "formatter": "standard",
                 "level": log_level,
                 "encoding": "utf-8"

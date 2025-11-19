@@ -60,7 +60,7 @@ class RAGFlow:
         results = self.vector_retriever.invoke(query)
         return results
 
-    def hybrid_retrieve(self, query: str, k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
+    def fusion_retrieve(self, query: str, k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
         """
         Retrieve the top k documents for the query using ensemble retriever.
 
@@ -72,12 +72,14 @@ class RAGFlow:
             List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
         """
         if not self.vector_retriever:
-            self.preprocess(k=k*2)
+            self.preprocess(k=(k+1)//2)
 
         results_vector = self.vector_retriever.invoke(query)
-        bm25_retriever = BM25Retriever.from_documents(results_vector, k=k)
+        bm25_retriever = BM25Retriever.from_documents(self.split_results, k=k//2)
         results_bm25 = bm25_retriever.invoke(query)
-        return results_bm25
+        combined_results = results_vector + results_bm25
+        merged_results = merge_documents(combined_results)
+        return merged_results
 
     def reranked_retrieve(self, query: str, k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
         """
