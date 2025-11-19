@@ -21,7 +21,7 @@ class RAGType(Enum):
     Type of the RAG.
     """
     SIMPLE = "simple"
-    PROMPT_REFINED = "prompt_refined"
+    QUERY_REFINED = "query_refined"
     HYBRID = "hybrid"
 
 class AgentState(TypedDict):
@@ -62,7 +62,7 @@ class RAGAgent:
         match rag_type:
             case RAGType.SIMPLE:
                 graph = self._build_base_graph()
-            case RAGType.PROMPT_REFINED:
+            case RAGType.QUERY_REFINED:
                 graph = self._build_base_graph()
             case RAGType.HYBRID:
                 graph = self._build_base_graph()
