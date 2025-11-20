@@ -94,7 +94,7 @@ def format_answer_prompt(state: TypedDict) -> str:
     """
     Format the answer.
     """
-    documents = state["ranked_documents"] if "ranked_documents" in state else state["documents"]
+    documents = state["documents"]
     # Handle both list[tuple] and list[Document] formats
     if documents and isinstance(documents[0], tuple):
         # Tuple structure: (doc, score)

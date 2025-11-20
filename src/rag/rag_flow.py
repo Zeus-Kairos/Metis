@@ -1,3 +1,5 @@
+from enum import Enum
+import logging
 import os
 from typing import List, Tuple
 from venv import logger
@@ -8,7 +10,17 @@ from src.rag.bm25_scores import BM25Scorer
 from src.rag.embeddings import EmbeddingRunner
 from src.rag.md_splitter import MarkdownSplitter
 from src.utils.reranker import JinaAPIReranker, JinaReRanker, BgeReRanker
-from src.utils.merger import merge_documents
+
+logger = logging.getLogger(__name__)
+
+class RAGType(Enum):
+    """
+    Type of the RAG.
+    """
+    SIMPLE = "simple"
+    QUERY_REFINED = "query_refined"
+    FUSION = "fusion"
+    RERANK = "rerank"
 
 class RAGFlow:
     def __init__(self, file_path: str, index_path: str=None):
@@ -42,7 +54,34 @@ class RAGFlow:
         
         self.vectorstore = FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
 
-    def retrieve(self, query: str, k: int=5, return_scores: bool=False) -> List[Document] | List[Tuple[Document, float]]:
+    def retrieve(self, rag_type: RAGType, query: str, k: int=5, return_scores: bool=False) -> List[Document] | List[Tuple[Document, float]]:
+        """
+        Retrieve the top k documents for the query.
+
+        Args:
+            rag_type (RAGType): The type of RAG.
+            query (str): The query string.
+            k (int, optional): The number of documents to retrieve. Defaults to 5.
+            return_scores (bool, optional): Whether to return the scores of the documents. Defaults to False.
+        
+        Returns:
+            List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
+        """
+        if not self.vectorstore:
+            self.preprocess()
+
+        match rag_type:
+            case RAGType.SIMPLE:
+                results = self.simple_retrieve(query, k=k, return_scores=return_scores)
+            case RAGType.QUERY_REFINED:
+                results = self.simple_retrieve(query, k=k, return_scores=return_scores)
+            case RAGType.FUSION:
+                results = self.fusion_retrieve(query, k=k, return_scores=return_scores)
+            case RAGType.RERANK:
+                results = self.rerank_retrieve(query, k=k, return_scores=return_scores)
+        return results
+
+    def simple_retrieve(self, query: str, k: int=5, return_scores: bool=False) -> List[Document] | List[Tuple[Document, float]]:
         """
         Retrieve the top k documents for the query.
 
@@ -54,9 +93,6 @@ class RAGFlow:
         Returns:
             List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
         """
-        if not self.vectorstore:
-            self.preprocess()
-
         if return_scores:
             results = self.vectorstore.similarity_search_with_relevance_scores(query, k=k)
         else:
@@ -97,7 +133,7 @@ class RAGFlow:
             sorted_results = [all_docs[i] for i in sorted_indices[:k]]
         return sorted_results
 
-    def reranked_retrieve(self, query: str, k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
+    def rerank_retrieve(self, query: str, k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
         """
         Retrieve the top k documents for the query using reranked retriever.
 
@@ -113,8 +149,8 @@ class RAGFlow:
 
         results = self.vectorstore.similarity_search(query, k=k*2)
 
-        re_ranker = JinaReRanker()
-        reranked_results = re_ranker.rerank(query, results)
+        reranker = JinaReRanker()
+        reranked_results = reranker.rerank(query, results)
         reranked_results = reranked_results[:k]
         if return_scores:
             return reranked_results

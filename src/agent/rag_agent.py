@@ -10,20 +10,11 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from src.agent.prompts import classify_intent_prompt, format_answer_prompt, handle_chat_prompt, refine_query_prompt
-from src.rag.rag_flow import RAGFlow
+from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
 from src.utils.knowledge_base_reader import KnowledgeBaseItem, KnowledgeBaseReader
 
 logger = logging.getLogger(__name__)
-
-class RAGType(Enum):
-    """
-    Type of the RAG.
-    """
-    SIMPLE = "simple"
-    QUERY_REFINED = "query_refined"
-    FUSION = "fusion"
-    RERANK = "rerank"
 
 class AgentState(TypedDict):
     """
@@ -34,10 +25,9 @@ class AgentState(TypedDict):
     refined_query: str = None
     messages: Annotated[List[Dict[str, str]], add_messages]
     documents: list[Document] | List[Tuple[Document, float]] = None
-    ranked_documents: list[Document] | List[Tuple[Document, float]] = None
     answer: str
     error_context: str = None
-    knowledge_base_item: KnowledgeBaseItem = None
+    knowledge_base_item: KnowledgeBaseItem = None   
 
 class RAGAgent:
     def __init__(self, rag_type: RAGType = RAGType.SIMPLE, rag_k: int = 10, on_langgraph_server: bool = False):
@@ -72,7 +62,6 @@ class RAGAgent:
             case _:
                 raise ValueError(f"Unknown RAG type: {rag_type}")
 
-        logger.info(f"graph: {graph}")
         if self.on_langgraph_server:
             return graph.compile()
         else:
@@ -126,24 +115,11 @@ class RAGAgent:
             refined_query = response.content.strip()
             
         rag_flow = RAGFlow(state["knowledge_base_item"].path)
-        if self.rag_type == RAGType.FUSION:
-            results = rag_flow.fusion_retrieve(refined_query, k=self.rag_k)
-            return {
-                "refined_query": refined_query,
-                "documents": results,
-            }
-        elif self.rag_type == RAGType.RERANK:
-            results = rag_flow.reranked_retrieve(refined_query, k=self.rag_k)
-            return {
-                "refined_query": refined_query,
-                "ranked_documents": results,
-            }
-        else:
-            results = rag_flow.retrieve(refined_query, k=self.rag_k)
-            return {
-                "refined_query": refined_query,
-                "documents": results,
-            }
+        results = rag_flow.retrieve(self.rag_type, refined_query, k=self.rag_k)
+        return {
+            "refined_query": refined_query,
+            "documents": results,
+        }
 
     def _format_answer(self, state: AgentState) -> str:
         """
