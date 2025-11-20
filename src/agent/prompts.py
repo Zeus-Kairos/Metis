@@ -99,14 +99,14 @@ def format_answer_prompt(state: TypedDict) -> str:
     if documents and isinstance(documents[0], tuple):
         # Tuple structure: (doc, score)
         doc_contents = "\n".join([
-            f"Document {i+1}: {doc[0].page_content}\n['Source: '{doc[0].metadata['file_path']}]"
-            for i, doc in enumerate(documents)
+            f"{doc[0].page_content}\n['Source: '{doc[0].metadata['file_path']}]"
+            for doc in documents
         ])
     else:
         # Regular Document list
         doc_contents = "\n".join([
-            f"Document {i+1}: {doc.page_content}\n['Source: '{doc.metadata['file_path']}]"
-            for i, doc in enumerate(documents)
+            f"{doc.page_content}\n['Source: '{doc.metadata['file_path']}]"
+            for doc in documents
         ])
     query = state["refined_query"] if "refined_query" in state else state["query"]
 

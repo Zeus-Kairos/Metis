@@ -33,7 +33,7 @@ class AgentState(TypedDict):
     intent: str = None
     refined_query: str = None
     messages: Annotated[List[Dict[str, str]], add_messages]
-    documents: list[Document] = None
+    documents: list[Document] | List[Tuple[Document, float]] = None
     ranked_documents: list[Document] | List[Tuple[Document, float]] = None
     answer: str
     error_context: str = None
@@ -66,6 +66,8 @@ class RAGAgent:
             case RAGType.QUERY_REFINED:
                 graph = self._build_base_graph()
             case RAGType.FUSION:
+                graph = self._build_base_graph()
+            case RAGType.RERANK:
                 graph = self._build_base_graph()
             case _:
                 raise ValueError(f"Unknown RAG type: {rag_type}")
