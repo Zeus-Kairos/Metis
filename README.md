@@ -40,10 +40,39 @@ Metis is a Retrieval-Augmented Generation (RAG) application designed to provide 
 ## Configuration
 
 ### Environment Variables
-The application requires several environment variables to be configured:
+The application uses environment variables for configuration. A template file `.env.example` is provided with all required variables:
 
-- **LLM Configuration**
+1. **Copy the example environment file**
+   ```bash
+   copy .env.example .env  # On Windows
+   # OR
+   cp .env.example .env    # On Linux/Mac
+   ```
+
+2. **Edit the `.env` file** to add your personal API keys and configure settings according to your needs.
+
+### Environment Variables Reference
+
+- **Ollama Configuration**
   - `OLLAMA_API_KEY` - Required for Ollama cloud model access
+  - `OLLAMA_MODEL` - Model to use (default: qwen3:8b)
+  - `OLLAMA_EMBED_MODEL` - Embedding model to use (default: nomic-embed-text:latest)
+  - `OLLAMA_BASE_URL` - Ollama API base URL (default: http://localhost:11434)
+
+- **Logging Configuration**
+  - `LOG_LEVEL` - Logging verbosity (INFO, DEBUG, WARNING, ERROR)
+
+- **RAG Configuration**
+  - `RAG_TYPE` - Type of RAG approach to use (fusion, simple, query_refined, rerank)
+  - `RAG_K` - Number of documents to retrieve during search
+
+- **LangSmith Configuration**
+  - `LANGSMITH_TRACING` - Enable/disable LangSmith tracing (true/false)
+  - `LANGSMITH_API_KEY` - Your LangSmith API key
+  - `LANGSMITH_ENDPOINT` - LangSmith API endpoint
+  - `LANGSMITH_PROJECT` - Name of your LangSmith project
+
+- **Reranking Configuration**
   - `JINA_API_KEY` - Required if using Jina API reranker
 
 ### Configuration Files

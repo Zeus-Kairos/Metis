@@ -23,6 +23,7 @@ class RAGType(Enum):
     SIMPLE = "simple"
     QUERY_REFINED = "query_refined"
     FUSION = "fusion"
+    RERANK = "rerank"
 
 class AgentState(TypedDict):
     """
@@ -125,6 +126,12 @@ class RAGAgent:
         rag_flow = RAGFlow(state["knowledge_base_item"].path)
         if self.rag_type == RAGType.FUSION:
             results = rag_flow.fusion_retrieve(refined_query, k=self.rag_k)
+            return {
+                "refined_query": refined_query,
+                "documents": results,
+            }
+        elif self.rag_type == RAGType.RERANK:
+            results = rag_flow.reranked_retrieve(refined_query, k=self.rag_k)
             return {
                 "refined_query": refined_query,
                 "ranked_documents": results,
