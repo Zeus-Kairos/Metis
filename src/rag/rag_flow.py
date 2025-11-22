@@ -160,7 +160,7 @@ class RAGFlow:
         else:
             return [doc for doc, _ in reranked_results]
 
-    def filtered_retrieve(self, query: str, filter: Dict[str, Any], k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
+    def filtered_retrieve(self, query: str, filter: Dict[str, Any], k: int=5, return_scores: bool=False) -> List[Document] | List[Tuple[Document, float]]:
         """
         Retrieve the top k documents for the query using filtered vectorstore.
 
@@ -172,5 +172,8 @@ class RAGFlow:
         Returns:
             List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
         """
-        results = self.vectorstore.similarity_search(query, k=k, filter=filter)
+        if return_scores:
+            results = self.vectorstore.similarity_search_with_score(query, k=k, filter=filter)
+        else:
+            results = self.vectorstore.similarity_search(query, k=k, filter=filter)
         return results

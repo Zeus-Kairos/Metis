@@ -29,14 +29,14 @@ def retrieve_tool(query: str, search_path: str, runtime: ToolRuntime) -> str:
                 filters[f"category_level_{i+1}"] = category.strip()
         else:
             # 2. if search_path is a file, split file path into categories and file_path
-            # e.g. "folder1/folder2/file.md" -> {"category_level_1": "folder1", "category_level_2": "folder2", "file_path": "file.md"}
+            # e.g. "folder1/folder2/file.md" -> {"category_level_1": "folder1", "category_level_2": "folder2", "file_path": "folder1/folder2/file.md"}
             sections = search_path.split("/")
             if len(sections) > 1:
                 for i, category in enumerate(sections[:-1]):
                     filters[f"category_level_{i+1}"] = category.strip()
             else:
                 filters["category_level_0"] = "root"
-            filters["file_path"] = search_path.split("/")[-1]
+            filters["file_path"] = search_path
 
     logger.info(f"Retriever Filters: {filters}")
 
