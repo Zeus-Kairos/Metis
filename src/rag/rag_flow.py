@@ -1,7 +1,7 @@
 from enum import Enum
 import logging
 import os
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 from venv import logger
 import numpy as np
 from langchain_core.documents import Document
@@ -21,6 +21,7 @@ class RAGType(Enum):
     QUERY_REFINED = "query_refined"
     FUSION = "fusion"
     RERANK = "rerank"
+    AGENTIC = "agentic"
 
 class RAGFlow:
     def __init__(self, file_path: str, index_path: str=None):
@@ -29,6 +30,8 @@ class RAGFlow:
         self.index_path = index_path if index_path else f"./index/{file_path.split('/')[-1].split('.')[0]}"
         self.split_results = None
         self.vectorstore = None
+
+        self.preprocess()
 
     def preprocess(self):
         """
@@ -52,7 +55,8 @@ class RAGFlow:
             self.vectorstore = FAISS.from_documents(split_results, self.embeddings)
             self.vectorstore.save_local(self.index_path)
         
-        self.vectorstore = FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
+        if not self.vectorstore:
+            self.vectorstore = FAISS.load_local(self.index_path, self.embeddings, allow_dangerous_deserialization=True)
 
     def retrieve(self, rag_type: RAGType, query: str, k: int=5, return_scores: bool=False) -> List[Document] | List[Tuple[Document, float]]:
         """
@@ -67,9 +71,6 @@ class RAGFlow:
         Returns:
             List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
         """
-        if not self.vectorstore:
-            self.preprocess()
-
         match rag_type:
             case RAGType.SIMPLE:
                 results = self.simple_retrieve(query, k=k, return_scores=return_scores)
@@ -79,6 +80,8 @@ class RAGFlow:
                 results = self.fusion_retrieve(query, k=k, return_scores=return_scores)
             case RAGType.RERANK:
                 results = self.rerank_retrieve(query, k=k, return_scores=return_scores)
+            case RAGType.AGENTIC:
+                results = self.fusion_retrieve(query, k=k, return_scores=return_scores)
         return results
 
     def simple_retrieve(self, query: str, k: int=5, return_scores: bool=False) -> List[Document] | List[Tuple[Document, float]]:
@@ -101,7 +104,7 @@ class RAGFlow:
 
     def fusion_retrieve(self, query: str, k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
         """
-        Retrieve the top k documents for the query using ensemble retriever.
+        Retrieve the top k documents for the query using fusion retriever.
 
         Args:
             query (str): The query string.
@@ -156,3 +159,18 @@ class RAGFlow:
             return reranked_results
         else:
             return [doc for doc, _ in reranked_results]
+
+    def filtered_retrieve(self, query: str, filter: Dict[str, Any], k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
+        """
+        Retrieve the top k documents for the query using filtered vectorstore.
+
+        Args:
+            query (str): The query string.
+            filter (Dict[str, Any]): The filter to apply to the vectorstore.
+            k (int, optional): The number of documents to retrieve. Defaults to 5.
+        
+        Returns:
+            List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
+        """
+        results = self.vectorstore.similarity_search(query, k=k, filter=filter)
+        return results

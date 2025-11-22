@@ -11,6 +11,7 @@ class KnowledgeBaseItem:
     id: int
     name: str
     path: str
+    index_path: str
     description: str
 
 class KnowledgeBaseReader:
@@ -77,6 +78,7 @@ class KnowledgeBaseReader:
                     id=item_dict.get('id'),
                     name=item_dict.get('name'),
                     path=item_dict.get('path'),
+                    index_path=item_dict.get('index_path'),
                     description=item_dict.get('description')
                 )
                 items.append(item)

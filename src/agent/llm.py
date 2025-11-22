@@ -102,7 +102,7 @@ class LLMRunner:
             self._initialize_chat_model()
         return self._chat_model
 
-    def chat_model_with_tools(self, tools: Sequence[BaseTool]) -> ChatOllama:
+    def chat_model_with_tools(self, tools: Sequence[BaseTool]):
         """
         Get the initialized chat model instance with tools bound.
         
@@ -136,12 +136,13 @@ class LLMRunner:
         """
         self.tokens = {}
     
-    def invoke(self, messages, **kwargs):
+    def invoke(self, messages, tools: Sequence[BaseTool] = None, **kwargs):
         """
         Convenience method to invoke the chat model directly.
         
         Args:
             messages: Messages to pass to the chat model
+            tools: Sequence of BaseTool instances to bind to the chat model
             **kwargs: Additional parameters to pass to the chat model
             
         Returns:
@@ -150,10 +151,14 @@ class LLMRunner:
 
         if self.chat_model:
             try:
-                response = self.chat_model.invoke(messages, **kwargs)
-                if not response.content.strip():
-                    logger.error(f"Empty response from chat model {self.chat_model.model}")
-                    raise Exception(f"Empty response from chat model {self.chat_model.model}")
+                if tools:
+                    logger.info(f"Invoked chat model {self.chat_model.model} with tools [{', '.join([tool.name for tool in tools])}]")
+                    response = self.chat_model_with_tools(tools).invoke(messages, **kwargs)              
+                    if hasattr(response, 'tool_calls') and response.tool_calls:
+                        for tool_call in response.tool_calls:
+                            logger.info(tool_call)
+                else:
+                    response = self.chat_model.invoke(messages, **kwargs)
                 frame = inspect.currentframe().f_back
                 caller_name = frame.f_code.co_name.lstrip("_") if frame else "unknown"
                 logger.info(f"Metadata for {caller_name}: {response.usage_metadata}")

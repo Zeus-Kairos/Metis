@@ -2,14 +2,17 @@ from enum import Enum
 import logging
 from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 
+from langchain.tools import ToolRuntime, tool
 from langchain_core.documents import Document
-from langchain_core.messages import SystemMessage
+from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain_community.document_compressors import FlashrankRerank
 from langchain.agents import create_agent
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
-from src.agent.prompts import classify_intent_prompt, format_answer_prompt, handle_chat_prompt, refine_query_prompt
+from langgraph.prebuilt import ToolNode, tools_condition
+from src.agent.tools import retrieve_tool
+from src.agent.prompts import classify_intent_prompt, complement_answer_prompt, deep_rag_prompt, filter_documents_prompt, format_answer_prompt, handle_chat_prompt, refine_query_prompt
 from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
 from src.utils.knowledge_base_reader import KnowledgeBaseItem, KnowledgeBaseReader
@@ -28,6 +31,12 @@ class AgentState(TypedDict):
     answer: str
     error_context: str = None
     knowledge_base_item: KnowledgeBaseItem = None   
+
+class AgenticAgentState(AgentState):
+    """
+    State of the agentic agent.
+    """
+    retrieve_tries: int = 0
 
 class RAGAgent:
     def __init__(self, rag_type: RAGType = RAGType.SIMPLE, rag_k: int = 10, on_langgraph_server: bool = False):
@@ -59,6 +68,8 @@ class RAGAgent:
                 graph = self._build_base_graph()
             case RAGType.RERANK:
                 graph = self._build_base_graph()
+            case RAGType.AGENTIC:
+                graph = self._build_agentic_graph()
             case _:
                 raise ValueError(f"Unknown RAG type: {rag_type}")
 
@@ -121,16 +132,56 @@ class RAGAgent:
             "documents": results,
         }
 
-    def _format_answer(self, state: AgentState) -> str:
+    def _filter_documents(self, state: AgentState) -> AgentState:
+        """
+        Filter the documents.
+        """
+        documents = state["documents"]
+        if self.rag_type == RAGType.SIMPLE:
+            return {"documents": documents}
+        else:
+            prompt = filter_documents_prompt(state)
+            response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+            try:
+                filtered_document_indices = list(map(int, response.content.strip().split(",")))
+            except ValueError:
+                filtered_document_indices = list(range(len(documents)))
+            return {
+                "documents": [documents[i] for i in filtered_document_indices],
+            }
+
+    def _format_answer(self, state: AgentState) -> AgentState:
         """
         Format the answer.
         """
-        prompt = format_answer_prompt(state)
+        if "answer" not in state or not state["answer"]:
+            prompt = format_answer_prompt(state)
+        else:
+            prompt = complement_answer_prompt(state)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
         
         return {
             "answer": response.content.strip(),
             "messages": [response],
+        }
+
+    def _deep_rag(self, state: AgenticAgentState) -> AgenticAgentState:
+        """
+        Handle the deep RAG.
+        """
+        MAX_RETRIEVE_TRIES = 3
+        retrieve_tries = state["retrieve_tries"] if "retrieve_tries" in state else 0
+        if retrieve_tries >= MAX_RETRIEVE_TRIES:
+            return {
+                "messages": [AIMessage(content="retrieve finished.")],
+                "retrieve_tries": 0,
+            }
+
+        prompt = deep_rag_prompt(state)
+        response = self.llm_runner.invoke([SystemMessage(content=prompt)], [retrieve_tool])
+        return {
+            "messages": [response],
+            "retrieve_tries": retrieve_tries + 1,
         }
 
     def _build_base_graph(self) -> StateGraph:
@@ -142,6 +193,7 @@ class RAGAgent:
         graph.add_node("classify_intent", self._classify_intent)
         graph.add_node("handle_rag", self._handle_rag)
         graph.add_node("handle_chat", self._handle_chat)
+        graph.add_node("filter_documents", self._filter_documents)
         graph.add_node("format_answer", self._format_answer)
 
         graph.add_edge(START, "classify_intent")
@@ -154,11 +206,54 @@ class RAGAgent:
             }
         )
         graph.add_edge("handle_chat", END)
-        graph.add_edge("handle_rag", "format_answer")
+        graph.add_edge("handle_rag", "filter_documents")
+        graph.add_edge("filter_documents", "format_answer")
         graph.add_edge("format_answer", END)     
 
         return graph
 
+    def _build_agentic_graph(self) -> StateGraph:
+        """
+        Build the agentic graph for the agent.
+        """
+        graph = StateGraph(AgenticAgentState)
+
+        graph.add_node("classify_intent", self._classify_intent)
+        graph.add_node("handle_rag", self._handle_rag)
+        graph.add_node("handle_chat", self._handle_chat)
+        graph.add_node("filter_documents", self._filter_documents)
+        graph.add_node("format_answer", self._format_answer)
+        graph.add_node("deep_rag", self._deep_rag)
+        graph.add_node("deep_retrieve", ToolNode([retrieve_tool]))
+
+        graph.add_edge(START, "classify_intent")
+        graph.add_conditional_edges(
+            "classify_intent",
+            lambda state: state["intent"],
+            {
+                "rag": "handle_rag",
+                "chat": "handle_chat",
+            }
+        )
+        graph.add_edge("handle_chat", END)
+        graph.add_edge("handle_rag", "filter_documents")
+        graph.add_edge("filter_documents", "format_answer")
+        graph.add_edge("format_answer", "deep_rag")
+        graph.add_conditional_edges(
+            "deep_rag",
+            # Assess LLM decision (call `retriever_tool` tool or respond to the user)
+            tools_condition,
+            {
+                # Translate the condition outputs to nodes in our graph
+                "tools": "deep_retrieve",
+                END: END,
+            },
+        )
+
+        graph.add_edge("deep_retrieve", "format_answer")     
+
+        return graph
+    
     def chat(self, query: str, knowledge_base_id: int = 1) -> Generator[Dict[str, Any], None, None]:
         """
         Chat with the agent.
