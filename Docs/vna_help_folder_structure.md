@@ -1,7 +1,5 @@
 # VNA_Help_MD Folder Structure and Description
 
-## Root Directory: c:\Apps\Metis\Docs\VNA_Help_MD
-
 ## Summary
 
 The VNA_Help_MD folder contains comprehensive documentation for Keysight VNA (Vector Network Analyzer) instruments. The documentation is organized in a logical workflow sequence (S0-S5) from getting started to output, along with specialized sections for applications, GUI reference, SCPI commands, tutorials, and support information. The structure follows a progression from basic to advanced topics, allowing users to find relevant information based on their needs and experience level.

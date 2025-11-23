@@ -31,6 +31,8 @@ class RAGFlow:
         self.split_results = None
         self.vectorstore = None
 
+        logger.info(f"RAGFlow initialized with file_path: {self.file_path} and index_path: {self.index_path}")
+
         self.preprocess()
 
     def preprocess(self):
@@ -113,9 +115,6 @@ class RAGFlow:
         Returns:
             List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
         """
-        if not self.vectorstore:
-            self.preprocess()
-
         all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
         all_docs = [doc for doc, _ in all_docs_with_scores]
         vector_scores = [score for _, score in all_docs_with_scores]
@@ -147,9 +146,6 @@ class RAGFlow:
         Returns:
             List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
         """
-        if not self.vectorstore:
-            self.preprocess()
-
         results = self.vectorstore.similarity_search(query, k=k*2)
 
         reranker = JinaReRanker()
@@ -176,4 +172,28 @@ class RAGFlow:
             results = self.vectorstore.similarity_search_with_score(query, k=k, filter=filter)
         else:
             results = self.vectorstore.similarity_search(query, k=k, filter=filter)
+        return results
+
+    def filtered_ensemble_retrieve(self, query: str, filter: Dict[str, Any], k: int=5) -> List[Document]:
+        """
+        Retrieve the top k documents for the query using filtered fusion retriever.
+
+        Args:
+            query (str): The query string.
+            filter (Dict[str, Any]): The filter to apply to the vectorstore.
+            k (int, optional): The number of documents to retrieve. Defaults to 5.
+        
+        Returns:
+            List[Document]: The list of documents.
+        """                 
+        results = self.vectorstore.similarity_search(query, k=k, filter=filter)
+        if len(results) < k:
+            all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
+            all_docs = [doc for doc, _ in all_docs_with_scores if all(doc.metadata.get(k) == v for k, v in filter.items())]
+            logger.info(f"There are {len(all_docs)} docs with filter: {filter}")
+            bm25_scorer = BM25Scorer.from_documents(all_docs)
+            bm25_scores = bm25_scorer.get_scores(query)
+            sorted_indices = np.argsort(bm25_scores)[::-1]
+            sorted_results = [all_docs[i] for i in sorted_indices[:k-len(results)]]
+            results += sorted_results
         return results

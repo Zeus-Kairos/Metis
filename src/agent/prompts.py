@@ -1,5 +1,6 @@
 import logging
-from typing import TypedDict
+from typing import List, Tuple, TypedDict
+from langchain_core.documents import Document
 from langchain_core.messages.utils import (  
     trim_messages,  
     count_tokens_approximately  
@@ -95,12 +96,11 @@ def refine_query_prompt(state: TypedDict) -> str:
     Refined Query:
     """
 
-def filter_documents_prompt(state: TypedDict) -> str:
+def filter_documents_prompt(query: str, documents: List[Document] | List[Tuple[Document, float]]) -> str:
     """
     Filter the documents.
     """
-    documents = state["documents"]
-    query = state["refined_query"]
+    
     doc_contents = format_documents(documents, with_index=True)  
 
     return f"""
@@ -141,21 +141,30 @@ def complement_answer_prompt(state: TypedDict) -> str:
     Complement the answer.
     """
     answer = state["answer"]
-    documents = state["documents"]
-    # Handle both list[tuple] and list[Document] formats
-    doc_contents = format_documents(documents, with_index=False)  
-    query = state["refined_query"] if "refined_query" in state else state["query"]
+    documents = state["additional_documents"]
+
+    additional_info = "\n"
+    for query, docs in documents.items():
+        # Handle both list[tuple] and list[Document] formats
+        doc_contents = format_documents(docs, with_index=False)  
+        additional_info += f"Documents about {query}:\n{doc_contents}\n"
+    base_query = state["refined_query"]
 
     return f"""
-    You are a helpful assistant to complement the answer based on new documents. 
-    To address the user's query, find out the most relevant information from the documents to complement the current answer.
-    The response should be friendly, concise, and relevant to the user's query.
-    If the new documents do not contain the information needed, just keep the current answer.
+    You are a helpful assistant to generate an answer based on the original answer and additional documents. 
+    You've already provided an answer to the user's query.
+    The additional documents are related to additional aspects to the user's query.
+    rewrite a new answer based on the original answer and the additional information.
+    The answer should be friendly, concise, and relevant to the user's query.
+    The citation in the original answer should be included in the new answer.
 
-    Current Answer: {answer}
-    New Documents: {doc_contents}
-    User: {query}
+    Constraints:
+    - Do not make up information that is not in the original answer or the additional documents.
 
+    Original Query: {base_query}
+    Original Answer: {answer}
+    Additional Documents: {additional_info}
+    
     Assistant:
     """
 
@@ -163,12 +172,14 @@ def deep_rag_prompt(state: TypedDict) -> str:
     """
     Deep RAG prompt.
     """
-    query = state["refined_query"] if "refined_query" in state else state["query"]
+    query = state["refined_query"]
     answer = state["answer"]
     knowledge_base_index_path = state["knowledge_base_item"].index_path
     # read the markdown index file
     with open(knowledge_base_index_path, 'r') as f:
         index = f.read()
+
+    searched_paths = "\n".join(state["searched_path"]) if "searched_path" in state else "None"
 
     return f"""
     You are a helpful assistant to help retrieve the most relevant information from the knowledge base.   
@@ -176,10 +187,16 @@ def deep_rag_prompt(state: TypedDict) -> str:
     You have access to the knowledge base index. The index contains the knowledge base structure and description of each folder.
     You also have a retrieval tool to find relevant documents in a specific folder in the knowledge base.
     You need to decide what additional information to retrieve and use the retrieval tool to search certain information from a specific folder.
+    Use relative path to specify the search_path.
+
     If the current answer to the query is sufficient, return "end" to stop the RAG process.
+
+    Constraints:
+    - Do not search the paths that have been searched before.
 
     Knowledge Base Index: {index}
 
     User: {query}
     User Current Answer: {answer}
+    Searched Paths: {searched_paths}
     """
