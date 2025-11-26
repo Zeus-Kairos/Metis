@@ -57,7 +57,7 @@ class LLMRunner:
         Initialize the chat model instance.
         """
 
-        if not self.base_url.startswith("http://localhost"):
+        if not self.base_url.startswith("http://localhost") and not self.base_url.startswith("https://ollama.com"):
             self._chat_model = None
             return
 
@@ -76,7 +76,7 @@ class LLMRunner:
         Initialize the embedding model instance.
         """
 
-        if not self.base_url.startswith("http://localhost"):
+        if not self.base_url.startswith("http://localhost") and not self.base_url.startswith("https://ollama.com"):
             self._embedding_model = None
             return
 

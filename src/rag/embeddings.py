@@ -41,7 +41,7 @@ class EmbeddingRunner:
         Initialize the embedding model instance.
         """
 
-        if not self.base_url.startswith("http://localhost"):
+        if not self.base_url.startswith("http://localhost") and not self.base_url.startswith("https://ollama.com"):
             self._embedding_model = None
             return
 
