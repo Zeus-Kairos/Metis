@@ -1,0 +1,92 @@
+=============== Level 1: Direct Retrieval =============== 
+
+1. How to handle and store connectors?
+
+- Install protective end caps when connectors are not in use.
+- Never store connectors, airlines, or calibration standards loose in a box. This is a common cause of connector damage.
+- Keep connector temperature the same as analyzer. Holding the connector in your hand or cleaning connector with compressed air can significantly change the temperature. Wait for connector temperature to stabilize before using in calibration or measurements.
+- Do not touch mating plane surfaces. Natural skin oils and microscopic particles of dirt are difficult to remove from these surfaces.
+- Do not set connectors contact-end down on a hard surface. The plating and mating plane surfaces can be damaged if the interface comes in contact with any hard surface.
+- Wear a grounded wrist strap and work on a grounded, conductive table mat. This helps protect the analyzer and devices from electrostatic discharge (ESD).
+
+
+2. What are Measurement Classes?
+
+Measurement Classes are categories of measurements that can coexist on a channel. A measurementfrom one class can NOT reside in a channel with a measurement from anotherclass. For example, a Noise Figure measurement can NOT reside in a channelthat is currently hosting Scalar Mixer Measurements.
+
+
+ =============== Level 2: Basic Fusion =============== 
+
+ 1. Summary and list all the sweep types
+
+- Linear Frequency
+- Log Frequency
+- Power Sweep
+- CW Time
+- Segment Sweep
+- Phase Sweep
+
+
+2. What are the measurement errors? How to reduce them?
+
+- Measurement errors include drift errors, random errors and systematic errors.
+- Drift errors are due to the instrument or test-system performance changing after a calibration has been done. They are primarily caused by thermal expansion characteristics of interconnecting cables within the test set and conversion stability of the microwave frequency converter.
+- Drift errors can be removed by re-calibrating. And providing a stable ambient temperature usually minimizes drift.
+- Random errors include instrument noise errors, switch repeatability errors and connector repeatability errors. 
+- Random errors are not predictable and cannot be removed through error correction. However, there are things that can be done to minimize their impact on measurement accuracy.
+- Instrument noise errors can be reduced by increasing the source power, narrowing the IF bandwidth and applying several measurement averages.
+- Switch repeatability errors can be reduced by avoiding switching attenuator settings during a critical measurement.
+- Connector repeatability errors can be reduced by practicing good connector care methods.
+- Systematic errors can be characterized during the calibration process and mathematically reduced during measurements. However, they are never completely removed. There are always some residual errors due to limitations in the calibration process.
+
+
+
+=============== Level 3: Multi-Source Reasoning =============== 
+
+1. Does N5245B with option 425 support start frequency down to 900 Hz?
+
+- Yes. LFE option is available for N5245B with option 425.
+
+
+2. Compare linear frequency sweep and segment sweep.
+
+- Linear frequency sweep can be set by pressing Sweep > Main > Sweep Type, then check "Linear frequency".
+- Linear frequency sweep sets a linear frequency sweep that is displayed on a standard grid with ten equal horizontal divisions.
+- Linear frequency sweep includes the following settings: start frequency, stop frequency, points, power, IF bandwidth and use center/span.
+- Segment Sweep can be set by pressing Sweep > Segment Table > Segment Table.
+- Segment Sweep activates a sweep which consists of frequency sub-sweeps, called segments.
+- The following settings are independent per segment: power level, IF bandwidth, IF bandwidth per port, sweep time, dwell time, vector averaging, video bandwidth, delay, sweep mode, shift LO, receiver atten per port, reference tone and SA data threshold.
+
+
+=============== Level 4: Contextual Synthesis =============== 
+
+1. How to add a segment into a segment sweep settings? Tell me the way by softkey and by programming.
+
+- You can press Sweep > Segment Table > Segment Table, then click "Add Segment" in segment table softkey
+- You can also call the command SENSe<cnum>:SEGMent<snum>:ADD to add a segment
+	<cnum>
+ 		Any existing channel number. If unspecified, value is set to 1
+	<snum>
+ 		Segment number to add. If unspecified, value is set to 1. Segment numbers must be sequential. If a new number is added where one currently exists, the existing segment and those following are incremented by one.
+ 
+
+2. Tell me two techniques to reduce noise. How to set them in PNA?
+
+- Both averaging and IF bandwidth can be used for noise reduction.
+- You can set averaging by pressing Avg BW > Main > Averaging. Check average ON. Enter the averaging number. And select average type "Sweep" or "Point".
+- You can set IF Bandwidth by pressing Avg BW > Main > IF BW. Enter the IF bandwidth value. Select IFBW shape "Standard", "Gaussian" and "Rectangular".
+
+
+=============== Level 5: Deep Inference =============== 
+
+1. I apply a cal set to a measurement in PNA, and ensure the error correction is turned on. The IF bandwidth in the cal set is 300MHz. And the IF bandwidth in the measurement is 100MHz. What correction level will be shown in the correction status bar?
+
+- "C-delta" will appear in the status bar because IF bandwidth is changed in measurement
+
+
+2. I set two segments in a segment sweep. The frequency range in the first segment is from 10MHz to 2GHz. The frequency range in the second segment is from 1GHz to 8GHz. Is it allowed?
+
+- No. It is not allowed to overlap the frequency range between segments.
+
+
+
