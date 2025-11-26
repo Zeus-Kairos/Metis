@@ -191,9 +191,10 @@ class RAGFlow:
             all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
             all_docs = [doc for doc, _ in all_docs_with_scores if all(doc.metadata.get(k) == v for k, v in filter.items())]
             logger.info(f"There are {len(all_docs)} docs with filter: {filter}")
-            bm25_scorer = BM25Scorer.from_documents(all_docs)
-            bm25_scores = bm25_scorer.get_scores(query)
-            sorted_indices = np.argsort(bm25_scores)[::-1]
-            sorted_results = [all_docs[i] for i in sorted_indices[:k-len(results)]]
-            results += sorted_results
+            if len(all_docs) > 0:
+                bm25_scorer = BM25Scorer.from_documents(all_docs)
+                bm25_scores = bm25_scorer.get_scores(query)
+                sorted_indices = np.argsort(bm25_scores)[::-1]
+                sorted_results = [all_docs[i] for i in sorted_indices[:k-len(results)]]
+                results += sorted_results
         return results

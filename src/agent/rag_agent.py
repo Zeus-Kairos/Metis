@@ -9,11 +9,13 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode, tools_condition
+from numpy import add
 from src.agent.tools import retrieve_tool
 from src.agent.prompts import classify_intent_prompt, complement_answer_prompt, deep_rag_prompt, filter_documents_prompt, format_answer_prompt, handle_chat_prompt, refine_query_prompt
 from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
 from src.utils.knowledge_base_reader import KnowledgeBaseItem, KnowledgeBaseReader
+from src.utils.merger import merge_documents
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +192,7 @@ class RAGAgent:
             else:
                 break
         
-        additional_documents = {}
+        additional_documents = state["additional_documents"] if "additional_documents" in state else {}
         searched_path = state["searched_path"] if "searched_path" in state else set()
         for tool_message in tool_messages:
             context = tool_message.artifact
@@ -218,11 +220,17 @@ class RAGAgent:
     def _complement_answer(self, state: DeepRAGState) -> DeepRAGState:
         """
         Complement the answer with the documents.
-        """
+        """       
         prompt = complement_answer_prompt(state)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        documents = state["documents"]
+        if documents and isinstance(documents[0], tuple):
+            documents = [doc for doc, _ in documents]
+        merged_documents = merge_documents(documents + [doc for sublist in state["additional_documents"].values() for doc in sublist])
         return {
             "answer": response.content.strip(),
+            "documents": merged_documents,
+            "additional_documents": {}
         }
 
     def _build_base_graph(self) -> StateGraph:

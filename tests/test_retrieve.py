@@ -18,12 +18,16 @@ test_case_3 = {
     "query": "noise",
     "filters": {'category_level_1': 'Programming', 'category_level_2': 'GP-IB_Command_Finder'},
 }
-test_cases = [test_case_1, test_case_2]
+test_case_4 = {
+    "query": "IF bandwidth SCPI commands",
+    "filters": {'category_level_1': 'Programming', 'category_level_2': 'GPIB_Command_Finder'},
+}
+test_cases = [test_case_1, test_case_2, test_case_3, test_case_4]
 rag_flow = RAGFlow("Docs/VNA_Help_MD")
-for test_case in test_cases:
-    results = rag_flow.filtered_retrieve(test_case["query"], test_case["filters"])
-    print(f"Retrieve {len(results)} results for query: {test_case['query']}")
-    print("\n")
+# for test_case in test_cases:
+#     results = rag_flow.filtered_retrieve(test_case["query"], test_case["filters"])
+#     print(f"Retrieve {len(results)} results for query: {test_case['query']}")
+#     print("\n")
 
 for test_case in test_cases:
     results = rag_flow.filtered_ensemble_retrieve(test_case["query"], test_case["filters"])

@@ -76,6 +76,32 @@ Measurement Classes are categories of measurements that can coexist on a channel
 - You can set averaging by pressing Avg BW > Main > Averaging. Check average ON. Enter the averaging number. And select average type "Sweep" or "Point".
 - You can set IF Bandwidth by pressing Avg BW > Main > IF BW. Enter the IF bandwidth value. Select IFBW shape "Standard", "Gaussian" and "Rectangular".
 
+*Metis Answer*
+Two noise reduction techniques for the PNA (Keysight VNA) and their SCPI command settings are:
+
+Sweep Averaging
+
+Purpose: Reduces noise by averaging multiple sweeps.
+
+SCPI Commands:
+
+SENSe:AVERage:MODE
+ (set averaging mode, e.g., SWEPT or LOG).
+
+SENSe:AVERage:COUNt
+ (specify the number of averages).
+
+SENSe:AVERage:STATe
+ (enable/disable averaging).
+
+Reducing IF Bandwidth
+
+Purpose: Lowers the noise floor by narrowing the intermediate frequency (IF) bandwidth.
+
+Note: While this technique is recommended (e.g., for reject band measurements), specific SCPI commands for adjusting IF bandwidth are not detailed in the provided documents. Refer to the 
+IF Bandwidth section in the Trace Noise documentation for configuration guidance.
+
+For detailed SCPI command syntax, consult the Sense:Average Commands section.
 
 =============== Level 5: Deep Inference =============== 
 
@@ -86,7 +112,7 @@ Measurement Classes are categories of measurements that can coexist on a channel
 
 2. I set two segments in a segment sweep. The frequency range in the first segment is from 10MHz to 2GHz. The frequency range in the second segment is from 1GHz to 8GHz. Is it allowed?
 
-- No. It is not allowed to overlap the frequency range between segments.
+- Yes, overlapping frequency ranges are allowed in two segments of a segment sweep on a Keysight VNA, but with specific conditions and setup steps.
 
 
 

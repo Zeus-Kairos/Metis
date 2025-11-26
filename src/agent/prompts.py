@@ -156,7 +156,6 @@ def complement_answer_prompt(state: TypedDict) -> str:
     The additional documents are related to additional aspects to the user's query.
     rewrite a new answer based on the original answer and the additional information.
     The answer should be friendly, concise, and relevant to the user's query.
-    The citation in the original answer should be included in the new answer.
 
     Constraints:
     - Do not make up information that is not in the original answer or the additional documents.
@@ -192,7 +191,7 @@ def deep_rag_prompt(state: TypedDict) -> str:
     If the current answer to the query is sufficient, return "end" to stop the RAG process.
 
     Constraints:
-    - Do not search the paths that have been searched before.
+    - Do not search the paths that are already in the Searched Paths.
 
     Knowledge Base Index: {index}
 
