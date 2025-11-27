@@ -42,7 +42,7 @@ def retrieve_tool(query: str, search_path: str, runtime: ToolRuntime) -> Tuple[s
     logger.info(f"[retrieve_tool] Retriever Filters: {filters}")
 
     rag_flow = RAGFlow(runtime.state["knowledge_base_item"].path)
-    results = rag_flow.filtered_ensemble_retrieve(query, filters)
+    results = rag_flow.filtered_fusion_retrieve(query, filters)
 
     return ("Documents retrieved", 
         {   "query": query,

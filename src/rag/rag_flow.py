@@ -176,7 +176,7 @@ class RAGFlow:
 
     def filtered_ensemble_retrieve(self, query: str, filter: Dict[str, Any], k: int=5) -> List[Document]:
         """
-        Retrieve the top k documents for the query using filtered fusion retriever.
+        Retrieve the top k documents for the query using filtered ensemble retriever.
 
         Args:
             query (str): The query string.
@@ -198,3 +198,38 @@ class RAGFlow:
                 sorted_results = [all_docs[i] for i in sorted_indices[:k-len(results)]]
                 results += sorted_results
         return results
+
+    def filtered_fusion_retrieve(self, query: str, filter: Dict[str, Any], k: int=5) -> List[Document]:
+        """
+        Retrieve the top k documents for the query using filtered fusion retriever.
+
+        Args:
+            query (str): The query string.
+            filter (Dict[str, Any]): The filter to apply to the vectorstore.
+            k (int, optional): The number of documents to retrieve. Defaults to 5.
+        
+        Returns:
+            List[Document]: The list of documents.
+        """                 
+        all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
+        filtered = [(doc, score) for doc, score in all_docs_with_scores if all(doc.metadata.get(k) == v for k, v in filter.items())]
+        filtered_docs = [doc for doc, _ in filtered]
+        logger.info(f"There are {len(filtered_docs)} docs with filter: {filter}")
+       
+        if len(filtered_docs) > k:
+            vector_scores = [score for _, score in filtered]
+            bm25_scorer = BM25Scorer.from_documents(filtered_docs)
+            bm25_scores = bm25_scorer.get_scores(query)
+
+            # Nomalize scores
+            epsilon = 1e-6
+            alpha = 0.5
+        
+            vector_scores = 1 - (vector_scores - np.min(vector_scores)) / (np.max(vector_scores) - np.min(vector_scores) + epsilon)
+            bm25_scores = (bm25_scores - np.min(bm25_scores)) / (np.max(bm25_scores) -  np.min(bm25_scores) + epsilon)
+            combined_scores = alpha * vector_scores + (1 - alpha) * bm25_scores  
+            sorted_indices = np.argsort(combined_scores)[::-1]
+            sorted_results = [filtered_docs[i] for i in sorted_indices[:k]]           
+            return sorted_results
+        else:
+            return filtered_docs
