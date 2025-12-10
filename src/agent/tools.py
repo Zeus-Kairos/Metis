@@ -8,12 +8,13 @@ from src.rag.rag_flow import RAGFlow
 logger = logging.getLogger(__name__)
 
 @tool("retrieve", response_format="content_and_artifact")
-def retrieve_tool(query: str, search_path: str, runtime: ToolRuntime) -> Tuple[str, dict]:
+def retrieve_tool(query: str, search_path: str, k: int, runtime: ToolRuntime) -> Tuple[str, dict]:
     """
     Retrieve documents within certain search path for the RAG.
     Args:
         query (str): The query to retrieve documents.
         search_path (str): The search path to filter documents.
+        k (int): The number of documents to retrieve. max 10.
     Returns:
         A tuple of (content, artifact) where artifact is the documents retrieved.
     """
@@ -42,7 +43,7 @@ def retrieve_tool(query: str, search_path: str, runtime: ToolRuntime) -> Tuple[s
     logger.info(f"[retrieve_tool] Retriever Filters: {filters}")
 
     rag_flow = RAGFlow(runtime.state["knowledge_base_item"].path)
-    results = rag_flow.filtered_fusion_retrieve(query, filters)
+    results = rag_flow.filtered_fusion_retrieve(query, filters, k=k)
 
     return ("Documents retrieved", 
         {   "query": query,

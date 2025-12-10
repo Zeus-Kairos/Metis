@@ -140,7 +140,7 @@ def complement_answer_prompt(state: TypedDict) -> str:
     """
     Complement the answer.
     """
-    answer = state["answer"]
+    answer = state["answer"] if "answer" in state else ""
     documents = state["additional_documents"]
 
     additional_info = "\n"
@@ -172,7 +172,7 @@ def deep_rag_prompt(state: TypedDict) -> str:
     Deep RAG prompt.
     """
     query = state["refined_query"]
-    answer = state["answer"]
+    answer = state["answer"] if "answer" in state else ""
     knowledge_base_index_path = state["knowledge_base_item"].index_path
     # read the markdown index file
     with open(knowledge_base_index_path, 'r') as f:

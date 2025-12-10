@@ -107,10 +107,10 @@ class RAGAgent:
         return {
             "messages": [response],
         }
-
-    def _handle_rag(self, state: AgentState) -> AgentState:
+    
+    def _refine_query(self, state: AgentState) -> AgentState:
         """
-        Handle the RAG.
+        Refine the query.
         """
         if self.rag_type == RAGType.SIMPLE:
             refined_query = state["query"]
@@ -118,11 +118,19 @@ class RAGAgent:
             prompt = refine_query_prompt(state)
             response = self.llm_runner.invoke([SystemMessage(content=prompt)])
             refined_query = response.content.strip()
+        return {
+            "refined_query": refined_query,
+        }
+
+    def _handle_rag(self, state: AgentState) -> AgentState:
+        """
+        Handle the RAG.
+        """
+        refined_query = state["refined_query"]
             
         rag_flow = RAGFlow(state["knowledge_base_item"].path)
         results = rag_flow.retrieve(self.rag_type, refined_query, k=self.rag_k)
         return {
-            "refined_query": refined_query,
             "documents": results,
         }
 
@@ -223,10 +231,11 @@ class RAGAgent:
         """       
         prompt = complement_answer_prompt(state)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
-        documents = state["documents"]
+        documents = state["documents"] if "documents" in state else []
+        new_documents = [doc for sublist in state["additional_documents"].values() for doc in sublist]
         if documents and isinstance(documents[0], tuple):
             documents = [doc for doc, _ in documents]
-        merged_documents = merge_documents(documents + [doc for sublist in state["additional_documents"].values() for doc in sublist])
+        merged_documents = merge_documents(documents + new_documents)
         return {
             "answer": response.content.strip(),
             "documents": merged_documents,
@@ -240,30 +249,30 @@ class RAGAgent:
         graph = StateGraph(AgentState)
 
         graph.add_node("classify_intent", self._classify_intent)
-        graph.add_node("handle_rag", self._handle_rag)
+        graph.add_node("refine_query", self._refine_query)
         graph.add_node("handle_chat", self._handle_chat)
-        graph.add_node("filter_documents", self._filter_documents)
-        graph.add_node("format_answer", self._format_answer)
         if self.rag_type == RAGType.AGENTIC:
             graph.add_node("deep_rag", self._deep_rag)      
             graph.add_node("deep_retrieve", ToolNode([retrieve_tool]))
             graph.add_node("filter_additional_documents", self._filter_additional_documents)
-            graph.add_node("complement_answer", self._complement_answer)     
-
+            graph.add_node("complement_answer", self._complement_answer)   
+        else:
+            graph.add_node("handle_rag", self._handle_rag)
+            graph.add_node("filter_documents", self._filter_documents)
+            graph.add_node("format_answer", self._format_answer)
+            
         graph.add_edge(START, "classify_intent")
         graph.add_conditional_edges(
             "classify_intent",
             lambda state: state["intent"],
             {
-                "rag": "handle_rag",
+                "rag": "refine_query",
                 "chat": "handle_chat",
             }
         )
         graph.add_edge("handle_chat", END)
-        graph.add_edge("handle_rag", "filter_documents")
-        graph.add_edge("filter_documents", "format_answer")
         if self.rag_type == RAGType.AGENTIC:
-            graph.add_edge("format_answer", "deep_rag")
+            graph.add_edge("refine_query", "deep_rag")
             graph.add_conditional_edges(
             "deep_rag",
             # Assess LLM decision (call `retriever_tool` tool or respond to the user)
@@ -278,6 +287,9 @@ class RAGAgent:
             graph.add_edge("filter_additional_documents", "complement_answer")     
             graph.add_edge("complement_answer", "deep_rag")    
         else:
+            graph.add_edge("refine_query", "handle_rag")
+            graph.add_edge("handle_rag", "filter_documents")
+            graph.add_edge("filter_documents", "format_answer")
             graph.add_edge("format_answer", END)     
 
         return graph
