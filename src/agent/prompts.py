@@ -199,3 +199,42 @@ def deep_rag_prompt(state: TypedDict) -> str:
     User Current Answer: {answer}
     Searched Paths: {searched_paths}
     """
+
+def reference_check_prompt(state: TypedDict) -> str:
+    """
+    Reference check prompt.
+    """
+    query = state["refined_query"]
+    answer = state["answer"] if "answer" in state else ""
+    documents = state["documents"]
+    doc_contents = format_documents(documents, with_index=True, index_offset=1)  
+
+    return f"""
+    You are an assistant that reviews an existing answer against a set of reference documents and adds precise reference markers.
+    Task:
+    Carefully read the user’s query, the existing answer, and all provided reference documents.
+    Verify each factual statement in the answer against the documents.
+    For every sentence, paragraph or specific claim that is supported by a document, add an inline reference marker in square brackets, using the format [Document Index].
+    If multiple documents support the same sentence or paragraph, include multiple markers, for example: [1][3].
+    If a sentence is not clearly supported by any document, leave it unmarked and do not invent or guess references. If a major claim is unsupported or contradicted, briefly flag it in a short note after the sentence, e.g. (unsupported by the provided documents).
+    Do not change any word of the original answer. Only:
+        Insert or adjust reference markers.
+    Verify the accuracy of the information in the answer against the documents.
+    If the answer contradicts the documents, flag it with a note.
+    At the end, add a short “Sources used” list that maps each marker (e.g. DocA:FilePath) to the corresponding document name/identifier.
+
+    Output:
+    The answer with inline reference markers inserted in the text exactly where the supporting information is used.
+    Keep the structure, headings, and formatting of the original answer as much as possible.
+    I will provide:
+        The original query
+        The original answer
+        A list of reference documents with their index and any available metadata (file path), e.g.
+            [1]: File Path 1
+            [2]: File Path 2
+    Use only these documents as evidence and do not rely on external knowledge.
+
+    User Query: {query}
+    Original Answer: {answer}
+    Reference Documents: {doc_contents}
+    """

@@ -9,9 +9,18 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode, tools_condition
-from numpy import add
+
 from src.agent.tools import retrieve_tool
-from src.agent.prompts import classify_intent_prompt, complement_answer_prompt, deep_rag_prompt, filter_documents_prompt, format_answer_prompt, handle_chat_prompt, refine_query_prompt
+from src.agent.prompts import (
+    classify_intent_prompt,
+    complement_answer_prompt,
+    deep_rag_prompt,
+    filter_documents_prompt,
+    format_answer_prompt,
+    handle_chat_prompt,
+    refine_query_prompt,
+    reference_check_prompt,
+)
 from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
 from src.utils.knowledge_base_reader import KnowledgeBaseItem, KnowledgeBaseReader
@@ -242,6 +251,16 @@ class RAGAgent:
             "additional_documents": {}
         }
 
+    def _reference_check(self, state: DeepRAGState) -> DeepRAGState:
+        """
+        Check the reference.
+        """       
+        prompt = reference_check_prompt(state)
+        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        return {
+            "answer": response.content.strip(),
+        }
+
     def _build_base_graph(self) -> StateGraph:
         """
         Build the base graph for the agent.
@@ -256,11 +275,12 @@ class RAGAgent:
             graph.add_node("deep_retrieve", ToolNode([retrieve_tool]))
             graph.add_node("filter_additional_documents", self._filter_additional_documents)
             graph.add_node("complement_answer", self._complement_answer)   
+            graph.add_node("reference_check", self._reference_check)
         else:
             graph.add_node("handle_rag", self._handle_rag)
             graph.add_node("filter_documents", self._filter_documents)
             graph.add_node("format_answer", self._format_answer)
-            
+
         graph.add_edge(START, "classify_intent")
         graph.add_conditional_edges(
             "classify_intent",
@@ -280,12 +300,13 @@ class RAGAgent:
             {
                 # Translate the condition outputs to nodes in our graph
                 "tools": "deep_retrieve",
-                END: END,
+                END: "reference_check",
             },
         )
             graph.add_edge("deep_retrieve", "filter_additional_documents")     
             graph.add_edge("filter_additional_documents", "complement_answer")     
             graph.add_edge("complement_answer", "deep_rag")    
+            graph.add_edge("reference_check", END)
         else:
             graph.add_edge("refine_query", "handle_rag")
             graph.add_edge("handle_rag", "filter_documents")

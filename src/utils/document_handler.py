@@ -2,7 +2,7 @@ from typing import List, Tuple
 from langchain_core.documents import Document
 
 
-def format_documents(documents: list[Document] | List[Tuple[Document, float]], with_index: bool = True) -> str:
+def format_documents(documents: list[Document] | List[Tuple[Document, float]], with_index: bool = True, index_offset: int = 0) -> str:
     """
     Format a list of documents for display.
     """
@@ -10,7 +10,7 @@ def format_documents(documents: list[Document] | List[Tuple[Document, float]], w
         # Tuple structure: (doc, score)
         if with_index:
             doc_contents = "\n".join([
-                f"Document Index: {idx}\n{doc[0].page_content}\n['Source: '{doc[0].metadata['file_path']}]"
+                f"Document Index: {idx+index_offset}\n{doc[0].page_content}\n['Source: '{doc[0].metadata['file_path']}]"
                 for idx, doc in enumerate(documents)
             ])
         else:
@@ -22,7 +22,7 @@ def format_documents(documents: list[Document] | List[Tuple[Document, float]], w
         # Regular Document list
         if with_index:
             doc_contents = "\n".join([
-                f"Document Index: {idx}\n{doc.page_content}\n['Source: '{doc.metadata['file_path']}]"
+                f"Document Index: {idx+index_offset}\n{doc.page_content}\n['Source: '{doc.metadata['file_path']}]"
                 for idx, doc in enumerate(documents)
             ])
         else:
