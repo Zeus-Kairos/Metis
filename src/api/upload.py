@@ -1,27 +1,25 @@
 import os
 import hashlib
+import dotenv
 from typing import List
 from fastapi import UploadFile, HTTPException
 from src.utils.logging_config import get_logger
 
+# Load environment variables
+dotenv.load_dotenv()
+
 logger = get_logger(__name__)
 
-# Define supported file formats
-SUPPORTED_FORMATS = {
-    ".txt",
-    ".pdf",
-    ".md",
-    ".docx",
-    ".pptx",
-    ".xlsx",
-    ".html",
-    ".csv"
-}
+# Define supported file formats from environment or use defaults
+SUPPORTED_FORMATS = set(os.getenv("SUPPORTED_FORMATS", ".txt,.pdf,.md,.docx,.pptx,.xlsx,.html,.csv").split(","))
 
-# Define maximum file size (100MB)
-MAX_FILE_SIZE = 100 * 1024 * 1024
+# Define maximum file size from environment or use default (100MB)
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(100 * 1024 * 1024)))
 
-MAX_FILES_PER_UPLOAD = 20
+MAX_FILES_PER_UPLOAD = int(os.getenv("MAX_FILES_PER_UPLOAD", "20"))
+
+# Base upload directory from environment or use default
+BASE_UPLOAD_DIR = os.getenv("BASE_UPLOAD_DIR", "uploads")
 
 async def handle_file_upload(user_id: str, knowledge_base: str, files: List[UploadFile]):
     """
@@ -47,7 +45,7 @@ async def handle_file_upload(user_id: str, knowledge_base: str, files: List[Uplo
         raise HTTPException(status_code=400, detail=f"Maximum {MAX_FILES_PER_UPLOAD} files allowed per upload")
     
     # Create upload directory structure
-    upload_dir = os.path.join("uploads", user_id, knowledge_base, "origin")
+    upload_dir = os.path.join(BASE_UPLOAD_DIR, user_id, knowledge_base, "origin")
     os.makedirs(upload_dir, exist_ok=True)
     
     # Process each file
