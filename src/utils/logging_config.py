@@ -105,10 +105,22 @@ def setup_logging(log_level: Optional[str] = None):
     
     return log_level
 
+def get_logger(name: str):
+    """
+    Get a logger with the given name
+    
+    Args:
+        name: Name of the logger
+        
+    Returns:
+        Logger instance
+    """
+    return logging.getLogger(name)
+
 # If this module is run directly, perform a simple test
 if __name__ == "__main__":
     setup_logging()
-    test_logger = logging.getLogger("test.logger")
+    test_logger = get_logger("test.logger")
     test_logger.debug("This is a debug log")
     test_logger.info("This is an info log")
     test_logger.warning("This is a warning log")
