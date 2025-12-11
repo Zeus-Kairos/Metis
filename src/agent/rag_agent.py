@@ -1,3 +1,4 @@
+from ast import Str
 import logging
 from re import search
 from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
@@ -20,6 +21,7 @@ from src.agent.prompts import (
     handle_chat_prompt,
     refine_query_prompt,
     reference_check_prompt,
+    review_answer_prompt,
 )
 from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
@@ -47,6 +49,7 @@ class DeepRAGState(AgentState):
     """
     searched_path: set[str]
     additional_documents: Dict[str, list[Document]]
+    answer_review: str
     retrieve_tries: int = 0
 
 class RAGAgent:
@@ -175,26 +178,43 @@ class RAGAgent:
             "messages": [response],
         }
 
-    def _deep_rag(self, state: DeepRAGState) -> DeepRAGState:
+    def _review_answer(self, state: DeepRAGState) -> DeepRAGState:
         """
-        Handle the deep RAG.
+        Review the answer.
         """
         MAX_RETRIEVE_TRIES = 3
         retrieve_tries = state["retrieve_tries"] if "retrieve_tries" in state else 0
         if retrieve_tries >= MAX_RETRIEVE_TRIES:
             logging.info("retrieve finished.")
             return {
-                "messages": [AIMessage(content="retrieve finished.")],
+                "answer_review": "end",
                 "retrieve_tries": 0,
             }
 
+        prompt = review_answer_prompt(state)
+        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        answer_review = response.content.strip().lower()
+        return {
+            "answer_review": answer_review,
+            "retrieve_tries": retrieve_tries + 1,
+        }
+
+    def _if_continue_rag(self, state: DeepRAGState) -> bool:
+        """
+        Check whether to continue the RAG.
+        """
+        return state["answer_review"] != "end"
+
+    def _deep_rag(self, state: DeepRAGState) -> DeepRAGState:
+        """
+        Handle the deep RAG.
+        """
         prompt = deep_rag_prompt(state)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)], [retrieve_tool])
         if response.content.strip():
             logger.info(f"[deep_rag] Response: {response.content.strip()}")
         return {
             "messages": [response],
-            "retrieve_tries": retrieve_tries + 1,
         }
 
     def _filter_additional_documents(self, state: DeepRAGState) -> DeepRAGState:
@@ -271,6 +291,7 @@ class RAGAgent:
         graph.add_node("refine_query", self._refine_query)
         graph.add_node("handle_chat", self._handle_chat)
         if self.rag_type == RAGType.AGENTIC:
+            graph.add_node("review_answer", self._review_answer)
             graph.add_node("deep_rag", self._deep_rag)      
             graph.add_node("deep_retrieve", ToolNode([retrieve_tool]))
             graph.add_node("filter_additional_documents", self._filter_additional_documents)
@@ -292,20 +313,20 @@ class RAGAgent:
         )
         graph.add_edge("handle_chat", END)
         if self.rag_type == RAGType.AGENTIC:
-            graph.add_edge("refine_query", "deep_rag")
+            graph.add_edge("refine_query", "review_answer")
             graph.add_conditional_edges(
-            "deep_rag",
-            # Assess LLM decision (call `retriever_tool` tool or respond to the user)
-            tools_condition,
+            "review_answer",
+            self._if_continue_rag,
             {
                 # Translate the condition outputs to nodes in our graph
-                "tools": "deep_retrieve",
-                END: "reference_check",
+                True: "deep_rag",
+                False: "reference_check",
             },
-        )
+            )
+            graph.add_edge("deep_rag", "deep_retrieve")
             graph.add_edge("deep_retrieve", "filter_additional_documents")     
             graph.add_edge("filter_additional_documents", "complement_answer")     
-            graph.add_edge("complement_answer", "deep_rag")    
+            graph.add_edge("complement_answer", "review_answer")    
             graph.add_edge("reference_check", END)
         else:
             graph.add_edge("refine_query", "handle_rag")

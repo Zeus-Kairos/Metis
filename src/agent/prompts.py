@@ -158,7 +158,8 @@ def complement_answer_prompt(state: TypedDict) -> str:
     The answer should be friendly, concise, and relevant to the user's query.
 
     Constraints:
-    - Do not make up information that is not in the original answer or the additional documents.
+    - You can only use the facts in the original answer or the additional documents.
+    - Do not make up any information based on your own knowledge or assumptions.
 
     Original Query: {base_query}
     Original Answer: {answer}
@@ -167,12 +168,48 @@ def complement_answer_prompt(state: TypedDict) -> str:
     Assistant:
     """
 
+def review_answer_prompt(state: TypedDict) -> str:
+    """
+    Review the answer.
+    """
+    query = state["refined_query"]
+    answer = state["answer"] if "answer" in state else ""
+    answer_review = state["answer_review"] if "answer_review" in state else ""
+
+    return f"""
+    You are an evaluator that reviews whether an assistant’s answer fully satisfies the user’s query.
+    Task:
+    1. Carefully read the user’s query and identify the explicit and implicit requirements (sub-questions, constraints, context, and expected level of detail).​
+    2. Read the assistant’s answer and assess it along these dimensions, focusing only on content, not style:​
+        - Relevance: Does the answer directly address all parts of the user’s query without going off-topic?
+        - Completeness: Does the answer cover all essential aspects of the query, including important edge cases, assumptions, or follow-up details a reasonable user would expect?
+        - Accuracy/Correctness: Does the answer contain any clear errors, contradictions, or misleading statements relative to the question context?
+        - Clarity: Is the answer understandable for the intended audience, with concepts explained at an appropriate level?
+    3. Based on this assessment, decide if the answer is sufficient:
+        - “Sufficient”: The answer is relevant, correct, and complete enough that a typical user would not need more information.
+        - “Insufficient”: The answer fails to address key parts of the question, is largely incorrect, or is too vague to be useful.​
+    4. If the answer is “Sufficient”, return "end".
+    4. If the answer is “Insufficient”, list:
+        - Which specific aspects of the user’s query are not adequately addressed.
+        - What additional information, clarification, or steps should be added to make the answer sufficient.
+    5. Do not rewrite the answer. Focus on evaluation and concrete improvement suggestions only.
+    6. Refer to the previous Answer Review to make the assessment
+
+    Use concise, precise language and base your decision strictly on the given query and answer.
+    Only give concept-level feedback. Do not give detailed information about the answer.
+
+    User Query: {query}
+    User Current Answer: {answer}
+    Previous Answer Review: {answer_review}
+    """
+
 def deep_rag_prompt(state: TypedDict) -> str:
     """
     Deep RAG prompt.
     """
     query = state["refined_query"]
     answer = state["answer"] if "answer" in state else ""
+    answer_review = state["answer_review"] if "answer_review" in state else ""
     knowledge_base_index_path = state["knowledge_base_item"].index_path
     # read the markdown index file
     with open(knowledge_base_index_path, 'r') as f:
@@ -182,13 +219,11 @@ def deep_rag_prompt(state: TypedDict) -> str:
 
     return f"""
     You are a helpful assistant to help retrieve the most relevant information from the knowledge base.   
-    Based on the user query and the current answer to the query, you decide whether additional information should be retrieved from the knowledge base.
+    Based on the user query, the current answer, and answer review, you decide how additional information should be retrieved from the knowledge base.
     You have access to the knowledge base index. The index contains the knowledge base structure and description of each folder.
     You also have a retrieval tool to find relevant documents in a specific folder in the knowledge base.
     You need to decide what additional information to retrieve and use the retrieval tool to search certain information from a specific folder.
     Use relative path to specify the search_path.
-
-    If the current answer to the query is sufficient, return "end" to stop the RAG process.
 
     Constraints:
     - Do not search the paths that are already in the Searched Paths.
@@ -197,6 +232,7 @@ def deep_rag_prompt(state: TypedDict) -> str:
 
     User: {query}
     User Current Answer: {answer}
+    User Current Answer Review: {answer_review}
     Searched Paths: {searched_paths}
     """
 

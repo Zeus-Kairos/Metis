@@ -1,3 +1,4 @@
 - Add doc search tool to list all headers in a file.
+- Separate an independent node for answer evaluation.
 - Add evaluation metrics for the RAG agent.
 - Add image support for the RAG agent.
