@@ -43,6 +43,13 @@ async def test_valid_file_upload():
     assert result["files"][0]["status"] == "success"
     assert "test.txt" in result["files"][0]["path"]
     
+    # Verify file_id is present in result
+    assert "file_id" in result["files"][0], "Result should contain file_id"
+    assert len(result["files"][0]["file_id"]) == 36, "file_id should be a UUID4 (36 characters)"
+    
+    # Verify file_hash is present in result
+    assert "file_hash" in result["files"][0], "Result should contain file_hash"
+    
     # Verify file was actually created
     expected_path = os.path.join("uploads", "test_user", "test_kb", "origin", "test.txt")
     assert os.path.exists(expected_path)
@@ -166,22 +173,19 @@ async def test_filename_collision():
     assert result["successful"] == 1, f"Expected 1 successful upload, got {result['successful']}"
     assert result["files"][0]["status"] == "success", f"Expected file status success, got {result['files'][0]['status']}"
     
-    # Both files should exist now
-    assert os.path.exists(first_file_path), "First file should still exist"
+    # Only the new file should exist with original name
+    assert os.path.exists(first_file_path), "File should still exist with original name"
     
-    # The second file should have a modified name like test_1.txt
+    # No second file with counter should exist
     second_file_path = os.path.join(upload_dir, "test_1.txt")
-    assert os.path.exists(second_file_path), "Second file should exist with counter appended"
+    assert not os.path.exists(second_file_path), "Second file with counter should not exist"
     
-    # Verify content of both files
+    # Verify content is replaced with new content
     with open(first_file_path, "rb") as f:
-        assert f.read() == b"Content 1"
-    
-    with open(second_file_path, "rb") as f:
-        assert f.read() == b"Content 2"
+        assert f.read() == b"Content 2", "File content should be replaced with new content"
     
     # Verify the result contains the correct path for the uploaded file
-    assert "test_1.txt" in result["files"][0]["path"], f"Expected test_1.txt in path, got {result['files'][0]['path']}"
+    assert "test.txt" in result["files"][0]["path"], f"Expected test.txt in path, got {result['files'][0]['path']}"
     
     # Log success
     print(f"✅ Filename collision test passed - both files coexist:")
@@ -296,3 +300,36 @@ async def test_upload_path_structure():
     # Log the successful path creation
     print(f"✅ Verified file uploaded to correct path: {expected_path}")
     print(f"✅ Path structure confirmed: uploads/user_id/knowledge_base/origin")
+
+@pytest.mark.asyncio
+async def test_uploaded_time_field():
+    """Test that successful uploads include the uploaded_time field."""
+    uploader = FileUploader()
+    
+    # Create a mock file
+    mock_file = AsyncMock(spec=UploadFile)
+    mock_file.filename = "test.txt"
+    mock_file.read.return_value = b"Test content"
+    
+    # Test upload
+    result = await uploader.upload_files("test_user", "test_kb", [mock_file])
+    
+    # Verify uploaded_time field exists and is in correct format
+    assert "uploaded_time" in result["files"][0], "uploaded_time should be present in successful upload"
+    
+    # Verify it's a valid ISO format datetime string
+    uploaded_time_str = result["files"][0]["uploaded_time"]
+    try:
+        from datetime import datetime
+        datetime.fromisoformat(uploaded_time_str)
+        is_valid = True
+    except ValueError:
+        is_valid = False
+    
+    assert is_valid, "uploaded_time should be a valid ISO format datetime string"
+    
+    # Clean up
+    import shutil
+    upload_path = os.path.join("uploads", "test_user")
+    if os.path.exists(upload_path):
+        shutil.rmtree(upload_path)

@@ -1,6 +1,8 @@
 import os
 import hashlib
+import uuid
 import dotenv
+from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import UploadFile
 from src.utils.logging_config import get_logger
@@ -40,11 +42,15 @@ class FileUploader:
         try:
             # Get file extension and validate format
             file_ext = os.path.splitext(file.filename)[1].lower()
+            # Generate unique file_id
+            file_id = str(uuid.uuid4())
             if file_ext not in SUPPORTED_FORMATS:
+                # Generate file_id even for failed uploads                
                 return {
                     "filename": file.filename,
                     "status": "failed",
-                    "error": f"Unsupported file format: {file_ext}. Supported formats: {', '.join(SUPPORTED_FORMATS)}"
+                    "error": f"Unsupported file format: {file_ext}. Supported formats: {', '.join(SUPPORTED_FORMATS)}",
+                    "file_id": file_id
                 }
             
             # Read file content
@@ -55,8 +61,9 @@ class FileUploader:
                 return {
                     "filename": file.filename,
                     "status": "failed",
-                    "error": f"File size exceeds maximum limit (100MB)"
-                }
+                    "error": f"File size exceeds maximum limit (100MB)",
+                    "file_id": file_id
+                }          
             
             # Check if file already exists based on content hash
             file_hash = hashlib.md5(content).hexdigest()
@@ -77,19 +84,12 @@ class FileUploader:
                 return {
                     "filename": file.filename,
                     "status": "skipped",
-                    "message": "File already exists with identical content"
+                    "message": "File already exists with identical content",
+                    "file_id": file_id  # Still generate file_id for skipped files
                 }
             
-            # Save new file
+            # Save new file - replace if exists
             file_path = os.path.join(upload_dir, file.filename)
-            
-            # Handle filename collisions by appending number if needed
-            counter = 1
-            base_filename, ext = os.path.splitext(file.filename)
-            while os.path.exists(file_path):
-                new_filename = f"{base_filename}_{counter}{ext}"
-                file_path = os.path.join(upload_dir, new_filename)
-                counter += 1
             
             with open(file_path, "wb") as f:
                 f.write(content)
@@ -101,17 +101,22 @@ class FileUploader:
             result_entry = {
                 "filename": file.filename,
                 "status": "success",
-                "path": file_path
+                "path": file_path,
+                "file_id": file_id,
+                "file_hash": file_hash,
+                "uploaded_time": datetime.now().isoformat()
             }
             
             return result_entry
             
         except Exception as e:
             logger.error(f"Error processing file {file.filename}: {str(e)}")
+            # Generate file_id even for failed uploads
             return {
                 "filename": file.filename,
                 "status": "failed",
-                "error": str(e)
+                "error": str(e),
+                "file_id": file_id
             }
     
     async def upload_files(self, user_id: str, knowledge_base: str, files: List[UploadFile]) -> Dict[str, Any]:
