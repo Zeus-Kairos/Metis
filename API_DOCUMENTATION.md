@@ -46,6 +46,12 @@ Currently, the API does not require authentication. In production environments, 
 - `.pptx`
 - `.xlsx`
 
+#### Supported File Formats for Automatic Parsing
+The following file formats are automatically parsed to Markdown:
+- `.txt` (Plain Text)
+- `.md` (Markdown)
+- `.html` (HTML)
+
 #### File Size Limit
 - Maximum file size: 50MB per file
 - Maximum files per request: 10 files
@@ -58,13 +64,26 @@ Currently, the API does not require authentication. In production environments, 
     {
       "filename": "example.txt",
       "status": "success",
-      "path": "uploads/user_id/knowledge_base/origin/example.txt"
+      "path": "uploads/user_id/knowledge_base/origin/example.txt",
+      "parsed": true,
+      "parsed_path": "uploads/user_id/knowledge_base/parsed/example.txt.md",
+      "parse_errors": null
+    },
+    {
+      "filename": "example.unsupported",
+      "status": "success",
+      "path": "uploads/user_id/knowledge_base/origin/example.unsupported",
+      "parsed": false,
+      "parsed_path": null,
+      "parse_errors": "Unsupported file type for parsing"
     }
   ],
-  "total": 1,
-  "successful": 1,
+  "total": 2,
+  "successful": 2,
   "skipped": 0,
-  "failed": 0
+  "failed": 0,
+  "total_parsed": 1,
+  "failed_parsing": 1
 }
 ```
 
@@ -76,13 +95,18 @@ Currently, the API does not require authentication. In production environments, 
     {
       "filename": "example.exe",
       "status": "failed",
-      "reason": "Unsupported file format"
+      "reason": "Unsupported file format",
+      "parsed": false,
+      "parsed_path": null,
+      "parse_errors": null
     }
   ],
   "total": 1,
   "successful": 0,
   "skipped": 0,
-  "failed": 1
+  "failed": 1,
+  "total_parsed": 0,
+  "failed_parsing": 0
 }
 ```
 
@@ -92,9 +116,14 @@ Uploaded files are stored in the following directory structure:
 uploads/
 └── {user_id}/
     └── {knowledge_base}/
-        └── origin/
-            └── {filename}
+        ├── origin/
+        │   └── {filename}
+        └── parsed/
+            └── {filename}.md
 ```
+
+- **origin/**: Contains the original uploaded files
+- **parsed/**: Contains automatically generated Markdown versions of supported file types
 
 ## Duplicate Handling
 - Files with identical content (based on MD5 hash) are automatically skipped
@@ -176,4 +205,9 @@ The following environment variables can be configured:
 5. Enable HTTPS
 
 ## Version History
+- **1.1.0**: Added automatic file parsing functionality
+  - Added support for parsing .txt, .md, and .html files to Markdown
+  - Created separate `parsed` directory for storing parsed content
+  - Updated API response to include parsing status and errors
+  - Added FileParser class in src/utils/file_parser.py
 - **1.0.0**: Initial release with basic file upload functionality

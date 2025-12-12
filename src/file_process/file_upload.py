@@ -1,8 +1,8 @@
 import os
 import hashlib
 import dotenv
-from typing import List
-from fastapi import UploadFile, HTTPException
+from typing import List, Dict, Any
+from fastapi import UploadFile
 from src.utils.logging_config import get_logger
 
 # Load environment variables
@@ -11,7 +11,7 @@ dotenv.load_dotenv()
 logger = get_logger(__name__)
 
 # Define supported file formats from environment or use defaults
-SUPPORTED_FORMATS = set(os.getenv("SUPPORTED_FORMATS", ".txt,.pdf,.md,.docx,.pptx,.xlsx,.html,.csv").split(","))
+SUPPORTED_FORMATS = set(os.getenv("SUPPORTED_FORMATS", ".txt,.pdf,.md,.docx,.pptx,.xlsx,.html,.htm,.csv").split(","))
 
 # Define maximum file size from environment or use default (100MB)
 MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(100 * 1024 * 1024)))
@@ -21,62 +21,42 @@ MAX_FILES_PER_UPLOAD = int(os.getenv("MAX_FILES_PER_UPLOAD", "20"))
 # Base upload directory from environment or use default
 BASE_UPLOAD_DIR = os.getenv("BASE_UPLOAD_DIR", "uploads")
 
-async def handle_file_upload(user_id: str, knowledge_base: str, files: List[UploadFile]):
-    """
-    Handle file uploads with validation, existence checking, and storage.
+class FileUploader:
+    """Class to handle file upload functionality without parsing."""
     
-    Args:
-        user_id: User ID for the upload
-        knowledge_base: Knowledge base name
-        files: List of UploadFile objects
+    def __init__(self):
+        pass
+    
+    async def upload_file(self, file: UploadFile, upload_dir: str) -> Dict[str, Any]:
+        """Upload a single file to the specified directory.
         
-    Returns:
-        Dictionary with upload results
-    """
-    # Validate user_id and knowledge_base
-    if not user_id or not knowledge_base:
-        raise HTTPException(status_code=400, detail="Missing required parameters: user_id and knowledge_base")
-    
-    # Validate file count
-    if not files or len(files) == 0:
-        raise HTTPException(status_code=400, detail="No files provided")
-    
-    if len(files) > MAX_FILES_PER_UPLOAD:
-        raise HTTPException(status_code=400, detail=f"Maximum {MAX_FILES_PER_UPLOAD} files allowed per upload")
-    
-    # Create upload directory structure
-    upload_dir = os.path.join(BASE_UPLOAD_DIR, user_id, knowledge_base, "origin")
-    os.makedirs(upload_dir, exist_ok=True)
-    
-    # Process each file
-    upload_results = []
-    all_successful = True
-    
-    for file in files:
+        Args:
+            file: UploadFile object from FastAPI
+            upload_dir: Directory to save the file
+            
+        Returns:
+            Dict containing upload result
+        """
         try:
             # Get file extension and validate format
             file_ext = os.path.splitext(file.filename)[1].lower()
             if file_ext not in SUPPORTED_FORMATS:
-                upload_results.append({
+                return {
                     "filename": file.filename,
                     "status": "failed",
                     "error": f"Unsupported file format: {file_ext}. Supported formats: {', '.join(SUPPORTED_FORMATS)}"
-                })
-                all_successful = False
-                continue
+                }
             
             # Read file content
             content = await file.read()
             
             # Check file size
             if len(content) > MAX_FILE_SIZE:
-                upload_results.append({
+                return {
                     "filename": file.filename,
                     "status": "failed",
                     "error": f"File size exceeds maximum limit (100MB)"
-                })
-                all_successful = False
-                continue
+                }
             
             # Check if file already exists based on content hash
             file_hash = hashlib.md5(content).hexdigest()
@@ -94,12 +74,11 @@ async def handle_file_upload(user_id: str, knowledge_base: str, files: List[Uplo
             
             if file_exists:
                 # Keep existing file, return message
-                upload_results.append({
+                return {
                     "filename": file.filename,
                     "status": "skipped",
                     "message": "File already exists with identical content"
-                })
-                continue
+                }
             
             # Save new file
             file_path = os.path.join(upload_dir, file.filename)
@@ -119,29 +98,56 @@ async def handle_file_upload(user_id: str, knowledge_base: str, files: List[Uplo
             logger.info(f"File uploaded successfully: {file.filename} -> {file_path}")
             
             # Add to results
-            upload_results.append({
+            result_entry = {
                 "filename": file.filename,
                 "status": "success",
                 "path": file_path
-            })
+            }
+            
+            return result_entry
             
         except Exception as e:
             logger.error(f"Error processing file {file.filename}: {str(e)}")
-            upload_results.append({
+            return {
                 "filename": file.filename,
                 "status": "failed",
                 "error": str(e)
-            })
-            all_successful = False
+            }
     
-    # Determine overall status
-    overall_status = "success" if all_successful else "partial_success"
-    
-    return {
-        "status": overall_status,
-        "files": upload_results,
-        "total": len(files),
-        "successful": sum(1 for r in upload_results if r["status"] == "success"),
-        "skipped": sum(1 for r in upload_results if r["status"] == "skipped"),
-        "failed": sum(1 for r in upload_results if r["status"] == "failed")
-    }
+    async def upload_files(self, user_id: str, knowledge_base: str, files: List[UploadFile]) -> Dict[str, Any]:
+        """Upload multiple files for a user and knowledge base.
+        
+        Args:
+            user_id: User ID for the upload
+            knowledge_base: Knowledge base name
+            files: List of UploadFile objects
+            
+        Returns:
+            Dict containing upload results for all files
+        """
+        # Create upload directory structure
+        upload_dir = os.path.join(BASE_UPLOAD_DIR, user_id, knowledge_base, "origin")
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Process each file
+        upload_results = []
+        all_successful = True
+        
+        for file in files:
+            result = await self.upload_file(file, upload_dir)
+            upload_results.append(result)
+            
+            if result["status"] != "success" and result["status"] != "skipped":
+                all_successful = False
+        
+        # Determine overall status
+        overall_status = "success" if all_successful else "partial_success"
+        
+        return {
+            "status": overall_status,
+            "files": upload_results,
+            "total": len(files),
+            "successful": sum(1 for r in upload_results if r["status"] == "success"),
+            "skipped": sum(1 for r in upload_results if r["status"] == "skipped"),
+            "failed": sum(1 for r in upload_results if r["status"] == "failed")
+        }
