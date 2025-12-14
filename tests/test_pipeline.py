@@ -117,22 +117,18 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
     assert successful == len(upload_files) - 1  # All except image
     assert failed == 1  # Only image should fail
 
-@pytest.fixture(scope="module", autouse=True)
+@pytest.fixture(scope="function", autouse=True)
 def cleanup_after_tests():
-    """Cleanup test files after module runs."""
+    """Cleanup test files after each test runs."""
     yield
     
     # Remove test directories
+    import shutil
     test_dirs = [
-        "c:\\Apps\\Metis\\uploads\\test_pipeline_user",
-        "c:\\Apps\\Metis\\uploads\\test_mixed_user"
+        r"c:\Apps\Metis\uploads\test_pipeline_user",
+        r"c:\Apps\Metis\uploads\test_mixed_user"
     ]
     
     for test_dir in test_dirs:
         if os.path.exists(test_dir):
-            for root, dirs, files in os.walk(test_dir, topdown=False):
-                for name in files:
-                    os.remove(os.path.join(root, name))
-                for name in dirs:
-                    os.rmdir(os.path.join(root, name))
-            os.rmdir(test_dir)
+            shutil.rmtree(test_dir, ignore_errors=True)

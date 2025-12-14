@@ -1,8 +1,9 @@
 import os
 import asyncio
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from markitdown import MarkItDown
 import html2text
+import pymupdf4llm
 import logging
 from src.utils.logging_config import get_logger
 
@@ -37,7 +38,9 @@ class FileParser:
             return 'text'
         elif extension in ['.html', '.htm']:
             return 'html'
-        elif extension in ['.pdf', '.docx', '.pptx', '.xlsx']:
+        elif extension in ['.pdf']:
+            return 'pdf'
+        elif extension in ['.docx', '.pptx', '.xlsx']:
             return 'markdownable'
         else:
             return 'unknown'
@@ -74,6 +77,10 @@ class FileParser:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     content = f.read()
                 parsed_content = self._parse_html(content)
+            elif file_type == 'pdf':
+                parsed_content = self._parse_pdf(file_path)
+                print(f"Parsed PDF content in {len(parsed_content)} pages")
+                parsed_content = '\n\n'.join([page['text'] for page in parsed_content])
             elif file_type == 'markdownable':
                 # For binary files, don't read them directly as text
                 parsed_content = self._parse_markdownable(file_path)
@@ -132,6 +139,35 @@ class FileParser:
         Parse HTML content using html2text.
         """
         return self.html_converter.handle(content)
+
+    def _parse_pdf(self, file_path: str) -> str:
+        """
+        Parse PDF content using PyPDF2.
+        """
+        parsed_dir, filename = self._get_parsed_path(file_path)
+        image_path = os.path.join(parsed_dir, f"{filename}_images")
+        md_text = pymupdf4llm.to_markdown(
+            doc=file_path,  # The file, either as a file path or a PyMuPDF Document.
+            page_chunks=True,  # If True, output is a list of page-specific dictionaries. Set to False for single string.
+            show_progress=True,  # Displays a progress bar during processing.
+            hdr_info=True,  # Optional, disables header detection logic.
+            write_images=True,  # Saves images found in the document as files.
+            # embed_images=True,  - Embeds images directly as base64 in markdown.
+            image_size_limit=0.05,  # Exclude small images below this size threshold.
+            dpi=150,  # Image resolution in dots per inch, if write_images=True.
+            image_path=image_path,  # Directory to save images if write_images=True.
+            image_format="png",  # Image file format, e.g., "png" or "jpg".
+            force_text=True,  # Include text overlapping images/graphics.
+            margins=0,  # Specify page margins for text extraction.
+            # page_width=612,  # Desired page width for reflowable documents.
+            # page_height=None,  - Desired page height for reflowable documents.
+            table_strategy="lines_strict",  # Strategy for table detection.
+            # graphics_limit=5000,  # Limit the number of vector graphics processed.
+            ignore_code=False,  # If True, avoids special formatting for mono-spaced text.
+            extract_words=False,  # Adds word-level data to each page dictionary.
+        )
+
+        return md_text
 
     def _parse_markdownable(self, file_path: str) -> str:
         """
@@ -212,24 +248,8 @@ class FileParser:
         """
         try:
             # Extract user_id, knowledge_base, and filename from original path
-            path_parts = original_file_path.split(os.sep)
-            
-            # Find the origin folder index
-            try:
-                origin_idx = path_parts.index("origin")
-                if origin_idx < 2:  # Need at least uploads/user_id/knowledge_base/origin
-                    raise ValueError("Invalid path structure")
-                    
-                # Build parsed directory path
-                parsed_dir_parts = path_parts[:origin_idx] + ["parsed"]
-                parsed_dir = os.sep.join(parsed_dir_parts)
-                
-                # Create parsed directory if it doesn't exist
-                os.makedirs(parsed_dir, exist_ok=True)
-                
-                # Get filename without extension and original extension
-                filename_with_ext = path_parts[-1]
-                filename, original_ext = os.path.splitext(filename_with_ext)
+            parsed_dir, filename = self._get_parsed_path(original_file_path)
+            try:  
                 
                 # Create parsed file path with .md extension, handling conflicts
                 base_filename = filename
@@ -253,4 +273,37 @@ class FileParser:
                 
         except Exception as e:
             logger.error(f"Error saving parsed content for {original_file_path}: {str(e)}")
+            return None
+
+    def _get_parsed_path(self, original_file_path: str, base_upload_dir: str = "uploads") -> Tuple[str, str]:
+        """
+        Get the parsed file path from the original file path.
+        
+        Returns:
+            Tuple of (parsed_dir, filename) where:
+            - parsed_dir: Directory path where parsed content will be saved
+            - filename: Filename without extension
+        """
+        # Extract user_id, knowledge_base, and filename from original path
+        path_parts = original_file_path.split(os.sep)
+            
+        # Find the origin folder index
+        try:
+            origin_idx = path_parts.index("origin")
+            if origin_idx < 2:  # Need at least uploads/user_id/knowledge_base/origin
+                raise ValueError("Invalid path structure")
+                    
+            # Build parsed directory path
+            parsed_dir_parts = path_parts[:origin_idx] + ["parsed"]
+            parsed_dir = os.sep.join(parsed_dir_parts)
+            # Create parsed directory if it doesn't exist
+            os.makedirs(parsed_dir, exist_ok=True)
+                
+            # Get filename without extension and original extension
+            filename_with_ext = path_parts[-1]
+            filename, original_ext = os.path.splitext(filename_with_ext)
+                
+            return parsed_dir, filename
+        except ValueError as e:
+            logger.error(f"Error extracting path components from {original_file_path}: {str(e)}")
             return None
