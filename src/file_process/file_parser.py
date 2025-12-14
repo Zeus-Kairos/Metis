@@ -1,5 +1,6 @@
 import os
 import asyncio
+import shutil
 from typing import List, Dict, Any, Optional, Tuple
 from markitdown import MarkItDown
 import html2text
@@ -81,8 +82,13 @@ class FileParser:
                 parsed_content = self._parse_html(content)
             elif file_type == 'pdf':
                 parsed_content = self._parse_pdf(file_path)
-                logger.info(f"Parsed PDF content in {len(parsed_content)} pages")
-                parsed_content = '\n\n'.join([page['text'] for page in parsed_content])
+                # Check if we got a list of page chunks or a single string
+                if isinstance(parsed_content, list):
+                    logger.info(f"Parsed PDF content in {len(parsed_content)} pages")
+                    parsed_content = '\n\n'.join([page['text'] for page in parsed_content])
+                else:
+                    # Single string case
+                    logger.info(f"Parsed PDF content")
             elif file_type == 'markdownable':
                 # For binary files, don't read them directly as text
                 parsed_content = self._parse_markdownable(file_path)
@@ -147,17 +153,23 @@ class FileParser:
         Parse PDF content using PyPDF2.
         """
         parsed_dir, filename = self._get_parsed_path(file_path)
-        image_path = os.path.join(parsed_dir, f"{filename}_images")
+        # copy the file to parsed_dir
+        target_image_path = os.path.join(parsed_dir, f"{filename}_images")
+        os.makedirs(target_image_path, exist_ok=True)
+        target_file_path = os.path.join(target_image_path, f"{filename}.pdf")
+        shutil.copy(file_path, target_file_path)
+        # image_path = os.path.join(parsed_dir, f"{filename}_images")
+                
         md_text = pymupdf4llm.to_markdown(
-            doc=file_path,  # The file, either as a file path or a PyMuPDF Document.
-            page_chunks=True,  # If True, output is a list of page-specific dictionaries. Set to False for single string.
+            doc=target_file_path,  # The file, either as a file path or a PyMuPDF Document.
+            page_chunks=False,  # If True, output is a list of page-specific dictionaries. Set to False for single string.
             show_progress=True,  # Displays a progress bar during processing.
             hdr_info=True,  # Optional, disables header detection logic.
             write_images=True,  # Saves images found in the document as files.
             # embed_images=True,  - Embeds images directly as base64 in markdown.
-            image_size_limit=0.05,  # Exclude small images below this size threshold.
+            image_size_limit=0.5,  # Exclude small images below this size threshold.
             dpi=150,  # Image resolution in dots per inch, if write_images=True.
-            image_path=image_path,  # Directory to save images if write_images=True.
+            # image_path=image_path,  # Directory to save images if write_images=True.
             image_format="png",  # Image file format, e.g., "png" or "jpg".
             force_text=True,  # Include text overlapping images/graphics.
             margins=0,  # Specify page margins for text extraction.
@@ -168,6 +180,9 @@ class FileParser:
             ignore_code=False,  # If True, avoids special formatting for mono-spaced text.
             extract_words=False,  # Adds word-level data to each page dictionary.
         )
+
+        # remove the copied pdf file from the image path
+        os.remove(target_file_path)
 
         return md_text
 
