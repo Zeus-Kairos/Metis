@@ -3,8 +3,10 @@ import asyncio
 from typing import List, Dict, Any, Optional, Tuple
 from markitdown import MarkItDown
 import html2text
+import pymupdf.layout
 import pymupdf4llm
 import logging
+
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -79,7 +81,7 @@ class FileParser:
                 parsed_content = self._parse_html(content)
             elif file_type == 'pdf':
                 parsed_content = self._parse_pdf(file_path)
-                print(f"Parsed PDF content in {len(parsed_content)} pages")
+                logger.info(f"Parsed PDF content in {len(parsed_content)} pages")
                 parsed_content = '\n\n'.join([page['text'] for page in parsed_content])
             elif file_type == 'markdownable':
                 # For binary files, don't read them directly as text
