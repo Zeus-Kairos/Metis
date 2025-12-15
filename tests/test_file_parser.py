@@ -24,7 +24,7 @@ def test_detect_file_type():
     assert parser.detect_file_type("test.csv") == "text"
     assert parser.detect_file_type("test.html") == "html"
     assert parser.detect_file_type("test.htm") == "html"
-    assert parser.detect_file_type("test.pdf") == "markdownable"
+    assert parser.detect_file_type("test.pdf") == "pdf"
     assert parser.detect_file_type("test.docx") == "markdownable"
     assert parser.detect_file_type("test.pptx") == "markdownable"
     assert parser.detect_file_type("test.xlsx") == "markdownable"
@@ -117,19 +117,19 @@ def test_parse_unknown_file_type(temp_dir):
     assert parsed_content["error"] is not None
 
 # Test that PDF files are treated as markdownable (not unknown)
-def test_pdf_is_markdownable(temp_dir):
+def test_pdf_is_pdf_type(temp_dir):
     parser = FileParser()
-    
+
     # Create a test PDF file (simulated)
     pdf_content = "%PDF-1.4 PDF content"  # Minimal PDF header
     pdf_file = os.path.join(temp_dir, "test.pdf")
-    
+
     with open(pdf_file, "w", encoding="utf-8") as f:
         f.write(pdf_content)
-    
+
     # Detect file type
     file_type = parser.detect_file_type(pdf_file)
-    assert file_type == "markdownable"
+    assert file_type == "pdf"
 
 # Test save_parsed_content functionality
 

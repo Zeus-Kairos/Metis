@@ -1,6 +1,7 @@
 import os
 import asyncio
 import shutil
+import re
 from typing import List, Dict, Any, Optional, Tuple
 from markitdown import MarkItDown
 import html2text
@@ -162,12 +163,14 @@ class FileParser:
                 
         md_text = pymupdf4llm.to_markdown(
             doc=target_file_path,  # The file, either as a file path or a PyMuPDF Document.
+            headers=False,  # Optional, disables header detection logic.
+            footer=False,  # Optional, disables footer detection logic.
             page_chunks=False,  # If True, output is a list of page-specific dictionaries. Set to False for single string.
             show_progress=True,  # Displays a progress bar during processing.
             hdr_info=True,  # Optional, disables header detection logic.
             write_images=True,  # Saves images found in the document as files.
             # embed_images=True,  - Embeds images directly as base64 in markdown.
-            image_size_limit=0.5,  # Exclude small images below this size threshold.
+            # image_size_limit=0.05,  # Exclude small images below this size threshold.
             dpi=150,  # Image resolution in dots per inch, if write_images=True.
             # image_path=image_path,  # Directory to save images if write_images=True.
             image_format="png",  # Image file format, e.g., "png" or "jpg".
@@ -184,7 +187,82 @@ class FileParser:
         # remove the copied pdf file from the image path
         os.remove(target_file_path)
 
+        # Clean up image links without descriptions
+        md_text, removed_images = self._clean_image_links(md_text)
+        # remove the images not referenced in the markdown text
+        for img in removed_images:
+            if os.path.exists(img):
+                os.remove(img)
+
         return md_text
+
+    def _clean_image_links(self, md_text: str) -> tuple[str, list[str]]:
+        """
+        Remove image links that don't have OCR descriptions.
+        Keeps images that have the description block format with both start and end markers.
+        
+        Returns:
+            tuple: (cleaned markdown content, list of removed image links)
+        """
+        # More strict pattern for image links - handles optional whitespace in parentheses
+        image_pattern = r'!\[\]\s*\(\s*[^)]+\s*\)'
+        
+        # More strict pattern for description block start - handles the exact format with optional <br> tags
+        desc_start_pattern = r'\s*\*\*----- Start of picture text -----\*\*\s*(<br>)?\s*'
+        # More strict pattern for description block end - handles the exact format with optional <br> tags
+        desc_end_pattern = r'\s*\*\*----- End of picture text -----\*\*\s*(<br>)?\s*'
+        
+        # Find all image links and their positions
+        images = list(re.finditer(image_pattern, md_text))
+        
+        # If no images, return as is
+        if not images:
+            return md_text, []
+        
+        removed_images = []
+        
+        # Process images in reverse order to avoid position shifts when removing
+        for image in reversed(images):
+            image_start = image.start()
+            image_end = image.end()
+            
+            # Get text after the image
+            text_after = md_text[image_end:]
+            
+            # Check if there's a description block after this image
+            # Look for the description start within a reasonable distance (1000 chars)
+            max_check_length = min(1000, len(text_after))
+            text_after_check = text_after[:max_check_length]
+            
+            # Use more strict pattern matching - ensure ONLY whitespace between image and description start
+            # Match must start immediately after image with only whitespace in between
+            # Construct the strict pattern directly to avoid issues with string manipulation
+            strict_pattern = r'^\s*\*\*----- Start of picture text -----\*\*\s*(<br>)?\s*'
+            desc_start_match = re.match(strict_pattern, text_after_check, re.DOTALL)
+            
+            if desc_start_match:
+                # Look for end pattern after the start pattern
+                remaining_text = text_after_check[desc_start_match.end():]
+                desc_end_match = re.search(desc_end_pattern, remaining_text, re.DOTALL)
+            else:
+                desc_end_match = None
+            
+            if not (desc_start_match and desc_end_match):
+                # No complete description, remove the image link and any trailing whitespace
+                # Also remove any blank lines that might be left after the image
+                next_content_start = image_end
+                # Skip any whitespace/newlines after the image
+                while next_content_start < len(md_text) and md_text[next_content_start] in (' ', '\t', '\n', '\r'):
+                    next_content_start += 1
+                
+                # Store the removed image link
+                removed_image = image.group().split('(')[1].split(')')[0].strip()
+                removed_images.append(removed_image)
+                
+                # Remove the image and any trailing whitespace
+                md_text = md_text[:image_start] + md_text[next_content_start:]
+        
+        return md_text, removed_images
 
     def _parse_markdownable(self, file_path: str) -> str:
         """
