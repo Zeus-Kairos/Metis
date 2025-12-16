@@ -187,12 +187,12 @@ class FileParser:
         # remove the copied pdf file from the image path
         os.remove(target_file_path)
 
-        # Clean up image links without descriptions
-        md_text, removed_images = self._clean_image_links(md_text)
-        # remove the images not referenced in the markdown text
-        for img in removed_images:
-            if os.path.exists(img):
-                os.remove(img)
+        # # Clean up image links without descriptions
+        # md_text, removed_images = self._clean_image_links(md_text)
+        # # remove the images not referenced in the markdown text
+        # for img in removed_images:
+        #     if os.path.exists(img):
+        #         os.remove(img)
 
         return md_text
 

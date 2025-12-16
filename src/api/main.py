@@ -4,7 +4,7 @@ from typing import List
 import os
 
 # Import the upload handler from another file
-from src.api.upload import handle_file_upload
+from src.file_process.pipeline import FileProcessingPipeline
 
 app = FastAPI(title="Metis File Upload API", version="1.0.0")
 
@@ -27,7 +27,8 @@ async def upload_files(
     """Upload one or more files to a knowledge base."""
     try:
         # Call the upload handler
-        result = await handle_file_upload(user_id, knowledge_base, files)
+        pipeline = FileProcessingPipeline()
+        result = await pipeline.process_files(user_id, knowledge_base, files)
         return result
     except Exception as e:
         # Return an error response with status code 400

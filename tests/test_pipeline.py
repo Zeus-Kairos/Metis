@@ -48,23 +48,43 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
         files=mock_upload_files
     )
     
+    # Print pipeline result
+    print("\n=== Pipeline Result (Supported Files) ===")
+    print(f"Status: {result['status']}")
+    print(f"Total: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
+    print(f"Parsing - Total Parsed: {result['parsing']['total_parsed']}, Failed Parsing: {result['parsing']['failed_parsing']}")
+    print(f"Total Chunks: {result['total_chunks']}")
+    print("Files:")
+    for file_result in result['files']:
+        print(f"  {file_result['filename']} - Status: {file_result['status']}, Parsed: {file_result.get('parsed', 'N/A')}")
+        if file_result['status'] != 'success':
+            print(f"    Error: {file_result.get('error', '')}")
+            print(f"    Message: {file_result.get('message', '')}")
+        if file_result.get('parsed') == False:
+            print(f"    Parsing Error: {file_result.get('parsing_error', '')}")
+    print("========================================\n")
+    
     # Verify results
     assert result["status"] in ["success", "partial_success"]
     assert result["total"] == len(mock_upload_files)
     
     # Check that all supported files were processed
     for file_result in result["files"]:
-        # All supported files should be successful
-        assert file_result["status"] == "success"
+        # All supported files should be either successful or skipped (already exists)
+        assert file_result["status"] in ["success", "skipped"]
         
-        # Path should be set for successful uploads
-        assert "path" in file_result
-        assert os.path.exists(file_result["path"])
-        
-        # File should be parsed
-        assert file_result.get("parsed", False) == True
-        assert "parsed_path" in file_result
-        assert os.path.exists(file_result["parsed_path"])
+        if file_result["status"] == "success":
+            # Path should be set for successful uploads
+            assert "path" in file_result
+            assert os.path.exists(file_result["path"])
+            
+            # File should be parsed
+            assert file_result.get("parsed", False) == True
+            assert "parsed_path" in file_result
+            assert os.path.exists(file_result["parsed_path"])
+        else:  # skipped
+            # Skip doesn't have path, but should have message
+            assert "message" in file_result
     
     # Verify parsing statistics
     assert result["parsing"]["total_parsed"] == len(mock_upload_files)
@@ -95,6 +115,22 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
         files=upload_files
     )
     
+    # Print pipeline result
+    print("\n=== Pipeline Result (Mixed Files) ===")
+    print(f"Status: {result['status']}")
+    print(f"Total: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
+    print(f"Parsing - Total Parsed: {result['parsing']['total_parsed']}, Failed Parsing: {result['parsing']['failed_parsing']}")
+    print(f"Total Chunks: {result['total_chunks']}")
+    print("Files:")
+    for file_result in result['files']:
+        print(f"  {file_result['filename']} - Status: {file_result['status']}, Parsed: {file_result.get('parsed', 'N/A')}")
+        if file_result['status'] != 'success':
+            print(f"    Error: {file_result.get('error', '')}")
+            print(f"    Message: {file_result.get('message', '')}")
+        if file_result.get('parsed') == False:
+            print(f"    Parsing Error: {file_result.get('parsing_error', '')}")
+    print("====================================\n")
+    
     # Verify results
     assert result["status"] == "partial_success"
     assert result["total"] == len(upload_files)
@@ -110,9 +146,10 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
             assert "error" in file_result
             failed += 1
         else:
-            # Other files should succeed
-            assert file_result["status"] == "success"
-            successful += 1
+            # Other files should be either success or skipped (already exists)
+            assert file_result["status"] in ["success", "skipped"]
+            if file_result["status"] == "success":
+                successful += 1
     
     assert successful == len(upload_files) - 1  # All except image
     assert failed == 1  # Only image should fail
@@ -132,3 +169,6 @@ def cleanup_after_tests():
     for test_dir in test_dirs:
         if os.path.exists(test_dir):
             shutil.rmtree(test_dir, ignore_errors=True)
+
+
+
