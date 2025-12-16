@@ -53,7 +53,7 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
     print(f"Status: {result['status']}")
     print(f"Total: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
     print(f"Parsing - Total Parsed: {result['parsing']['total_parsed']}, Failed Parsing: {result['parsing']['failed_parsing']}")
-    print(f"Total Chunks: {result['total_chunks']}")
+    print(f"Total Chunks: \n{result['total_chunks']}")
     print("Files:")
     for file_result in result['files']:
         print(f"  {file_result['filename']} - Status: {file_result['status']}, Parsed: {file_result.get('parsed', 'N/A')}")
@@ -120,7 +120,7 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
     print(f"Status: {result['status']}")
     print(f"Total: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
     print(f"Parsing - Total Parsed: {result['parsing']['total_parsed']}, Failed Parsing: {result['parsing']['failed_parsing']}")
-    print(f"Total Chunks: {result['total_chunks']}")
+    print(f"Total Chunks: \n{result['total_chunks']}")
     print("Files:")
     for file_result in result['files']:
         print(f"  {file_result['filename']} - Status: {file_result['status']}, Parsed: {file_result.get('parsed', 'N/A')}")

@@ -33,7 +33,7 @@ class FileProcessingPipeline:
         upload_results = await self.file_uploader.upload_files(user_id, knowledge_base, files)
         
         # Step 2: Parse successful uploads and split parsed content
-        all_documents = []
+        all_documents = {}
         for file_result in upload_results["files"]:
             if file_result["status"] != "success":
                 continue
@@ -57,7 +57,7 @@ class FileProcessingPipeline:
                         'file_path': file_path,
                     }
                     documents = self.file_splitter.split_text(content, metadata)
-                    all_documents.extend(documents)
+                    all_documents[filename] = documents
                     logger.info(f"File split into {len(documents)} documents: {filename}")
                 else:
                     file_result["parsed"] = False
@@ -75,7 +75,8 @@ class FileProcessingPipeline:
         all_successful = upload_results["successful"] == len(files) and upload_results["status"] == "success"
         overall_status = "success" if all_successful else "partial_success"
 
-        total_chunks = len(all_documents)
+        total_chunks = {"total": sum(len(docs) for docs in all_documents.values())}
+        total_chunks.update({filename: len(docs) for filename,docs in all_documents.items()})
         
         final_result = {
             "status": overall_status,
