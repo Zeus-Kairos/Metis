@@ -199,6 +199,13 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
     assert successful == len(upload_files) - 1  # All except image
     assert failed == 1  # Only image should fail
 
+    vectorstore = result["vectorstore"]
+    assert vectorstore is not None
+    assert len(vectorstore.index_to_docstore_id) == result["total_chunks"]["total"]
+
+    test_result = vectorstore.similarity_search_with_score("EPM", k=3)
+    print(test_result)
+
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_after_tests():
     """Cleanup test files after each test runs."""

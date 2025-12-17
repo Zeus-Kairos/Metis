@@ -1,10 +1,11 @@
 import os
 from typing import List, Dict, Any
 from fastapi import UploadFile
+from src.file_process.indexer import Indexer
 from src.file_process.file_splitter import FileSplitter
-from src.utils.logging_config import get_logger
 from src.file_process.file_upload import FileUploader
 from src.file_process.file_parser import FileParser, PARSABLE_FORMATS
+from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -60,7 +61,7 @@ class FileProcessingPipeline:
                         'file_path': file_path,
                     }
                     documents = self.file_splitter.split_text(content, metadata)
-                    all_documents[filename] = documents
+                    all_documents[file_id] = documents
                     logger.info(f"File split into {len(documents)} documents: {filename}")
                 else:
                     file_result["parsed"] = False
@@ -69,6 +70,10 @@ class FileProcessingPipeline:
             else:
                 file_result["parsed"] = False
                 file_result["parsing_error"] = "File type not parsable"
+
+        # Step 4: Index chunks
+        self.indexer = Indexer(f"./index/{user_id}/{knowledge_base}")
+        vectorstore = self.indexer.index_chunks(all_documents)
         
         # Calculate parsing metrics
         total_parsed = sum(1 for r in upload_results["files"] if r["status"] in ["success", "updated"] and r.get("parsed", False))
@@ -77,9 +82,9 @@ class FileProcessingPipeline:
         # Determine overall status
         all_successful = upload_results["successful"] == len(files) and upload_results["status"] == "success"
         overall_status = "success" if all_successful else "partial_success"
-
+        
         total_chunks = {"total": sum(len(docs) for docs in all_documents.values())}
-        total_chunks.update({filename: len(docs) for filename,docs in all_documents.items()})
+        total_chunks.update({file_id: len(docs) for file_id,docs in all_documents.items()})
         
         final_result = {
             "status": overall_status,
@@ -95,6 +100,7 @@ class FileProcessingPipeline:
             "total_chunks": total_chunks,
             "knowledge_base": knowledge_base,
             "user_id": user_id,
+            "vectorstore": vectorstore,
         }
         
         logger.info(f"Pipeline completed: {final_result['status']}, total={final_result['total']}, successful={final_result['successful']}, parsed={final_result['parsing']['total_parsed']}, total_chunks={final_result['total_chunks']}")
