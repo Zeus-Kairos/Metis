@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import UploadFile
 from src.utils.logging_config import get_logger
+from src.file_process.utils import get_file_id
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -40,10 +41,13 @@ class FileUploader:
             Dict containing upload result
         """
         try:
+            file_path = os.path.join(upload_dir, file.filename)
+
             # Get file extension and validate format
             file_ext = os.path.splitext(file.filename)[1].lower()
-            # Generate unique file_id
-            file_id = str(uuid.uuid4())
+            
+            # Generate unique file_id using filename
+            file_id = get_file_id(file_path)
             if file_ext not in SUPPORTED_FORMATS:
                 # Generate file_id even for failed uploads                
                 return {
@@ -65,49 +69,61 @@ class FileUploader:
                     "file_id": file_id
                 }          
             
-            # Check if file already exists based on content hash
+            # Generate file hash
             file_hash = hashlib.md5(content).hexdigest()
-            existing_files = os.listdir(upload_dir)
             
-            file_exists = False
-            for existing_file in existing_files:
-                existing_path = os.path.join(upload_dir, existing_file)
-                if os.path.isfile(existing_path):
-                    with open(existing_path, "rb") as f:
-                        existing_hash = hashlib.md5(f.read()).hexdigest()
-                    if existing_hash == file_hash:
-                        file_exists = True
-                        break
-            
-            if file_exists:
-                # Keep existing file, return message
-                return {
+            # Check if file with same name already exists
+            if os.path.exists(file_path):
+                # Same name exists, check if content is identical
+                with open(file_path, "rb") as f:
+                    existing_content = f.read()
+                existing_hash = hashlib.md5(existing_content).hexdigest()
+                
+                if existing_hash == file_hash:
+                    # Same name and same content
+                    return {
+                        "filename": file.filename,
+                        "status": "skipped",
+                        "message": "File already exists with identical content",
+                        "file_id": file_id,
+                        "uploaded_time": datetime.now().isoformat()
+                    }
+                else:
+                    # Same name but different content - update the file
+                    with open(file_path, "wb") as f:
+                        f.write(content)
+                    
+                    logger.info(f"File updated successfully: {file.filename} -> {file_path}")
+                    
+                    result_entry = {
+                        "filename": file.filename,
+                        "status": "updated",
+                        "path": file_path,
+                        "file_id": file_id,
+                        "file_hash": file_hash,
+                        "uploaded_time": datetime.now().isoformat()
+                    }
+                    
+                    return result_entry
+            else:
+                # New file - save it
+                with open(file_path, "wb") as f:
+                    f.write(content)
+                
+                # Log successful upload
+                logger.info(f"File uploaded successfully: {file.filename} -> {file_path}")
+                
+                # Add to results
+                result_entry = {
                     "filename": file.filename,
-                    "status": "skipped",
-                    "message": "File already exists with identical content",
-                    "file_id": file_id  # Still generate file_id for skipped files
+                    "status": "success",
+                    "path": file_path,
+                    "file_id": file_id,
+                    "file_hash": file_hash,
+                    "uploaded_time": datetime.now().isoformat()
                 }
-            
-            # Save new file - replace if exists
-            file_path = os.path.join(upload_dir, file.filename)
-            
-            with open(file_path, "wb") as f:
-                f.write(content)
-            
-            # Log successful upload
-            logger.info(f"File uploaded successfully: {file.filename} -> {file_path}")
-            
-            # Add to results
-            result_entry = {
-                "filename": file.filename,
-                "status": "success",
-                "path": file_path,
-                "file_id": file_id,
-                "file_hash": file_hash,
-                "uploaded_time": datetime.now().isoformat()
-            }
-            
-            return result_entry
+                
+                return result_entry
             
         except Exception as e:
             logger.error(f"Error processing file {file.filename}: {str(e)}")
@@ -119,19 +135,20 @@ class FileUploader:
                 "file_id": file_id
             }
     
-    async def upload_files(self, user_id: str, knowledge_base: str, files: List[UploadFile]) -> Dict[str, Any]:
+    async def upload_files(self, user_id: str, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
         """Upload multiple files for a user and knowledge base.
         
         Args:
             user_id: User ID for the upload
             knowledge_base: Knowledge base name
             files: List of UploadFile objects
+            directory: Directory to store files (optional, defaults to empty string)
             
         Returns:
             Dict containing upload results for all files
         """
         # Create upload directory structure
-        upload_dir = os.path.join(BASE_UPLOAD_DIR, user_id, knowledge_base, "origin")
+        upload_dir = os.path.join(BASE_UPLOAD_DIR, user_id, knowledge_base, "origin", directory)
         os.makedirs(upload_dir, exist_ok=True)
         
         # Process each file
@@ -142,7 +159,7 @@ class FileUploader:
             result = await self.upload_file(file, upload_dir)
             upload_results.append(result)
             
-            if result["status"] != "success" and result["status"] != "skipped":
+            if result["status"] not in ["success", "skipped", "updated"]:
                 all_successful = False
         
         # Determine overall status
@@ -152,7 +169,15 @@ class FileUploader:
             "status": overall_status,
             "files": upload_results,
             "total": len(files),
-            "successful": sum(1 for r in upload_results if r["status"] == "success"),
+            "successful": sum(1 for r in upload_results if r["status"] in ["success", "updated"]),
             "skipped": sum(1 for r in upload_results if r["status"] == "skipped"),
             "failed": sum(1 for r in upload_results if r["status"] == "failed")
         }
+
+
+
+
+
+
+
+

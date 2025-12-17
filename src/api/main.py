@@ -22,13 +22,14 @@ app.add_middleware(
 async def upload_files(
     user_id: str = Form(...),
     knowledge_base: str = Form(...),
+    directory: str = Form(""),
     files: List[UploadFile] = File(...)
 ):
     """Upload one or more files to a knowledge base."""
     try:
         # Call the upload handler
         pipeline = FileProcessingPipeline()
-        result = await pipeline.process_files(user_id, knowledge_base, files)
+        result = await pipeline.process_files(user_id, knowledge_base, files, directory)
         return result
     except Exception as e:
         # Return an error response with status code 400

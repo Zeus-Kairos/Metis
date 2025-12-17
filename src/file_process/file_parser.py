@@ -389,13 +389,15 @@ class FileParser:
                 raise ValueError("Invalid path structure")
                     
             # Build parsed directory path
-            parsed_dir_parts = path_parts[:origin_idx] + ["parsed"]
+            filepath_with_ext = os.sep.join(path_parts[origin_idx+1:])
+            parsed_dir_parts = path_parts[:origin_idx] + ["parsed"] + filepath_with_ext.split(os.sep)[:-1]
             parsed_dir = os.sep.join(parsed_dir_parts)
+            
             # Create parsed directory if it doesn't exist
             os.makedirs(parsed_dir, exist_ok=True)
                 
             # Get filename without extension and original extension
-            filename_with_ext = path_parts[-1]
+            filename_with_ext = filepath_with_ext.split(os.sep)[-1]
             filename, original_ext = os.path.splitext(filename_with_ext)
                 
             return parsed_dir, filename

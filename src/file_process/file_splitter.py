@@ -14,12 +14,12 @@ class FileSplitter:
     def split_text(self, text: str, metadata: dict = {}) -> list[Document]:
         md_header_splits  = self.markdown_splitter.split_text(text)
         documents = []
-        chunk_id = 0
+        chunk_index = 0
         for split in md_header_splits:
             split_docs = self.text_splitter.split_documents([split])
             for doc in split_docs:
-                doc.metadata.update({"chunk_id": chunk_id})
+                doc.metadata.update({"chunk_id": f"{chunk_index}"})
                 doc.metadata.update(metadata)
-                chunk_id += 1
+                chunk_index += 1
             documents.extend(split_docs)
         return documents

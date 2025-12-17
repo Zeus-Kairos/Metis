@@ -1,13 +1,14 @@
 import requests
 from io import BytesIO
 import os
+import shutil
 
 # Test the upload endpoint with the new directory structure
 def test_upload_api():
     # Create test file
     test_content = b"Test content for API verification"
     files = {'files': ('test_verification.txt', BytesIO(test_content), 'text/plain')}
-    data = {'user_id': 'test_user', 'knowledge_base': 'test_api_kb'}
+    data = {'user_id': 'test_user', 'knowledge_base': 'test_api_kb', 'directory': 'test_dir'}
     
     try:
         # Send request
@@ -21,7 +22,7 @@ def test_upload_api():
             print("✓ API upload successful!")
             
             # Check if directory structure was created
-            upload_path = os.path.join('uploads', 'test_user', 'test_api_kb', 'origin')
+            upload_path = os.path.join('uploads', 'test_user', 'test_api_kb', 'origin', 'test_dir')
             if os.path.exists(upload_path):
                 print(f"✓ Directory structure created: {upload_path}")
                 
@@ -40,17 +41,10 @@ def test_upload_api():
             print("✗ API upload failed")
             
     finally:
-        # Cleanup
+        # Cleanup - use shutil.rmtree for complete directory removal
         upload_path = os.path.join('uploads', 'test_user', 'test_api_kb')
-        origin_path = os.path.join(upload_path, 'origin')
-        
-        if os.path.exists(origin_path):
-            for file in os.listdir(origin_path):
-                os.unlink(os.path.join(origin_path, file))
-            os.rmdir(origin_path)
-        
         if os.path.exists(upload_path):
-            os.rmdir(upload_path)
+            shutil.rmtree(upload_path)
         
         print("\nCleanup completed")
 

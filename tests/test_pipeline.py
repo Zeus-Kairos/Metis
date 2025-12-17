@@ -4,6 +4,8 @@ import pytest
 from fastapi import UploadFile
 from io import BytesIO
 from src.file_process.pipeline import FileProcessingPipeline
+from src.file_process.file_parser import PARSABLE_FORMATS
+from src.file_process.file_upload import SUPPORTED_FORMATS
 
 @pytest.fixture
 def pipeline():
@@ -45,9 +47,30 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
     result = await pipeline.process_files(
         user_id="test_pipeline_user",
         knowledge_base="test_pipeline_kb",
+        directory="test_directory",  # Add missing directory parameter
         files=mock_upload_files
     )
-    
+
+    # Print detailed results
+    print(f"Pipeline Status: {result['status']}")
+    print(f"Total Files: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
+    print(f"Total Chunks: {result['total_chunks']}")  # Add total_chunks print
+    print("\nFile Details:")
+    for file_result in result['files']:
+        print(f"  - {file_result['filename']}: Status={file_result['status']}, Parsed={file_result.get('parsed', False)}, Errors={file_result.get('errors', '')}")
+
+    # Assertions
+    assert result["status"] == "partial_success" or result["status"] == "success"
+    assert result["total"] == 6
+    assert result["successful"] + result["skipped"] + result["failed"] == result["total"]
+
+    # Check that all supported files were processed successfully
+    for file_result in result["files"]:
+        if file_result["status"] == "success":
+            file_ext = os.path.splitext(file_result["filename"])[1].lower()
+            if file_ext in PARSABLE_FORMATS:
+                assert file_result.get("parsed", False), f"{file_result['filename']} should be parsed"
+
     # Print pipeline result
     print("\n=== Pipeline Result (Supported Files) ===")
     print(f"Status: {result['status']}")
@@ -94,27 +117,49 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
 async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
     """Test the pipeline with both supported and unsupported files."""
     upload_files = []
-    
+
     # Include all test files including image
     for filename in os.listdir(test_files_dir):
         file_path = os.path.join(test_files_dir, filename)
         if os.path.isfile(file_path):
             with open(file_path, "rb") as f:
                 content = f.read()
-            
+
             upload_file = UploadFile(
                 filename=filename,
                 file=BytesIO(content)
             )
             upload_files.append(upload_file)
-    
+
     # Process files through pipeline
     result = await pipeline.process_files(
         user_id="test_mixed_user",
         knowledge_base="test_mixed_kb",
+        directory="test_directory",  # Add missing directory parameter
         files=upload_files
     )
-    
+
+    # Print detailed results
+    print(f"Pipeline Status: {result['status']}")
+    print(f"Total Files: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
+    print(f"Total Chunks: {result['total_chunks']}")  # Add total_chunks print
+    print("\nFile Details:")
+    for file_result in result['files']:
+        print(f"  - {file_result['filename']}: Status={file_result['status']}, Parsed={file_result.get('parsed', False)}, Errors={file_result.get('errors', '')}")
+
+    # Assertions
+    assert result["status"] == "partial_success" or result["status"] == "success"
+    assert result["total"] >= 1  # At least one file should be processed
+    assert result["successful"] + result["skipped"] + result["failed"] == result["total"]
+
+    # Check that image file is handled appropriately
+    image_extensions = ['.jpeg', '.jpg', '.png', '.gif', '.bmp']
+    for file_result in result["files"]:
+        filename = file_result["filename"]
+        file_ext = os.path.splitext(filename)[1].lower()
+        if file_ext in image_extensions:
+            assert file_ext not in SUPPORTED_FORMATS, f"Image files should not be in supported formats: {filename}"
+
     # Print pipeline result
     print("\n=== Pipeline Result (Mixed Files) ===")
     print(f"Status: {result['status']}")
@@ -169,6 +214,9 @@ def cleanup_after_tests():
     for test_dir in test_dirs:
         if os.path.exists(test_dir):
             shutil.rmtree(test_dir, ignore_errors=True)
+
+
+
 
 
 

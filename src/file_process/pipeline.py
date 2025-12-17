@@ -16,30 +16,32 @@ class FileProcessingPipeline:
         self.file_parser = FileParser()
         self.file_splitter = FileSplitter()
     
-    async def process_files(self, user_id: str, knowledge_base: str, files: List[UploadFile]) -> Dict[str, Any]:
+    async def process_files(self, user_id: str, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
         """Process files through the complete pipeline: upload -> parse.
         
         Args:
             user_id: User ID for the upload
             knowledge_base: Knowledge base name
             files: List of UploadFile objects
+            directory: Directory to store files (optional, defaults to empty string)
             
         Returns:
             Dict containing complete processing results
         """
-        logger.info(f"Starting file processing pipeline: user_id={user_id}, knowledge_base={knowledge_base}, file_count={len(files)}")
+        logger.info(f"Starting file processing pipeline: user_id={user_id}, knowledge_base={knowledge_base}, directory={directory}, file_count={len(files)}")
         
         # Step 1: Upload files
-        upload_results = await self.file_uploader.upload_files(user_id, knowledge_base, files)
+        upload_results = await self.file_uploader.upload_files(user_id, knowledge_base, files, directory)
         
         # Step 2: Parse successful uploads and split parsed content
         all_documents = {}
         for file_result in upload_results["files"]:
-            if file_result["status"] != "success":
+            if file_result["status"] not in ["success", "updated"]:
                 continue
             
             file_path = file_result["path"]
             filename = file_result["filename"]
+            file_id = file_result["file_id"]
             
             # Check if file is parsable
             file_ext = os.path.splitext(filename)[1].lower()
@@ -53,6 +55,7 @@ class FileProcessingPipeline:
                     # Step 3: Split parsed content
                     content = parse_result["content"]
                     metadata = {
+                        "file_id": file_id,
                         "filename": filename,
                         'file_path': file_path,
                     }
@@ -68,8 +71,8 @@ class FileProcessingPipeline:
                 file_result["parsing_error"] = "File type not parsable"
         
         # Calculate parsing metrics
-        total_parsed = sum(1 for r in upload_results["files"] if r["status"] == "success" and r.get("parsed", False))
-        failed_parsing = sum(1 for r in upload_results["files"] if r["status"] == "success" and not r.get("parsed", False))
+        total_parsed = sum(1 for r in upload_results["files"] if r["status"] in ["success", "updated"] and r.get("parsed", False))
+        failed_parsing = sum(1 for r in upload_results["files"] if r["status"] in ["success", "updated"] and not r.get("parsed", False))
         
         # Determine overall status
         all_successful = upload_results["successful"] == len(files) and upload_results["status"] == "success"
@@ -97,3 +100,6 @@ class FileProcessingPipeline:
         logger.info(f"Pipeline completed: {final_result['status']}, total={final_result['total']}, successful={final_result['successful']}, parsed={final_result['parsing']['total_parsed']}, total_chunks={final_result['total_chunks']}")
         
         return final_result
+
+
+

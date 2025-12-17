@@ -147,7 +147,7 @@ async def test_filename_collision():
     uploader = FileUploader()
     
     # Create upload directory manually for this test to ensure clean state
-    upload_dir = os.path.join("uploads", "test_user", "test_kb", "origin")
+    upload_dir = os.path.join("uploads", "test_user", "test_kb", "origin", "test_dir")
     os.makedirs(upload_dir, exist_ok=True)
     
     # Clean up any existing test files first
@@ -166,12 +166,12 @@ async def test_filename_collision():
     mock_file2.read.return_value = b"Content 2"
     
     # Upload the second file with same name but different content
-    result = await uploader.upload_files("test_user", "test_kb", [mock_file2])
+    result = await uploader.upload_files("test_user", "test_kb", [mock_file2], "test_dir")
     
     # Verify result - should be success because different content
-    assert result["status"] == "success", f"Expected success status, got {result['status']}"
+    assert result["status"] == "success", f"Expected success status, got {result['status']}"     
     assert result["successful"] == 1, f"Expected 1 successful upload, got {result['successful']}"
-    assert result["files"][0]["status"] == "success", f"Expected file status success, got {result['files'][0]['status']}"
+    assert result["files"][0]["status"] == "updated", f"Expected file status updated, got {result['files'][0]['status']}"
     
     # Only the new file should exist with original name
     assert os.path.exists(first_file_path), "File should still exist with original name"
