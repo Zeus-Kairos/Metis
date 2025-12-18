@@ -203,7 +203,7 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
     assert vectorstore is not None
     assert len(vectorstore.index_to_docstore_id) == result["total_chunks"]["total"]
 
-    test_result = vectorstore.similarity_search_with_score("EPM", k=3)
+    test_result = vectorstore.similarity_search_with_score("measurement accuracy of N8481A", k=3)
     print(test_result)
 
 @pytest.fixture(scope="function", autouse=True)
