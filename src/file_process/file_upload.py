@@ -135,7 +135,7 @@ class FileUploader:
                 "file_id": file_id
             }
     
-    async def upload_files(self, user_id: str, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
+    async def upload_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
         """Upload multiple files for a user and knowledge base.
         
         Args:
@@ -148,7 +148,7 @@ class FileUploader:
             Dict containing upload results for all files
         """
         # Create upload directory structure
-        upload_dir = os.path.join(BASE_UPLOAD_DIR, user_id, knowledge_base, "origin", directory)
+        upload_dir = os.path.join(BASE_UPLOAD_DIR, str(user_id), knowledge_base, "origin", directory)
         os.makedirs(upload_dir, exist_ok=True)
         
         # Process each file

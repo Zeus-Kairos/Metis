@@ -45,7 +45,7 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
     """Test the pipeline with supported test files."""
     # Process files through pipeline
     result = await pipeline.process_files(
-        user_id="test_pipeline_user",
+        user_id=1,
         knowledge_base="test_pipeline_kb",
         directory="test_directory",  # Add missing directory parameter
         files=mock_upload_files
@@ -133,7 +133,7 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
 
     # Process files through pipeline
     result = await pipeline.process_files(
-        user_id="test_mixed_user",
+        user_id=2,
         knowledge_base="test_mixed_kb",
         directory="test_directory",  # Add missing directory parameter
         files=upload_files
@@ -214,8 +214,8 @@ def cleanup_after_tests():
     # Remove test directories
     import shutil
     test_dirs = [
-        r"c:\Apps\Metis\uploads\test_pipeline_user",
-        r"c:\Apps\Metis\uploads\test_mixed_user"
+        r"c:\Apps\Metis\uploads\1",
+        r"c:\Apps\Metis\uploads\2"
     ]
     
     for test_dir in test_dirs:

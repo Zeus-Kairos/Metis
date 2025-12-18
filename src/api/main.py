@@ -20,7 +20,7 @@ app.add_middleware(
 # API endpoint for file uploads
 @app.post("/api/upload")
 async def upload_files(
-    user_id: str = Form(...),
+    user_id: int = Form(...),
     knowledge_base: str = Form(...),
     directory: str = Form(""),
     files: List[UploadFile] = File(...)

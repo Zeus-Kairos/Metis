@@ -17,7 +17,7 @@ class FileProcessingPipeline:
         self.file_parser = FileParser()
         self.file_splitter = FileSplitter()
     
-    async def process_files(self, user_id: str, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
+    async def process_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
         """Process files through the complete pipeline: upload -> parse.
         
         Args:
