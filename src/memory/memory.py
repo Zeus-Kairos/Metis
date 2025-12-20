@@ -67,7 +67,7 @@ class MemoryManager:
                 with conn.cursor() as cur:
                     # raise an error if the user doesn't exist
                     cur.execute(
-                        "SELECT user_id FROM users WHERE user_id = %s",
+                        "SELECT id FROM users WHERE id = %s",
                         (user_id,)
                     )
                     if not cur.fetchone():
@@ -159,7 +159,7 @@ class MemoryManager:
 
                     # raise an error if the user doesn't exist
                     cur.execute(
-                        "SELECT user_id FROM users WHERE user_id = %s",
+                        "SELECT id FROM users WHERE id = %s",
                         (user_id,)
                     )
                     if not cur.fetchone():
@@ -542,6 +542,16 @@ class MemoryManager:
         thread_id = self._get_thread_id_for_user(user_id)
         return (user_id, thread_id)
 
+    def __del__(self):
+        """
+        Clean up resources when the MemoryManager instance is destroyed.
+        """
+        if hasattr(self, 'connection_pool'):
+            try:
+                self.connection_pool.close()
+            except Exception as e:
+                logger.error(f"Error closing connection pool: {e}")
+
     def get_checkpointer(self):
         """
         Get the checkpointer instance.
@@ -564,7 +574,7 @@ class MemoryManager:
                     # Create users table
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS users (
-                            user_id INTEGER PRIMARY KEY,
+                            id SERIAL PRIMARY KEY,
                             username VARCHAR(255) NOT NULL,
                             email VARCHAR(255) NOT NULL,
                             password VARCHAR(255) NOT NULL,
@@ -582,16 +592,79 @@ class MemoryManager:
                             is_active BOOLEAN NOT NULL DEFAULT true,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (user_id) REFERENCES users(user_id)
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                         )
                     """)
                     
-                    # Create index for threads table
+                    # Create index on threads.user_id
                     cur.execute("""
                         CREATE INDEX IF NOT EXISTS idx_threads_user_id ON threads(user_id)
+                    """)
+                    
+                    # Create knowledgebase table
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS knowledgebase (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL,
+                            name VARCHAR(255) NOT NULL,
+                            description TEXT,
+                            navigation JSONB,
+                            is_active BOOLEAN NOT NULL DEFAULT true,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        )
+                    """)
+                    
+                    # Create kb_thread table for knowledgebase-thread mapping (one-to-many)
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS kb_thread (
+                            knowledgebase_id INTEGER NOT NULL,
+                            thread_id VARCHAR(255) NOT NULL,
+                            PRIMARY KEY (knowledgebase_id, thread_id),
+                            FOREIGN KEY (knowledgebase_id) REFERENCES knowledgebase(id) ON DELETE CASCADE,
+                            FOREIGN KEY (thread_id) REFERENCES threads(thread_id) ON DELETE CASCADE,
+                            UNIQUE (thread_id)  -- Ensure each thread maps to at most one knowledgebase
+                        )
+                    """)
+                    
+                    # Create index on kb_thread.knowledgebase_id for efficient queries
+                    cur.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_kb_thread_knowledgebase_id ON kb_thread(knowledgebase_id)
+                    """)
+                    
+                    # Create index on kb_thread.thread_id for efficient queries
+                    cur.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_kb_thread_thread_id ON kb_thread(thread_id)
                     """)
                     
                     conn.commit()
         except Exception as e:
             logger.error(f"Error initializing database tables: {e}")
             return
+
+    def create_user(self, username: str, email: str, password: str) -> int:
+        """
+        Create a new user in the database.
+        
+        Args:
+            username: User's username
+            email: User's email
+            password: User's password
+            
+        Returns:
+            The created user's ID
+        """
+        if not self.conn_str:
+            raise ValueError("Cannot create user in in-memory mode")
+            
+        with self.connection_pool.connection() as conn:
+            with conn.cursor() as cur:
+                # Insert the user
+                cur.execute(
+                    "INSERT INTO users (username, email, password) VALUES (%s, %s, %s) RETURNING id",
+                    (username, email, password)
+                )
+                user_id = cur.fetchone()[0]
+                conn.commit()
+                return user_id
