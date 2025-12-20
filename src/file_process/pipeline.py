@@ -100,12 +100,12 @@ class FileProcessingPipeline:
             "total_chunks": total_chunks,
             "knowledge_base": knowledge_base,
             "user_id": user_id,
-            "vectorstore": vectorstore,
         }
         
         logger.info(f"Pipeline completed: {final_result['status']}, total={final_result['total']}, successful={final_result['successful']}, parsed={final_result['parsing']['total_parsed']}, total_chunks={final_result['total_chunks']}")
         
         return final_result
+
 
 
 

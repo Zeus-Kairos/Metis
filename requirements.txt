@@ -102,6 +102,7 @@ rank-bm25==0.2.2
 regex==2025.11.3
 requests==2.32.5
 requests-toolbelt==1.0.0
+passlib[bcrypt]==1.7.4
 safetensors==0.6.2
 scikit-learn==1.7.2
 scipy==1.16.3
@@ -140,3 +141,4 @@ yarl==1.22.0
 zipp==3.23.0
 zlib-state==0.1.10
 zstandard==0.25.0
+

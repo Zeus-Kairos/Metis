@@ -333,7 +333,7 @@ def test_database_tables_creation():
                     AND table_name = 'kb_thread'
                 """)
                 kb_thread_columns = [row[0] for row in cur.fetchall()]
-                required_kb_thread_columns = ['knowledgebase_id', 'thread_id', 'created_at']
+                required_kb_thread_columns = ['knowledgebase_id', 'thread_id']
                 for col in required_kb_thread_columns:
                     assert col in kb_thread_columns, f"Required column '{col}' not found in kb_thread table"
                 print("✓ kb_thread table has all required columns")

@@ -7,6 +7,7 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.base import BaseStore
 from langgraph.store.memory import InMemoryStore
 from psycopg_pool import ConnectionPool
+from passlib.context import CryptContext      
 
 DEFAULT_THREAD_TITLE = "New Chat"
 
@@ -22,17 +23,19 @@ class MemoryManager:
         """
         # Get connection string from environment
         self.conn_str = os.getenv("DB_URI")
+        # Password hashing
+        self.pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
         
         # Initialize connection pool and checkpointer
         if self.conn_str:
             # Create connection pool with autocommit=True to handle CREATE INDEX CONCURRENTLY
             self.connection_pool = ConnectionPool(self.conn_str, kwargs={"autocommit": True})
-            self.checkpointer = PostgresSaver(self.connection_pool)
-            try:
-                self.checkpointer.setup()
-            except Exception as e:
-                logger.error(f"Error setting up checkpointer: {e}")
-                # If setup fails, we might already have the tables
+            # self.checkpointer = PostgresSaver(self.connection_pool)
+            # try:
+            #     self.checkpointer.setup()
+            # except Exception as e:
+            #     logger.error(f"Error setting up checkpointer: {e}")
+            #     # If setup fails, we might already have the tables
         else:
             self.checkpointer = InMemorySaver()
             self.memory_store = InMemoryStore()
@@ -46,9 +49,10 @@ class MemoryManager:
         self.thread_metadata = {}
 
     # Method to return a ConnectionPool lifespan context manager
-    def get_connection_pool(self) -> ConnectionPool:
+    def get_connection_pool(self) -> Optional[ConnectionPool]:
         """Return the connection pool for database operations."""
-        return ConnectionPool(self.conn_str)
+        return getattr(self, 'connection_pool', None)
+        # return ConnectionPool(self.conn_str)
     
     # Helper method to get the active thread_id for a user or create a new thread_id for a new user
     def _get_thread_id_for_user(self, user_id: int) -> str:
@@ -583,6 +587,13 @@ class MemoryManager:
                         )
                     """)
                     
+                    # Add unique constraints to username and email columns if they don't exist
+                    cur.execute("""
+                        ALTER TABLE users 
+                        ADD CONSTRAINT users_username_key UNIQUE (username),
+                        ADD CONSTRAINT users_email_key UNIQUE (email);
+                    """)
+                                       
                     # Create threads table
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS threads (
@@ -643,6 +654,44 @@ class MemoryManager:
             logger.error(f"Error initializing database tables: {e}")
             return
 
+    def create_knowledgebase(self, user_id: int, name: str, description: str = None, navigation: dict = None) -> int:
+        """
+        Create a new knowledge base for the user.
+        
+        Args:
+            user_id: User identifier
+            name: Knowledge base name
+            description: Optional knowledge base description
+            navigation: Optional knowledge base navigation structure
+            
+        Returns:
+            The created knowledge base ID
+        """
+        if not self.conn_str:
+            raise ValueError("Cannot create knowledgebase in in-memory mode")
+            
+        with self.connection_pool.connection() as conn:
+            with conn.cursor() as cur:
+                # Check if user exists
+                cur.execute(
+                    "SELECT id FROM users WHERE id = %s",
+                    (user_id,)
+                )
+                if not cur.fetchone():
+                    raise ValueError(f"User ID {user_id} does not exist")
+                
+                # Serialize navigation to JSON string if provided
+                navigation_json = json.dumps(navigation) if navigation else None
+                
+                # Insert the knowledgebase
+                cur.execute(
+                    "INSERT INTO knowledgebase (user_id, name, description, navigation) VALUES (%s, %s, %s, %s) RETURNING id",
+                    (user_id, name, description, navigation_json)
+                )
+                knowledgebase_id = cur.fetchone()[0]
+                conn.commit()
+                return knowledgebase_id
+
     def create_user(self, username: str, email: str, password: str) -> int:
         """
         Create a new user in the database.
@@ -656,15 +705,30 @@ class MemoryManager:
             The created user's ID
         """
         if not self.conn_str:
-            raise ValueError("Cannot create user in in-memory mode")
-            
-        with self.connection_pool.connection() as conn:
-            with conn.cursor() as cur:
-                # Insert the user
-                cur.execute(
-                    "INSERT INTO users (username, email, password) VALUES (%s, %s, %s) RETURNING id",
-                    (username, email, password)
-                )
-                user_id = cur.fetchone()[0]
-                conn.commit()
-                return user_id
+            raise ValueError("Cannot create user in in-memory mode")        
+        
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Hash password using argon2
+                    hashed_password = self.pwd_context.hash(password)
+                    
+                    # Insert the user
+                    cur.execute(
+                        "INSERT INTO users (username, email, password) VALUES (%s, %s, %s) RETURNING id",
+                        (username, email, hashed_password)
+                    )
+                    user_id = cur.fetchone()[0]
+                    conn.commit()
+                    return user_id
+        except Exception as e:
+            # Check if this is a unique constraint violation
+            error_message = str(e)
+            if 'unique_username' in error_message:
+                raise ValueError("Username already exists")
+            elif 'unique_email' in error_message:
+                raise ValueError("Email already exists")
+            elif 'duplicate key value' in error_message:
+                raise ValueError("Username or email already exists")
+            # If it's not a unique constraint violation, re-raise the original exception
+            raise
