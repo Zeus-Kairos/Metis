@@ -4,8 +4,7 @@ import pytest
 from fastapi import UploadFile
 from io import BytesIO
 from src.file_process.pipeline import FileProcessingPipeline
-from src.file_process.file_parser import PARSABLE_FORMATS
-from src.file_process.file_upload import SUPPORTED_FORMATS
+from src.file_process.utils import SUPPORTED_FORMATS
 
 @pytest.fixture
 def pipeline():
@@ -68,7 +67,7 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
     for file_result in result["files"]:
         if file_result["status"] == "success":
             file_ext = os.path.splitext(file_result["filename"])[1].lower()
-            if file_ext in PARSABLE_FORMATS:
+            if file_ext in SUPPORTED_FORMATS:
                 assert file_result.get("parsed", False), f"{file_result['filename']} should be parsed"
 
     # Print pipeline result
@@ -181,7 +180,7 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
     parsable_files_count = 0
     for filename in os.listdir(test_files_dir):
         file_ext = os.path.splitext(filename)[1].lower()
-        if file_ext in PARSABLE_FORMATS:
+        if file_ext in SUPPORTED_FORMATS:
             parsable_files_count += 1
     
     assert result["status"] in ["success", "partial_success"]

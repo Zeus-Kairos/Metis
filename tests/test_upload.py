@@ -4,7 +4,8 @@ import shutil
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi import UploadFile
-from src.file_process.file_upload import FileUploader, SUPPORTED_FORMATS, MAX_FILE_SIZE, MAX_FILES_PER_UPLOAD
+from src.file_process.file_upload import FileUploader
+from src.file_process.utils import MAX_FILE_SIZE, MAX_FILES_PER_UPLOAD
 
 # Create a temporary test directory
 test_dir = "test_upload_temp"

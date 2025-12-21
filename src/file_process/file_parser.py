@@ -13,9 +13,6 @@ from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# Define supported file formats for parsing
-PARSABLE_FORMATS = {'.txt', '.md', '.html', '.htm', '.pdf', '.docx', '.pptx', '.xlsx', '.html', '.csv'}
-
 class FileParser:
     """
     File parsing module that converts uploaded files to markdown format.

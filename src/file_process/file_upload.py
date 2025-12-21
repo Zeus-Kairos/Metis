@@ -1,26 +1,12 @@
 import os
 import hashlib
-import dotenv
 from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import UploadFile
+from src.file_process.utils import MAX_FILE_SIZE, SUPPORTED_FORMATS, get_upload_dir
 from src.utils.logging_config import get_logger
 
-# Load environment variables
-dotenv.load_dotenv()
-
 logger = get_logger(__name__)
-
-# Define supported file formats from environment or use defaults
-SUPPORTED_FORMATS = set(os.getenv("SUPPORTED_FORMATS", ".txt,.pdf,.md,.docx,.pptx,.xlsx,.html,.htm,.csv").split(","))
-
-# Define maximum file size from environment or use default (100MB)
-MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(100 * 1024 * 1024)))
-
-MAX_FILES_PER_UPLOAD = int(os.getenv("MAX_FILES_PER_UPLOAD", "20"))
-
-# Base upload directory from environment or use default
-BASE_UPLOAD_DIR = os.getenv("BASE_UPLOAD_DIR", "uploads")
 
 class FileUploader:
     """Class to handle file upload functionality without parsing."""
@@ -137,7 +123,7 @@ class FileUploader:
             Dict containing upload results for all files
         """
         # Create upload directory structure
-        upload_dir = os.path.join(BASE_UPLOAD_DIR, str(user_id), knowledge_base, "origin", directory)
+        upload_dir = get_upload_dir(user_id, knowledge_base, directory)
         os.makedirs(upload_dir, exist_ok=True)
         
         # Process each file

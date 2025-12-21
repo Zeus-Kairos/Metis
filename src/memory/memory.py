@@ -385,7 +385,7 @@ class MemoryManager:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id
+                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id, file_size
                         FROM files
                         WHERE knowledgebase_id = %s
                         ORDER BY uploaded_time DESC
@@ -413,7 +413,7 @@ class MemoryManager:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id
+                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id, file_size
                         FROM files
                         WHERE file_id = %s
                         """,

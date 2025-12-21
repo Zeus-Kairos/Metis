@@ -1,10 +1,11 @@
 import os
 from typing import List, Dict, Any
 from fastapi import UploadFile
+from src.file_process.utils import SUPPORTED_FORMATS, get_index_path
 from src.file_process.indexer import Indexer
 from src.file_process.file_splitter import FileSplitter
 from src.file_process.file_upload import FileUploader
-from src.file_process.file_parser import FileParser, PARSABLE_FORMATS
+from src.file_process.file_parser import FileParser
 from src.memory.memory import MemoryManager
 from src.utils.logging_config import get_logger
 
@@ -29,7 +30,7 @@ class FileProcessingPipeline:
         
         for file in files:
             file_ext = os.path.splitext(file.filename)[1].lower()
-            if file_ext in PARSABLE_FORMATS:
+            if file_ext in SUPPORTED_FORMATS:
                 parsable_files.append(file)
             else:
                 non_parsable_files.append(file)
@@ -52,7 +53,7 @@ class FileProcessingPipeline:
             
             # Check if file is parsable (redundant check for safety)
             file_ext = os.path.splitext(filename)[1].lower()
-            if file_ext in PARSABLE_FORMATS:
+            if file_ext in SUPPORTED_FORMATS:
                 parse_result = self.file_parser.parse_file(file_path, save=True)
                 if parse_result["success"]:
                     file_result["parsed"] = True
@@ -97,7 +98,7 @@ class FileProcessingPipeline:
                 file_result["parsing_error"] = "File type not parsable"
 
         # Step 5: Index chunks
-        self.indexer = Indexer(f"./index/{user_id}/{knowledge_base}")
+        self.indexer = Indexer(get_index_path(user_id, knowledge_base))
         vectorstore = self.indexer.index_chunks(all_documents)
         
         # Add non-parsable files to the results with appropriate status
