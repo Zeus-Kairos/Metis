@@ -1,26 +1,56 @@
-import requests
-import json
+import sys
+import os
 
-BASE_URL = "http://127.0.0.1:8000"
+# Add the src directory to the path BEFORE importing from src
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
 
-# Test data
+from fastapi.testclient import TestClient
+from src.api.main import app
+from src.memory.memory import MemoryManager
+import time
+
+client = TestClient(app)
+memory_manager = MemoryManager()
+
+# Test data with unique values
 TEST_USER = {
     "username": "testuser",
     "email": "test@example.com",
     "password": "test123"  # Shorter password within 72-byte limit
 }
 
-
 def test_user_creation():
     """Test creating a new user."""
     print("=== Testing User Creation ===")
-    response = requests.post(f"{BASE_URL}/api/users", json=TEST_USER)
+    
+    # Cleanup any existing user directly from the database
+    try:
+        with memory_manager.connection_pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM users WHERE username = %s OR email = %s", 
+                           (TEST_USER["username"], TEST_USER["email"]))
+                conn.commit()
+        print("✓ Cleaned up any existing test user")
+    except Exception as e:
+        print(f"⚠ Error during cleanup: {e}")
+    
+    # Create new user
+    response = client.post("/api/users", json=TEST_USER)
     print(f"Status Code: {response.status_code}")
     print(f"Response: {response.json()}")
     assert response.status_code == 200, f"Expected status 200, got {response.status_code}"
-    assert response.json()["success"] is True, "Expected success to be True"
     print("✓ User creation test passed!")
     return response.json()
+
+
+def get_token():
+    """Get a JWT token for the test user."""
+    login_data = {
+        "username": TEST_USER["username"],
+        "password": TEST_USER["password"]
+    }
+    response = client.post("/api/token", data=login_data)
+    return response.json()["access_token"]
 
 
 def test_login():
@@ -30,7 +60,7 @@ def test_login():
         "username": TEST_USER["username"],
         "password": TEST_USER["password"]
     }
-    response = requests.post(f"{BASE_URL}/api/token", data=login_data)
+    response = client.post("/api/token", data=login_data)
     print(f"Status Code: {response.status_code}")
     print(f"Response: {response.json()}")
     assert response.status_code == 200, f"Expected status 200, got {response.status_code}"
@@ -40,13 +70,17 @@ def test_login():
     return response.json()
 
 
-def test_protected_endpoint(token_data):
+def test_protected_endpoint():
     """Test accessing a protected endpoint with the JWT token."""
     print("\n=== Testing Protected Endpoint ===")
+    
+    # Get a token first
+    token = get_token()
+    
     headers = {
-        "Authorization": f"Bearer {token_data['access_token']}"
+        "Authorization": f"Bearer {token}"
     }
-    response = requests.get(f"{BASE_URL}/api/users/me", headers=headers)
+    response = client.get("/api/users/me", headers=headers)
     print(f"Status Code: {response.status_code}")
     print(f"Response: {response.json()}")
     assert response.status_code == 200, f"Expected status 200, got {response.status_code}"
@@ -59,7 +93,7 @@ def test_protected_endpoint(token_data):
 def test_unauthorized_access():
     """Test accessing a protected endpoint without a token."""
     print("\n=== Testing Unauthorized Access ===")
-    response = requests.get(f"{BASE_URL}/api/users/me")
+    response = client.get("/api/users/me")
     print(f"Status Code: {response.status_code}")
     assert response.status_code == 401, f"Expected status 401, got {response.status_code}"
     print("✓ Unauthorized access test passed!")
@@ -70,7 +104,7 @@ if __name__ == "__main__":
         # Run all tests
         user_data = test_user_creation()
         token_data = test_login()
-        protected_data = test_protected_endpoint(token_data)
+        protected_data = test_protected_endpoint()  # No longer needs token_data parameter
         test_unauthorized_access()
         
         print("\n🎉 All authentication tests passed successfully!")

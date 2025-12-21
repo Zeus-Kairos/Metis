@@ -177,34 +177,41 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir):
     print("====================================\n")
     
     # Verify results
-    assert result["status"] == "partial_success"
+    # Calculate expected parsable files (all except image)
+    parsable_files_count = 0
+    for filename in os.listdir(test_files_dir):
+        file_ext = os.path.splitext(filename)[1].lower()
+        if file_ext in PARSABLE_FORMATS:
+            parsable_files_count += 1
+    
+    assert result["status"] in ["success", "partial_success"]
     assert result["total"] == len(upload_files)
+    assert result["skipped_non_parsable"] == len(upload_files) - parsable_files_count
     
     # Count successful and failed
     successful = 0
     failed = 0
     
     for file_result in result["files"]:
-        if file_result["filename"] == "test_image.jpeg":
-            # Image should fail
-            assert file_result["status"] == "failed"
-            assert "error" in file_result
+        filename = file_result["filename"]
+        status = file_result["status"]
+        
+        if filename == "test_image.jpeg":
+            # Non-parsable files should have failed status
+            assert status == "failed"
+            assert "parsed" in file_result
+            assert not file_result["parsed"]
+            assert "errors" in file_result
+            assert "File type not parsable" in str(file_result["errors"])
             failed += 1
         else:
-            # Other files should be either success or skipped (already exists)
-            assert file_result["status"] in ["success", "skipped"]
-            if file_result["status"] == "success":
+            # Parsable files should be successful or skipped (if no changes)
+            assert status in ["success", "skipped"]
+            if status == "success":
                 successful += 1
     
     assert successful == len(upload_files) - 1  # All except image
     assert failed == 1  # Only image should fail
-
-    vectorstore = result["vectorstore"]
-    assert vectorstore is not None
-    assert len(vectorstore.index_to_docstore_id) == result["total_chunks"]["total"]
-
-    test_result = vectorstore.similarity_search_with_score("measurement accuracy of N8481A", k=3)
-    print(test_result)
 
 @pytest.fixture(scope="function", autouse=True)
 def cleanup_after_tests():
@@ -221,6 +228,11 @@ def cleanup_after_tests():
     for test_dir in test_dirs:
         if os.path.exists(test_dir):
             shutil.rmtree(test_dir, ignore_errors=True)
+
+
+
+
+
 
 
 

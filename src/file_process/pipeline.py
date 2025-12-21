@@ -31,8 +31,22 @@ class FileProcessingPipeline:
         """
         logger.info(f"Starting file processing pipeline: user_id={user_id}, knowledge_base={knowledge_base}, directory={directory}, file_count={len(files)}")
         
-        # Step 1: Upload files
-        upload_results = await self.file_uploader.upload_files(user_id, knowledge_base, files, directory)
+        # Filter files to only include parsable formats
+        parsable_files = []
+        non_parsable_files = []
+        
+        for file in files:
+            file_ext = os.path.splitext(file.filename)[1].lower()
+            if file_ext in PARSABLE_FORMATS:
+                parsable_files.append(file)
+            else:
+                non_parsable_files.append(file)
+                logger.info(f"Skipping non-parsable file: {file.filename}")
+        
+        logger.info(f"Filtered to {len(parsable_files)} parsable files out of {len(files)} total files")
+        
+        # Step 1: Upload only parsable files
+        upload_results = await self.file_uploader.upload_files(user_id, knowledge_base, parsable_files, directory)
         
         # Step 2: Parse successful uploads and split parsed content
         all_documents = {}
@@ -44,7 +58,7 @@ class FileProcessingPipeline:
             filename = file_result["filename"]
             file_id = file_result["file_id"]
             
-            # Check if file is parsable
+            # Check if file is parsable (redundant check for safety)
             file_ext = os.path.splitext(filename)[1].lower()
             if file_ext in PARSABLE_FORMATS:
                 parse_result = self.file_parser.parse_file(file_path, save=True)
@@ -75,12 +89,23 @@ class FileProcessingPipeline:
         self.indexer = Indexer(f"./index/{user_id}/{knowledge_base}")
         vectorstore = self.indexer.index_chunks(all_documents)
         
+        # Add non-parsable files to the results with appropriate status
+        for file in non_parsable_files:
+            upload_results["files"].append({
+                "filename": file.filename,
+                "status": "failed",
+                "message": f"File format not parsable: {os.path.splitext(file.filename)[1].lower()}",
+                "parsed": False,
+                "errors": "File type not parsable",
+                "parsing_error": "File type not parsable"
+            })
+        
         # Calculate parsing metrics
         total_parsed = sum(1 for r in upload_results["files"] if r["status"] in ["success", "updated"] and r.get("parsed", False))
         failed_parsing = sum(1 for r in upload_results["files"] if r["status"] in ["success", "updated"] and not r.get("parsed", False))
         
         # Determine overall status
-        all_successful = upload_results["successful"] == len(files) and upload_results["status"] == "success"
+        all_successful = upload_results["successful"] == len(parsable_files) and upload_results["status"] == "success"
         overall_status = "success" if all_successful else "partial_success"
         
         total_chunks = {"total": sum(len(docs) for docs in all_documents.values())}
@@ -89,10 +114,10 @@ class FileProcessingPipeline:
         final_result = {
             "status": overall_status,
             "files": upload_results["files"],
-            "total": upload_results["total"],
+            "total": len(files),  # Total includes all files, both parsable and non-parsable
             "successful": upload_results["successful"],
-            "skipped": upload_results["skipped"],
-            "failed": upload_results["failed"],
+            "skipped": upload_results["skipped"],  # Non-parsable files are now in failed count, not skipped
+            "failed": upload_results["failed"] + len(non_parsable_files),  # Include non-parsable files in failed count
             "parsing": {
                 "total_parsed": total_parsed,
                 "failed_parsing": failed_parsing,
@@ -100,12 +125,9 @@ class FileProcessingPipeline:
             "total_chunks": total_chunks,
             "knowledge_base": knowledge_base,
             "user_id": user_id,
+            "skipped_non_parsable": len(non_parsable_files)
         }
         
-        logger.info(f"Pipeline completed: {final_result['status']}, total={final_result['total']}, successful={final_result['successful']}, parsed={final_result['parsing']['total_parsed']}, total_chunks={final_result['total_chunks']}")
+        logger.info(f"Pipeline completed: {final_result['status']}, total={final_result['total']}, successful={final_result['successful']}, parsed={final_result['parsing']['total_parsed']}, total_chunks={final_result['total_chunks']}, skipped_non_parsable={final_result['skipped_non_parsable']}")
         
         return final_result
-
-
-
-

@@ -10,7 +10,8 @@ load_dotenv()
 # Add the src directory to the path - fix the path construction
 sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
 
-from memory.memory import MemoryManager
+from src.memory.thread import ThreadManager
+from src.memory.memory import MemoryManager
 
 def test_in_memory_mode():
     print("Testing in-memory mode...")
@@ -24,38 +25,38 @@ def test_in_memory_mode():
         del os.environ["DB_URI"]
     
     try:
-        # Create memory manager in in-memory mode
-        memory = MemoryManager()
+        # Create thread manager in in-memory mode
+        thread_manager = ThreadManager()
         
         # Test thread creation
-        thread_id_1 = memory.create_thread(user_id)
+        thread_id_1 = thread_manager.create_thread(user_id)
         print(f"Created thread: {thread_id_1}")
         assert thread_id_1 is not None
         
         # Test thread retrieval
-        threads = memory.get_threads_for_user(user_id)
+        threads = thread_manager.get_threads_for_user(user_id)
         print(f"Threads for user {user_id}: {len(threads)} threads")
         assert len(threads) == 1
         
         # Test multiple threads
-        thread_id_2 = memory.create_thread(user_id)
+        thread_id_2 = thread_manager.create_thread(user_id)
         print(f"Created thread: {thread_id_2}")
         assert thread_id_2 is not None
         assert thread_id_1 != thread_id_2
         
-        threads = memory.get_threads_for_user(user_id)
+        threads = thread_manager.get_threads_for_user(user_id)
         print(f"Threads for user {user_id}: {len(threads)} threads")
         assert len(threads) == 2
         
         # Test thread removal
-        memory.remove_thread(user_id, thread_id_1)
-        threads = memory.get_threads_for_user(user_id)
+        thread_manager.remove_thread(user_id, thread_id_1)
+        threads = thread_manager.get_threads_for_user(user_id)
         print(f"After removing thread, remaining threads: {len(threads)}")
         assert len(threads) == 1
         
         # Test thread removal again (non-existent thread)
-        memory.remove_thread(user_id, "non-existent-thread")
-        threads = memory.get_threads_for_user(user_id)
+        thread_manager.remove_thread(user_id, "non-existent-thread")
+        threads = thread_manager.get_threads_for_user(user_id)
         assert len(threads) == 1
         
         print("In-memory mode tests completed successfully!")
@@ -84,21 +85,21 @@ def test_basic_functionality():
         del os.environ["DB_URI"]
     
     try:
-        # Create memory manager in in-memory mode
-        memory = MemoryManager()
+        # Create thread manager in in-memory mode
+        thread_manager = ThreadManager()
         
         user_id = 456
         
         # Test _get_thread_id_for_user creates a new thread if none exists
-        thread_id = memory._get_thread_id_for_user(user_id)
+        thread_id = thread_manager._get_thread_id_for_user(user_id)
         print(f"_get_thread_id_for_user created thread: {thread_id}")
         
         # Test get_config_for_user
-        config = memory.get_config_for_user(user_id)
+        config = thread_manager.get_config_for_user(user_id)
         print(f"get_config_for_user: {config}")
         
         # Test get_user_namespace
-        namespace = memory.get_user_namespace(user_id)
+        namespace = thread_manager.get_user_namespace(user_id)
         print(f"get_user_namespace: {namespace}")
         
         print("Basic functionality tests completed successfully!")
@@ -129,37 +130,38 @@ def test_database_mode():
     try:
         # Create memory manager in database mode
         memory = MemoryManager()
+        thread_manager = ThreadManager(memory_manager=memory)
         
         # Make sure we're in database mode
         assert memory.conn_str is not None, "Expected database mode but conn_str is None"
         
         # Create a user first
-        created_user_id = memory.create_user("test_user", "test@example.com", "password123")
+        created_user_id = thread_manager.create_user("test_user", "test@example.com", "password123")
         print(f"Created user with ID: {created_user_id}")
         
         # Test thread creation in database
-        thread_id_1 = memory.create_thread(created_user_id)
+        thread_id_1 = thread_manager.create_thread(created_user_id)
         print(f"Created thread in database: {thread_id_1}")
         assert thread_id_1 is not None
         
         # Test thread retrieval from database
-        threads = memory.get_threads_for_user(created_user_id)
+        threads = thread_manager.get_threads_for_user(created_user_id)
         print(f"Threads in database for user {created_user_id}: {len(threads)} threads")
         assert len(threads) >= 1
         
         # Test multiple threads in database
-        thread_id_2 = memory.create_thread(created_user_id)
+        thread_id_2 = thread_manager.create_thread(created_user_id)
         print(f"Created thread in database: {thread_id_2}")
         assert thread_id_2 is not None
         assert thread_id_1 != thread_id_2
         
-        threads = memory.get_threads_for_user(created_user_id)
+        threads = thread_manager.get_threads_for_user(created_user_id)
         print(f"Threads in database for user {created_user_id}: {len(threads)} threads")
         assert len(threads) >= 2
         
         # Test thread removal from database
-        memory.remove_thread(created_user_id, thread_id_1)
-        threads = memory.get_threads_for_user(created_user_id)
+        thread_manager.remove_thread(created_user_id, thread_id_1)
+        threads = thread_manager.get_threads_for_user(created_user_id)
         print(f"After removing thread from database, remaining threads: {len(threads)}")
         
         # Verify the thread is actually removed from database
@@ -168,10 +170,10 @@ def test_database_mode():
         
         # Clean up - remove all test threads
         for thread in threads:
-            memory.remove_thread(created_user_id, thread['thread_id'])
+            thread_manager.remove_thread(created_user_id, thread['thread_id'])
         
         # Verify all test threads are removed
-        threads = memory.get_threads_for_user(created_user_id)
+        threads = thread_manager.get_threads_for_user(created_user_id)
         print(f"After cleanup, threads for user {created_user_id}: {len(threads)} threads")
         
         print("Database mode tests completed successfully!")
