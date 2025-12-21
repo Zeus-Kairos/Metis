@@ -51,15 +51,6 @@ class MemoryManager:
             except Exception as e:
                 logger.error(f"Error closing connection pool: {e}")
 
-    def get_checkpointer(self):
-        """
-        Get the checkpointer instance.
-        
-        Returns:
-            InMemorySaver instance
-        """
-        return self.checkpointer
-
     def _init_db_tables(self):
         """
         Initialize database tables if they don't exist.
