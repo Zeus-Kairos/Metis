@@ -5,6 +5,7 @@ from src.file_process.indexer import Indexer
 from src.file_process.file_splitter import FileSplitter
 from src.file_process.file_upload import FileUploader
 from src.file_process.file_parser import FileParser, PARSABLE_FORMATS
+from src.memory.memory import MemoryManager
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -16,19 +17,10 @@ class FileProcessingPipeline:
         self.file_uploader = FileUploader()
         self.file_parser = FileParser()
         self.file_splitter = FileSplitter()
+        self.memory_manager = MemoryManager()
     
     async def process_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
-        """Process files through the complete pipeline: upload -> parse.
-        
-        Args:
-            user_id: User ID for the upload
-            knowledge_base: Knowledge base name
-            files: List of UploadFile objects
-            directory: Directory to store files (optional, defaults to empty string)
-            
-        Returns:
-            Dict containing complete processing results
-        """
+        """Process files through the complete pipeline: upload -> parse."""
         logger.info(f"Starting file processing pipeline: user_id={user_id}, knowledge_base={knowledge_base}, directory={directory}, file_count={len(files)}")
         
         # Filter files to only include parsable formats
@@ -56,7 +48,7 @@ class FileProcessingPipeline:
             
             file_path = file_result["path"]
             filename = file_result["filename"]
-            file_id = file_result["file_id"]
+            file_size = file_result["file_size"]
             
             # Check if file is parsable (redundant check for safety)
             file_ext = os.path.splitext(filename)[1].lower()
@@ -67,7 +59,24 @@ class FileProcessingPipeline:
                     file_result["parsed_path"] = parse_result["parsed_file"]
                     logger.info(f"File parsed successfully: {filename} -> {parse_result['parsed_file']}")
 
-                    # Step 3: Split parsed content
+                    # Step 3: Add file to database and get file_id
+                    try:
+                        file_id = self.memory_manager.add_file_by_knowledgebase_name(
+                            filename=filename,
+                            filepath=file_path,
+                            parsed_path=parse_result["parsed_file"],
+                            user_id=user_id,
+                            knowledgebase_name=knowledge_base,
+                            file_size=file_size
+                        )
+                        file_result["file_id"] = file_id
+                    except Exception as e:
+                        file_result["status"] = "failed"
+                        file_result["error"] = f"Failed to add file to database: {str(e)}"
+                        logger.error(f"Failed to add file {filename} to database: {e}")
+                        continue
+
+                    # Step 4: Split parsed content
                     content = parse_result["content"]
                     metadata = {
                         "file_id": file_id,
@@ -78,14 +87,16 @@ class FileProcessingPipeline:
                     all_documents[file_id] = documents
                     logger.info(f"File split into {len(documents)} documents: {filename}")
                 else:
+                    file_result["status"] = "failed"
                     file_result["parsed"] = False
                     file_result["parsing_error"] = parse_result["error"]
                     logger.error(f"Failed to parse content for {filename}: {parse_result['error']}")
             else:
+                file_result["status"] = "failed"
                 file_result["parsed"] = False
                 file_result["parsing_error"] = "File type not parsable"
 
-        # Step 4: Index chunks
+        # Step 5: Index chunks
         self.indexer = Indexer(f"./index/{user_id}/{knowledge_base}")
         vectorstore = self.indexer.index_chunks(all_documents)
         

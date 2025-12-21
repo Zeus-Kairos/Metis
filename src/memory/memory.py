@@ -88,7 +88,7 @@ class MemoryManager:
                         ADD CONSTRAINT users_username_key UNIQUE (username),
                         ADD CONSTRAINT users_email_key UNIQUE (email);
                     """)
-                                       
+                                        
                     # Create threads table
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS threads (
@@ -122,6 +122,12 @@ class MemoryManager:
                         )
                     """)
                     
+                    # Add unique constraint to knowledgebase (user_id, name) if it doesn't exist
+                    cur.execute("""
+                        ALTER TABLE knowledgebase 
+                        ADD CONSTRAINT knowledgebase_user_id_name_key UNIQUE (user_id, name);
+                    """)
+                    
                     # Create kb_thread table for knowledgebase-thread mapping (one-to-many)
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS kb_thread (
@@ -144,6 +150,29 @@ class MemoryManager:
                         CREATE INDEX IF NOT EXISTS idx_kb_thread_thread_id ON kb_thread(thread_id)
                     """)
                     
+                    # Create files table
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS files (
+                            file_id SERIAL PRIMARY KEY,
+                            filename VARCHAR(255) NOT NULL,
+                            filepath VARCHAR(1024) NOT NULL UNIQUE,
+                            parsed_path VARCHAR(1024) NOT NULL,
+                            uploaded_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            file_size INTEGER,
+                            knowledgebase_id INTEGER NOT NULL,
+                            FOREIGN KEY (knowledgebase_id) REFERENCES knowledgebase(id) ON DELETE CASCADE
+                        )
+                    """)
+                    
+                    # Create indexes on files table for efficient queries                     
+                    cur.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_files_knowledgebase_id ON files(knowledgebase_id)
+                    """)
+                    
+                    cur.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_files_filename ON files(filename)
+                    """)
+                    
                     conn.commit()
         except Exception as e:
             logger.error(f"Error initializing database tables: {e}")
@@ -161,28 +190,44 @@ class MemoryManager:
             
         Returns:
             The created knowledge base ID
-        """            
-        with self.connection_pool.connection() as conn:
-            with conn.cursor() as cur:
-                # Check if user exists
-                cur.execute(
-                    "SELECT id FROM users WHERE id = %s",
-                    (user_id,)
-                )
-                if not cur.fetchone():
-                    raise ValueError(f"User ID {user_id} does not exist")
-                
-                # Serialize navigation to JSON string if provided
-                navigation_json = json.dumps(navigation) if navigation else None
-                
-                # Insert the knowledgebase
-                cur.execute(
-                    "INSERT INTO knowledgebase (user_id, name, description, navigation) VALUES (%s, %s, %s, %s) RETURNING id",
-                    (user_id, name, description, navigation_json)
-                )
-                knowledgebase_id = cur.fetchone()[0]
-                conn.commit()
-                return knowledgebase_id
+        """
+            
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Check if user exists
+                    cur.execute(
+                        "SELECT id FROM users WHERE id = %s",
+                        (user_id,)
+                    )
+                    if not cur.fetchone():
+                        raise ValueError(f"User ID {user_id} does not exist")
+                    
+                    # Serialize navigation to JSON string if provided
+                    navigation_json = json.dumps(navigation) if navigation else None
+                    
+                    # Insert the new knowledgebase as active
+                    cur.execute(
+                        "INSERT INTO knowledgebase (user_id, name, description, navigation, is_active) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                        (user_id, name, description, navigation_json, True)
+                    )
+                    knowledgebase_id = cur.fetchone()[0]
+                    
+                    # Set all other knowledgebases for this user to inactive
+                    cur.execute(
+                        "UPDATE knowledgebase SET is_active = false WHERE user_id = %s AND is_active = true AND id != %s",
+                        (user_id, knowledgebase_id)
+                    )
+                    
+                    conn.commit()
+                    return knowledgebase_id
+        except Exception as e:
+            # Check if this is a unique constraint violation
+            error_message = str(e)
+            if 'duplicate key value' in error_message:
+                raise ValueError("Knowledgebase with this name already exists")
+            # If it's not a unique constraint violation, re-raise the original exception
+            raise
 
     def create_user(self, username: str, email: str, password: str) -> int:
         """
@@ -241,4 +286,164 @@ class MemoryManager:
                     return cur.rowcount > 0
         except Exception as e:
             logger.error(f"Error deleting user {user_id}: {e}")
+            raise
+
+    def add_file_by_knowledgebase_name(self, filename: str, filepath: str, parsed_path: str, user_id: int, knowledgebase_name: str, file_size: int = None) -> int:
+        """
+        Add a new file record to the database using knowledgebase name and user ID.
+        
+        Args:
+            filename: Name of the file
+            filepath: Path to the uploaded file
+            parsed_path: Path to the parsed file
+            user_id: ID of the user who owns the knowledgebase
+            knowledgebase_name: Name of the knowledgebase associated with the file
+            file_size: Size of the file in bytes (optional)
+            
+        Returns:
+            The created file ID
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Check if knowledgebase exists
+                    cur.execute(
+                        "SELECT id FROM knowledgebase WHERE user_id = %s AND name = %s",
+                        (user_id, knowledgebase_name)
+                    )
+                    knowledgebase = cur.fetchone()
+                    if not knowledgebase:
+                        raise ValueError(f"Knowledgebase {knowledgebase_name} does not exist for user {user_id}")
+                    knowledgebase_id = knowledgebase[0]
+                    
+                    # Call the main add_file method with knowledgebase_id
+                    return self.add_file(filename, filepath, parsed_path, knowledgebase_id, file_size)
+
+        except Exception as e:
+            logger.error(f"Error adding file: {e}")
+            raise
+
+    def add_file(self, filename: str, filepath: str, parsed_path: str, knowledgebase_id: int, file_size: int = None) -> int:
+        """
+        Add a new file record to the database.
+        
+        Args:
+            filename: Name of the file
+            filepath: Path to the uploaded file
+            parsed_path: Path to the parsed file
+            knowledgebase_id: ID of the knowledgebase associated with the file
+            file_size: Size of the file in bytes (optional)
+            
+        Returns:
+            The created file ID
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    
+                    # Check if knowledgebase exists
+                    cur.execute(
+                        "SELECT id FROM knowledgebase WHERE id = %s",
+                        (knowledgebase_id,)
+                    )
+                    if not cur.fetchone():
+                        raise ValueError(f"Knowledgebase ID {knowledgebase_id} does not exist")
+                    
+                    # Insert the file record with UPSERT (update if filepath exists)
+                    cur.execute(
+                        """
+                        INSERT INTO files (filename, filepath, parsed_path, knowledgebase_id, file_size)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON CONFLICT (filepath) DO UPDATE
+                        SET filename = EXCLUDED.filename,
+                            parsed_path = EXCLUDED.parsed_path,
+                            file_size = EXCLUDED.file_size,
+                            uploaded_time = CURRENT_TIMESTAMP
+                        RETURNING file_id
+                        """,
+                        (filename, filepath, parsed_path, knowledgebase_id, file_size)
+                    )
+                    file_id = cur.fetchone()[0]
+                    conn.commit()
+                    return file_id
+        except Exception as e:
+            logger.error(f"Error adding file: {e}")
+            raise
+    
+    def get_files_by_knowledgebase_id(self, knowledgebase_id: int) -> list:
+        """
+        Get all files for a specific knowledgebase.
+        
+        Args:
+            knowledgebase_id: ID of the knowledgebase
+            
+        Returns:
+            List of file records
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id
+                        FROM files
+                        WHERE knowledgebase_id = %s
+                        ORDER BY uploaded_time DESC
+                        """,
+                        (knowledgebase_id,)
+                    )
+                    files = cur.fetchall()
+                    return files
+        except Exception as e:
+            logger.error(f"Error getting files by knowledgebase ID: {e}")
+            raise
+    
+    def get_file_by_id(self, file_id: int) -> tuple:
+        """
+        Get a specific file by ID.
+        
+        Args:
+            file_id: ID of the file
+            
+        Returns:
+            File record if found, None otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id
+                        FROM files
+                        WHERE file_id = %s
+                        """,
+                        (file_id,)
+                    )
+                    file = cur.fetchone()
+                    return file
+        except Exception as e:
+            logger.error(f"Error getting file by ID: {e}")
+            raise
+    
+    def delete_file(self, file_id: int) -> bool:
+        """
+        Delete a file by ID.
+        
+        Args:
+            file_id: ID of the file
+            
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM files WHERE file_id = %s",
+                        (file_id,)
+                    )
+                    conn.commit()
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error deleting file: {e}")
             raise

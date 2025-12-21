@@ -1,12 +1,10 @@
 import os
 import hashlib
-import uuid
 import dotenv
 from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import UploadFile
 from src.utils.logging_config import get_logger
-from src.file_process.utils import get_file_id
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -46,15 +44,12 @@ class FileUploader:
             # Get file extension and validate format
             file_ext = os.path.splitext(file.filename)[1].lower()
             
-            # Generate unique file_id using filename
-            file_id = get_file_id(file_path)
             if file_ext not in SUPPORTED_FORMATS:
                 # Generate file_id even for failed uploads                
                 return {
                     "filename": file.filename,
                     "status": "failed",
-                    "error": f"Unsupported file format: {file_ext}. Supported formats: {', '.join(SUPPORTED_FORMATS)}",
-                    "file_id": file_id
+                    "error": f"Unsupported file format: {file_ext}. Supported formats: {', '.join(SUPPORTED_FORMATS)}"
                 }
             
             # Read file content
@@ -65,8 +60,7 @@ class FileUploader:
                 return {
                     "filename": file.filename,
                     "status": "failed",
-                    "error": f"File size exceeds maximum limit (100MB)",
-                    "file_id": file_id
+                    "error": f"File size exceeds maximum limit (100MB)"
                 }          
             
             # Generate file hash
@@ -84,9 +78,7 @@ class FileUploader:
                     return {
                         "filename": file.filename,
                         "status": "skipped",
-                        "message": "File already exists with identical content",
-                        "file_id": file_id,
-                        "uploaded_time": datetime.now().isoformat()
+                        "message": "File already exists with identical content"
                     }
                 else:
                     # Same name but different content - update the file
@@ -99,9 +91,8 @@ class FileUploader:
                         "filename": file.filename,
                         "status": "updated",
                         "path": file_path,
-                        "file_id": file_id,
-                        "file_hash": file_hash,
-                        "uploaded_time": datetime.now().isoformat()
+                        "file_size": len(content),
+                        "file_hash": file_hash
                     }
                     
                     return result_entry
@@ -118,9 +109,8 @@ class FileUploader:
                     "filename": file.filename,
                     "status": "success",
                     "path": file_path,
-                    "file_id": file_id,
-                    "file_hash": file_hash,
-                    "uploaded_time": datetime.now().isoformat()
+                    "file_size": len(content),
+                    "file_hash": file_hash
                 }
                 
                 return result_entry
@@ -131,8 +121,7 @@ class FileUploader:
             return {
                 "filename": file.filename,
                 "status": "failed",
-                "error": str(e),
-                "file_id": file_id
+                "error": str(e)
             }
     
     async def upload_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
@@ -173,6 +162,7 @@ class FileUploader:
             "skipped": sum(1 for r in upload_results if r["status"] == "skipped"),
             "failed": sum(1 for r in upload_results if r["status"] == "failed")
         }
+
 
 
 

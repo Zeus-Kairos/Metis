@@ -43,10 +43,6 @@ async def test_valid_file_upload():
     assert result["files"][0]["status"] == "success"
     assert "test.txt" in result["files"][0]["path"]
     
-    # Verify file_id is present in result
-    assert "file_id" in result["files"][0], "Result should contain file_id"
-    assert len(result["files"][0]["file_id"]) == 36, "file_id should be a UUID4 (36 characters)"
-    
     # Verify file_hash is present in result
     assert "file_hash" in result["files"][0], "Result should contain file_hash"
     
@@ -300,36 +296,3 @@ async def test_upload_path_structure():
     # Log the successful path creation
     print(f"✅ Verified file uploaded to correct path: {expected_path}")
     print(f"✅ Path structure confirmed: uploads/user_id/knowledge_base/origin")
-
-@pytest.mark.asyncio
-async def test_uploaded_time_field():
-    """Test that successful uploads include the uploaded_time field."""
-    uploader = FileUploader()
-    
-    # Create a mock file
-    mock_file = AsyncMock(spec=UploadFile)
-    mock_file.filename = "test.txt"
-    mock_file.read.return_value = b"Test content"
-    
-    # Test upload
-    result = await uploader.upload_files("test_user", "test_kb", [mock_file])
-    
-    # Verify uploaded_time field exists and is in correct format
-    assert "uploaded_time" in result["files"][0], "uploaded_time should be present in successful upload"
-    
-    # Verify it's a valid ISO format datetime string
-    uploaded_time_str = result["files"][0]["uploaded_time"]
-    try:
-        from datetime import datetime
-        datetime.fromisoformat(uploaded_time_str)
-        is_valid = True
-    except ValueError:
-        is_valid = False
-    
-    assert is_valid, "uploaded_time should be a valid ISO format datetime string"
-    
-    # Clean up
-    import shutil
-    upload_path = os.path.join("uploads", "test_user")
-    if os.path.exists(upload_path):
-        shutil.rmtree(upload_path)
