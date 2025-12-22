@@ -53,45 +53,18 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
             border: message.role === 'user' ? '1px solid rgba(255, 255, 255, 0.8)' : 'none',
             boxShadow: message.role === 'user' ? '0 2px 8px rgba(0, 0, 0, 0.05)' : 'none',
             borderRadius: message.role === 'user' ? '10px' : '18px',
-            padding: message.role === 'user' ? '12px' : '24px 12px 12px 12px', 
+            padding: message.role === 'user' ? '12px' : '12px', 
             marginBottom: '12px',
             display: 'flex',
             flexDirection: message.role === 'user' ? 'row' : 'row',
             alignItems: 'flex-start',
             gap: '12px',
             maxWidth: '70%',
-            alignSelf: message.role === 'user' ? 'flex-end' : 'flex-start', 
+            alignSelf: message.role === 'user' ? 'flex-start' : 'flex-start', 
             position: message.role === 'assistant' ? 'relative' : 'static',
             marginTop: message.role === 'assistant' ? '16px' : '0',
           }}
         >
-          {message.role === 'assistant' && (
-            <div 
-              className="avatar"
-              style={{ 
-                width: '48px',
-                height: '48px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                position: 'absolute',
-                top: '-24px',
-                left: '-24px',
-                zIndex: 1,
-              }}
-            >
-              {/* Assistant icon (new custom icon with original colors, larger size) */}
-              <svg width="40" height="40" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="10" y="15" width="44" height="35" rx="8" fill="#FFD700"/>
-                <rect x="15" y="20" width="34" height="25" rx="5" fill="#FFFFFF"/>
-                <rect x="20" y="26" width="24" height="4" rx="2" fill="#87CEEB"/>
-                <rect x="20" y="34" width="16" height="4" rx="2" fill="#98FB98"/>
-                <path d="M48 44L52 48" stroke="#FF6347" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M45 44L49 48" stroke="#FF6347" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-          )}
           <div style={{ flex: 1 }}>
             <div 
               className={`message-content ${!message.complete ? 'streaming' : ''}`}
@@ -144,7 +117,7 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
           style={{ 
             backgroundColor: '#FFF8F0',
             borderRadius: '18px',
-            padding: '12px 24px 12px 12px', 
+            padding: '12px', 
             marginBottom: '12px',
             display: 'flex',
             alignItems: 'center',
@@ -164,7 +137,6 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
               borderTop: '2px solid #7bb8ff',
               borderRadius: '50%',
               animation: 'spin 1s linear infinite',
-              marginLeft: 12, 
             }}
           />
           <span style={{ fontFamily: '"Roboto", sans-serif' }}>Thinking...</span>
