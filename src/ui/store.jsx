@@ -58,6 +58,7 @@ const useChatStore = create((set, get) => {
         
         // Check if we have a token
         const token = getToken();
+        
         if (!token) {
           // No token found, set user_id to null and return
           set({ 
@@ -72,16 +73,27 @@ const useChatStore = create((set, get) => {
         
         // Step 1: Get active user from /api/users/me endpoint
         const userResponse = await fetchWithAuth('/api/users/me');
+        
         if (!userResponse.ok) {
           if (userResponse.status === 401) {
             // Token is invalid or expired, remove it
             localStorage.removeItem('token');
+            set({ 
+              isLoading: false, 
+              isInitializing: false,
+              user_id: null,
+              activeThreadId: null,
+              conversations: {}
+            });
+          } else {
+            throw new Error(`Failed to get active user: ${userResponse.status}`);
           }
-          throw new Error(`Failed to get active user: ${userResponse.status}`);
+          return;
         }
         
         // Try to parse response as JSON, handle case where HTML is returned
         const contentType = userResponse.headers.get('content-type');
+        
         if (!contentType || !contentType.includes('application/json')) {
           const textContent = await userResponse.text();
           console.warn('Received non-JSON response from /api/users/me:', textContent.substring(0, 100) + '...');
@@ -100,12 +112,14 @@ const useChatStore = create((set, get) => {
         
         // Step 2: Get all threads for the user
         const threadsResponse = await fetchWithAuth(`/api/threads/${userId}`);
+        
         if (!threadsResponse.ok) {
           throw new Error(`Failed to get threads: ${threadsResponse.status}`);
         }
         
         // Check content type for threads response too
         const threadsContentType = threadsResponse.headers.get('content-type');
+        
         if (!threadsContentType || !threadsContentType.includes('application/json')) {
           const textContent = await threadsResponse.text();
           console.warn('Received non-JSON response from /api/threads:', textContent.substring(0, 100) + '...');
@@ -165,19 +179,19 @@ const useChatStore = create((set, get) => {
           }
         }
         
-      } catch (error) {
-        console.error('Failed to initialize app:', error);
-        
-        // Only set error state, don't create fallback users/threads
+      } catch (err) {
+        console.error('Failed to initialize app:', err);
         set({ 
-          error: 'Failed to initialize the application. Please try refreshing the page.',
-          isLoading: false,
+          isLoading: false, 
           isInitializing: false,
-          // Reset state on error
-          user_id: null,
-          activeThreadId: null,
-          conversations: {}
+          error: err.message
         });
+        
+        // Check if error is due to authentication
+        if (err.message.includes('401')) {
+          localStorage.removeItem('token');
+          set({ user_id: null });
+        }
       }
     },
 
@@ -204,7 +218,15 @@ const useChatStore = create((set, get) => {
         }
         
         const historyData = await response.json();
-        const messages = historyData.messages || [];
+        // Fix: Backend returns 'history' not 'messages'
+        const messages = historyData.history || [];
+        
+        // Ensure all messages have the 'complete' flag
+        const messagesWithComplete = messages.map(msg => ({
+          ...msg,
+          // All existing messages from history should be complete
+          complete: true
+        }));
         
         // Update the conversation with the fetched messages
         set((state) => ({
@@ -212,7 +234,7 @@ const useChatStore = create((set, get) => {
             ...state.conversations,
             [threadId]: {
               ...state.conversations[threadId],
-              messages: messages
+              messages: messagesWithComplete
             }
           }
         }));
@@ -428,7 +450,8 @@ const useChatStore = create((set, get) => {
               role: 'assistant',
               content: result.response || 'Sorry, I couldn\'t process your request.',
               metadata: {},
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              complete: true // Add complete flag set to true for non-streaming responses
             });
             
             return {
@@ -458,7 +481,8 @@ const useChatStore = create((set, get) => {
               role: 'assistant',
               content: '',
               metadata: {},
-              timestamp: new Date().toISOString()
+              timestamp: new Date().toISOString(),
+              complete: false // Add complete flag set to false initially
             }]
           });
 
@@ -467,7 +491,23 @@ const useChatStore = create((set, get) => {
             const { done, value } = await reader.read();
             if (done) break;
 
-            partialContent += decoder.decode(value, { stream: true });
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split('\n');
+            
+            // Process each SSE line
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const jsonData = JSON.parse(line.substring(6));
+                  if (jsonData.response) {
+                    // Only append the response content, not the entire JSON
+                    partialContent += jsonData.response;
+                  }
+                } catch (e) {
+                  console.error('Error parsing SSE data:', e);
+                }
+              }
+            }
 
             // Update the assistant message with the partial content
             set((state) => {
@@ -495,7 +535,30 @@ const useChatStore = create((set, get) => {
             });
           }
           
-          set({ isLoading: false });
+          // Mark the assistant message as complete
+          set((state) => {
+            const updatedMessages = [...state.conversations[activeThreadId].messages];
+            const assistantMessageIndex = updatedMessages.findIndex(msg => msg.id === assistantMessageId);
+            
+            if (assistantMessageIndex !== -1) {
+              updatedMessages[assistantMessageIndex] = { 
+                ...updatedMessages[assistantMessageIndex], 
+                complete: true // Set complete flag to true when streaming is done
+              };
+            }
+            
+            return {
+              conversations: {
+                ...state.conversations,
+                [activeThreadId]: {
+                  ...state.conversations[activeThreadId],
+                  messages: updatedMessages,
+                  updatedAt: new Date().toISOString()
+                }
+              },
+              isLoading: false
+            };
+          });
         }
       } catch (error) {
         console.error('Error sending message:', error);
@@ -534,6 +597,52 @@ const useChatStore = create((set, get) => {
       }
     },
 
+    // Remove a conversation
+    removeConversation: async (threadId) => {
+      const { user_id, conversations } = get();
+      
+      if (!user_id) {
+        set({ error: 'User not authenticated. Cannot delete conversation.' });
+        return;
+      }
+      
+      try {
+        set({ isLoading: true, error: null });
+        
+        // Call backend API to delete the thread
+        const response = await fetchWithAuth(`/api/thread/${user_id}/${threadId}`, {
+          method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to delete conversation: ${response.status}`);
+        }
+        
+        // Create a new conversations object without the deleted thread
+        const { [threadId]: deletedConversation, ...remainingConversations } = conversations;
+        
+        // If the deleted conversation was the active one, set a new active thread
+        let newActiveThreadId = get().activeThreadId;
+        if (newActiveThreadId === threadId) {
+          // Get the keys of remaining conversations
+          const remainingThreadIds = Object.keys(remainingConversations);
+          // Set to null if no conversations remain, otherwise use the first one
+          newActiveThreadId = remainingThreadIds.length > 0 ? remainingThreadIds[0] : null;
+        }
+        
+        // Update state
+        set({
+          conversations: remainingConversations,
+          activeThreadId: newActiveThreadId,
+          isLoading: false
+        });
+        
+      } catch (error) {
+        console.error('Error deleting conversation:', error);
+        set({ error: 'Failed to delete conversation: ' + error.message, isLoading: false });
+      }
+    },
+    
     // Set error message
     setError: (error) => {
       set({ error });

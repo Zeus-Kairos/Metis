@@ -34,12 +34,7 @@ const ChatContainer = () => {
     if (initialized) return;
     
     const init = async () => {
-      await initializeApp();
-      
-      // Create a new conversation if there are no conversations or messages
-      if (!activeThreadId || !currentMessages.length) {
-        await createConversation();
-      }
+      await initializeApp()
       
       setInitialized(true);
     }
