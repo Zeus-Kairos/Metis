@@ -245,6 +245,36 @@
   margin: 12px 0;
 }
 
+/* View toggle styles */
+.view-toggle {
+  display: flex;
+  gap: 8px;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background-color: #e9ecef;
+  cursor: pointer;
+  font-size: 18px;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  background-color: #dee2e6;
+}
+
+.toggle-btn.active {
+  background-color: #4285f4;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .sidebar {

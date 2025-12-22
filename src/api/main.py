@@ -190,6 +190,65 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_active
     """Get current user information."""
     return current_user
 
+# API endpoint to list all knowledgebases for the current user
+@app.get("/api/knowledgebase")
+async def list_knowledgebases(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """List all knowledgebases for the current user."""
+    try:
+        knowledgebases = memory_manager.get_all_knowledgebases(current_user.id)
+        
+        # Format the response
+        formatted_knowledgebases = []
+        for kb in knowledgebases:
+            formatted_knowledgebases.append({
+                "id": kb[0],
+                "name": kb[1],
+                "description": kb[2],
+                "navigation": kb[3],
+                "is_active": kb[4],
+                "created_at": kb[5],
+                "updated_at": kb[6]
+            })
+        
+        return {
+            "success": True,
+            "knowledgebases": formatted_knowledgebases
+        }
+    except Exception as e:
+        logger.error(f"Error listing knowledgebases: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to update a knowledgebase's active status
+@app.patch("/api/knowledgebase/{kb_id}")
+async def update_knowledgebase(
+    kb_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    update_data: dict
+):
+    """Update a knowledgebase, primarily for setting active status."""
+    try:
+        if "is_active" in update_data and update_data["is_active"]:
+            # Use the MemoryManager method to set the active knowledgebase
+            success = memory_manager.set_active_knowledgebase(current_user.id, kb_id)
+            if success:
+                return {
+                    "success": True,
+                    "message": f"Knowledgebase {kb_id} set as active"
+                }
+            return {
+                "success": False,
+                "message": f"Failed to set knowledgebase {kb_id} as active"
+            }
+        return {
+            "success": False,
+            "message": "Only is_active=true is supported for this endpoint"
+        }
+    except Exception as e:
+        logger.error(f"Error updating knowledgebase: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint for deleting a user
 @app.delete("/api/users/me")
 async def delete_user(current_user: Annotated[User, Depends(get_current_active_user)]):
@@ -259,6 +318,179 @@ def delete_all_threads(user_id: int):
     thread_manager.remove_thread(user_id, None)
     logger.debug(f"All threads deleted successfully for user {user_id}")
     return {"status": "success", "message": f"All threads of user {user_id} deleted successfully"}
+
+# Knowledgebase endpoints
+@app.get("/api/knowledgebase/list")
+async def list_directory(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    path: str = "",
+    knowledge_base: str = "default"
+):
+    """List directory contents for a knowledgebase"""
+    try:
+        from src.file_process.utils import get_upload_dir
+        import os
+        
+        # Get the upload directory path
+        upload_dir = get_upload_dir(current_user.id, knowledge_base, path)
+        
+        # Check if directory exists
+        if not os.path.exists(upload_dir):
+            return {
+                "success": True,
+                "folders": [],
+                "files": []
+            }
+        
+        # Get directory contents
+        items = os.listdir(upload_dir)
+        
+        folders = []
+        files = []
+        
+        for item in items:
+            item_path = os.path.join(upload_dir, item)
+            if os.path.isdir(item_path):
+                folders.append(item)
+            else:
+                files.append(item)
+        
+        return {
+            "success": True,
+            "folders": folders,
+            "files": files
+        }
+    except Exception as e:
+        logger.error(f"Error listing directory: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/knowledgebase/folder")
+async def create_folder(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    name: str = Body(..., description="Folder name"),
+    parentPath: str = Body("", description="Parent path"),
+    knowledge_base: str = Body("default", description="Knowledge base name")
+):
+    """Create a new folder in knowledgebase"""
+    try:
+        from src.file_process.utils import get_upload_dir
+        import os
+        
+        # Validate folder name
+        if not name or name.strip() == "":
+            raise HTTPException(status_code=400, detail="Folder name cannot be empty")
+        
+        # Get the parent directory path
+        parent_dir = get_upload_dir(current_user.id, knowledge_base, parentPath)
+        
+        # Create the new folder path
+        new_folder_path = os.path.join(parent_dir, name)
+        
+        # Create the folder if it doesn't exist
+        if os.path.exists(new_folder_path):
+            raise HTTPException(status_code=400, detail=f"Folder '{name}' already exists")
+        
+        os.makedirs(new_folder_path, exist_ok=True)
+        
+        return {
+            "success": True,
+            "message": f"Folder '{name}' created successfully",
+            "path": f"{parentPath}/{name}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating folder: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/knowledgebase/folder")
+async def delete_folder(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    path: str = Body(..., description="Folder path"),
+    knowledge_base: str = Body("default", description="Knowledge base name")
+):
+    """Delete a folder from knowledgebase"""
+    try:
+        from src.file_process.utils import get_upload_dir
+        import shutil
+        import os
+        
+        # Get the folder path
+        folder_path = get_upload_dir(current_user.id, knowledge_base, path)
+        
+        # Check if folder exists
+        if not os.path.exists(folder_path):
+            raise HTTPException(status_code=404, detail=f"Folder '{path}' not found")
+        
+        # Delete the folder and its contents
+        shutil.rmtree(folder_path)
+        
+        return {
+            "success": True,
+            "message": f"Folder '{path}' deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting folder: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/knowledgebase/file")
+async def delete_file(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    path: str = Body(..., description="File path"),
+    knowledge_base: str = Body("default", description="Knowledge base name")
+):
+    """Delete a file from knowledgebase"""
+    try:
+        from src.file_process.utils import get_upload_dir
+        import os
+        
+        # Split the path into directory and filename
+        directory = os.path.dirname(path)
+        filename = os.path.basename(path)
+        
+        # Get the file path
+        file_path = get_upload_dir(current_user.id, knowledge_base, directory)
+        full_file_path = os.path.join(file_path, filename)
+        
+        # Check if file exists
+        if not os.path.exists(full_file_path):
+            raise HTTPException(status_code=404, detail=f"File '{path}' not found")
+        
+        # Delete the file from filesystem
+        os.remove(full_file_path)
+        
+        # Delete the file from database
+        # First, get the knowledgebase id
+        with memory_manager.connection_pool.connection() as conn:
+            with conn.cursor() as cur:
+                # Get knowledgebase id
+                cur.execute(
+                    "SELECT id FROM knowledgebase WHERE user_id = %s AND name = %s",
+                    (current_user.id, knowledge_base)
+                )
+                knowledgebase = cur.fetchone()
+                if not knowledgebase:
+                    raise HTTPException(status_code=404, detail=f"Knowledgebase '{knowledge_base}' not found")
+                knowledgebase_id = knowledgebase[0]
+                
+                # Delete the file from database
+                cur.execute(
+                    "DELETE FROM files WHERE knowledgebase_id = %s AND filepath LIKE %s",
+                    (knowledgebase_id, f"%/{filename}")
+                )
+                conn.commit()
+        
+        return {
+            "success": True,
+            "message": f"File '{path}' deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting file: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/thread/create")
 def create_thread(user_id: int, title: Optional[str] = None):

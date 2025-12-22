@@ -8,10 +8,14 @@ const getToken = () => {
 // Helper function to add auth header to fetch requests
 export const fetchWithAuth = async (url, options = {}) => {
   const token = getToken();
-  const headers = {
-    ...options.headers,
-    'Content-Type': options.headers?.['Content-Type'] || 'application/json'
+  let headers = {
+    ...options.headers
   };
+
+  // Don't set Content-Type if body is FormData - browser handles it automatically
+  if (!options.body || !(options.body instanceof FormData)) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+  }
 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -47,6 +51,7 @@ const useChatStore = create((set, get) => {
     user_id: null,
     activeThreadId: null,
     conversations: {},
+    knowledgebases: [],
     isLoading: false,
     isInitializing: false,
     error: null,
@@ -110,7 +115,38 @@ const useChatStore = create((set, get) => {
         // Update user_id in state
         set({ user_id: userId });
         
-        // Step 2: Get all threads for the user
+        // Step 2: Get all knowledgebases for the user
+        const knowledgebasesResponse = await fetchWithAuth('/api/knowledgebase');
+        
+        if (!knowledgebasesResponse.ok) {
+          throw new Error(`Failed to get knowledgebases: ${knowledgebasesResponse.status}`);
+        }
+        
+        const knowledgebasesData = await knowledgebasesResponse.json();
+        let knowledgebases = knowledgebasesData.knowledgebases || [];
+        
+        // Create default knowledgebase if none exist
+        if (knowledgebases.length === 0) {
+          const createDefaultKBResponse = await fetchWithAuth('/api/knowledgebase', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: 'default',
+              description: 'Default knowledgebase',
+              navigation: {}
+            })
+          });
+          
+          if (createDefaultKBResponse.ok) {
+            // Fetch knowledgebases again to get the newly created one
+            const updatedKBsResponse = await fetchWithAuth('/api/knowledgebase');
+            if (updatedKBsResponse.ok) {
+              const updatedKBsData = await updatedKBsResponse.json();
+              knowledgebases = updatedKBsData.knowledgebases || [];
+            }
+          }
+        }
+        
+        // Step 3: Get all threads for the user
         const threadsResponse = await fetchWithAuth(`/api/threads/${userId}`);
         
         if (!threadsResponse.ok) {
@@ -156,10 +192,11 @@ const useChatStore = create((set, get) => {
           activeThreadId = null;
         }
         
-        // Update state with conversations and active thread
+        // Update state with conversations, active thread, and knowledgebases
         set({ 
           conversations,
           activeThreadId,
+          knowledgebases,
           isLoading: false,
           isInitializing: false
         });
@@ -192,6 +229,29 @@ const useChatStore = create((set, get) => {
           localStorage.removeItem('token');
           set({ user_id: null });
         }
+      }
+    },
+
+    // Update the active knowledgebase
+    setActiveKnowledgebase: async (kbId) => {
+      try {
+        // Call API to update active knowledgebase
+        const response = await fetchWithAuth(`/api/knowledgebase/${kbId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ is_active: true })
+        });
+        
+        if (response.ok) {
+          // Fetch updated knowledgebases
+          const kbsResponse = await fetchWithAuth('/api/knowledgebase');
+          if (kbsResponse.ok) {
+            const kbsData = await kbsResponse.json();
+            set({ knowledgebases: kbsData.knowledgebases || [] });
+          }
+        }
+      } catch (error) {
+        console.error('Error updating active knowledgebase:', error);
+        throw error;
       }
     },
 

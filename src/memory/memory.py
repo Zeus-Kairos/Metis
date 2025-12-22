@@ -258,6 +258,66 @@ class MemoryManager:
             # If it's not a unique constraint violation, re-raise the original exception
             raise
     
+    def get_all_knowledgebases(self, user_id: int) -> list:
+        """
+        Get all knowledgebases for a specific user.
+        
+        Args:
+            user_id: ID of the user
+            
+        Returns:
+            List of knowledgebase records
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, name, description, navigation, is_active, created_at, updated_at
+                        FROM knowledgebase
+                        WHERE user_id = %s
+                        ORDER BY is_active DESC, updated_at DESC
+                        """,
+                        (user_id,)
+                    )
+                    knowledgebases = cur.fetchall()
+                    return knowledgebases
+        except Exception as e:
+            logger.error(f"Error getting knowledgebases for user {user_id}: {e}")
+            raise
+    
+    def set_active_knowledgebase(self, user_id: int, knowledgebase_id: int) -> bool:
+        """
+        Set a specific knowledgebase as active for a user, deactivating all other knowledgebases.
+        
+        Args:
+            user_id: ID of the user
+            knowledgebase_id: ID of the knowledgebase to set as active
+            
+        Returns:
+            True if the update was successful
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Update all knowledgebases for this user - set the specified one to active, others to inactive
+                    cur.execute(
+                        """
+                        UPDATE knowledgebase
+                        SET is_active = CASE 
+                            WHEN id = %s THEN true 
+                            ELSE false 
+                        END
+                        WHERE user_id = %s
+                        """,
+                        (knowledgebase_id, user_id)
+                    )
+                    conn.commit()
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error setting active knowledgebase for user {user_id}: {e}")
+            raise
+
     def delete_user(self, user_id: int) -> bool:
         """
         Delete a user from the database.

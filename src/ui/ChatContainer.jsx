@@ -4,6 +4,7 @@ import MessageInput from './MessageInput';
 import useChatStore from './store';
 import Sidebar from './Sidebar';
 import SystemPrompt from './SystemPrompt';
+import KnowledgebaseBrowser from './KnowledgebaseBrowser';
 import './ChatContainer.css';
 
 
@@ -19,11 +20,11 @@ const ChatContainer = () => {
     setError,
     renameConversation
   } = useChatStore();
-  
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
   const [initialized, setInitialized] = useState(false);
+  const [view, setView] = useState('chat'); // 'chat' or 'knowledgebase'
   // Fix: Access messages through active conversation, not as a function
   const currentMessages = conversations[activeThreadId]?.messages || [];
   const currentConversation = conversations[activeThreadId];
@@ -106,8 +107,8 @@ const ChatContainer = () => {
                 />
               ) : (
                 <>
-                  <h1 className="chat-title">{currentConversation?.title || 'IntelliPlan Chat'}</h1>
-                  {activeThreadId && (
+                  <h1 className="chat-title">{view === 'chat' ? (currentConversation?.title || 'Metis') : 'Knowledge Base'}</h1>
+                  {view === 'chat' && activeThreadId && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -122,6 +123,22 @@ const ChatContainer = () => {
                   )}
                 </>
               )}
+            </div>
+            <div className="view-toggle">
+              <button 
+                className={`toggle-btn ${view === 'chat' ? 'active' : ''}`}
+                onClick={() => setView('chat')}
+                title="Chat View"
+              >
+                💬
+              </button>
+              <button 
+                className={`toggle-btn ${view === 'knowledgebase' ? 'active' : ''}`}
+                onClick={() => setView('knowledgebase')}
+                title="Knowledge Base"
+              >
+                📚
+              </button>
             </div>
           </div>
         </header>
@@ -148,6 +165,8 @@ const ChatContainer = () => {
                 Retry
               </button>
             </div>
+          ) : view === 'knowledgebase' ? (
+            <KnowledgebaseBrowser />
           ) : !activeThreadId ? (
             <div className="no-threads-state">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -180,7 +199,7 @@ const ChatContainer = () => {
           )}
         </main>
         {/* Input Area */}
-        <MessageInput />
+        {view === 'chat' && <MessageInput />}
       </div>
     </div>
   );
