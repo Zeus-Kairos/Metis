@@ -10,13 +10,16 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import os
 import sys
+import json
+from fastapi.responses import StreamingResponse
 
-# Add the project root to Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-
-# Import the upload handler from another file
+from src.agent.rag_agent import RAGAgent, RAGType
 from src.file_process.pipeline import FileProcessingPipeline
 from src.memory.memory import MemoryManager
+from src.memory.thread import ThreadManager
+from src.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Authentication settings
 ALGORITHM = "HS256"
@@ -61,6 +64,7 @@ app.add_middleware(
 
 # Initialize MemoryManager
 memory_manager = MemoryManager()
+thread_manager = ThreadManager(memory_manager)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -239,6 +243,147 @@ async def upload_files(
     except Exception as e:
         # Return an error response with status code 400
         raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/thread/{user_id}/{thread_id}")
+def delete_thread(user_id: int, thread_id: str):
+    """Delete a specific thread for a user"""
+    logger.debug(f"Deleting thread {thread_id} for user {user_id}")
+    thread_manager.remove_thread(user_id, thread_id)
+    logger.debug(f"Thread {thread_id} deleted successfully for user {user_id}")
+    return {"status": "success", "message": f"Thread {thread_id} deleted successfully"}
+
+@app.delete("/api/threads/{user_id}")
+def delete_all_threads(user_id: int):
+    """Delete all threads for a user"""
+    logger.debug(f"Deleting all threads for user {user_id}")
+    thread_manager.remove_thread(user_id, None)
+    logger.debug(f"All threads deleted successfully for user {user_id}")
+    return {"status": "success", "message": f"All threads of user {user_id} deleted successfully"}
+
+@app.post("/api/thread/create")
+def create_thread(user_id: int, title: Optional[str] = None):
+    """Create a new conversation thread for a user"""
+    logger.debug(f"Creating new thread for user {user_id} with title {title}")
+    thread_id = thread_manager.create_thread(user_id, title)
+    logger.debug(f"Created thread {thread_id} for user {user_id}")
+    return {"status": "success", "thread_id": thread_id, "title": title or f"Thread {thread_id[:8]}"}
+
+@app.get("/api/threads/{user_id}")
+def get_user_threads(user_id: int):
+    """Get all conversation threads for a user"""
+    logger.debug(f"Fetching threads for user {user_id}")
+    threads = thread_manager.get_threads_for_user(user_id)
+    logger.debug(f"Found {len(threads)} threads for user {user_id}")
+    return {"status": "success", "threads": threads}
+
+@app.post("/api/thread/set-active")
+def set_active_thread(user_id: int, thread_id: str):
+    """Set the active thread for a user"""
+    logger.debug(f"Setting active thread {thread_id} for user {user_id}")
+    success = thread_manager.set_active_thread(user_id, thread_id)
+    if success:
+        logger.debug(f"Thread {thread_id} set as active for user {user_id}")
+        return {"status": "success", "message": "Thread set as active successfully"}
+    else:
+        logger.error(f"Failed to set active thread {thread_id} for user {user_id}")
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found or does not belong to user {user_id}")
+
+class ThreadTitleUpdate(BaseModel):
+    user_id: int
+    thread_id: str
+    title: str
+
+@app.post("/api/thread/title")
+def update_thread_title_endpoint(update_data: ThreadTitleUpdate):
+    """Update the title of a specific thread"""
+    user_id = update_data.user_id
+    thread_id = update_data.thread_id
+    title = update_data.title
+    
+    try:
+        logger.debug(f"Updating title for thread {thread_id} of user {user_id} to: {title}")
+        success = thread_manager.update_thread_title(user_id, thread_id, title)
+        if success:
+            logger.debug(f"Successfully updated title for thread {thread_id} of user {user_id}")
+            return {"status": "success", "message": "Thread title updated successfully"}
+        else:
+            logger.error(f"Failed to update title for thread {thread_id} of user {user_id}")
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found or does not belong to user {user_id}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating thread title: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/thread/history")
+def get_thread_history(user_id: int, thread_id: str): 
+    """Get a specific thread by ID"""
+    logger.debug(f"Fetching thread history for thread {thread_id} of user {user_id}")
+    history = thread_manager.get_conversation_history(user_id, thread_id)
+    if history:
+        logger.debug(f"Found {len(history)} messages in thread {thread_id} for user {user_id}")
+        return {"status": "success", "history": history}
+    else:
+        logger.error(f"Message history not found for thread {thread_id} of user {user_id}")
+        raise HTTPException(status_code=404, detail=f"Message history not found for thread {thread_id} of user {user_id}") 
+
+# Add this class definition near the top of the file
+
+class ChatRequest(BaseModel):
+    message: str
+    user_id: int
+    thread_id: str
+
+# Replace the chat_endpoint with this updated version
+@app.post("/api/chat")
+def chat_endpoint(request: ChatRequest):
+    """Chat endpoint that processes user messages and returns streaming responses."""
+    message = request.message
+    user_id = request.user_id
+    thread_id = request.thread_id
+    
+    logger.debug(f"Received chat request from user {user_id}, thread {thread_id}: {message}")
+    
+    try:
+        # Get RAG settings from environment variables
+        try:
+            rag_type_str = os.getenv("RAG_TYPE", "simple").lower()
+            rag_type = RAGType(rag_type_str)
+        except ValueError:
+            rag_type = RAGType.SIMPLE
+            
+        rag_k = int(os.getenv("RAG_K", 10))
+        
+        # Create RAGAgent instance
+        rag_agent = RAGAgent(rag_type, rag_k)
+        
+        # Process the message
+        def generate_stream():
+            try:
+                for chunk in rag_agent.chat(message, knowledge_base_id=1):
+                    for key, value in chunk.items():
+                        if key == "stage":
+                            # Send stage information
+                            yield f"data: {json.dumps({key: value})}\n\n"
+                        elif key == "response":
+                            # Send response chunk
+                            yield f"data: {json.dumps({key: value})}\n\n"
+                
+                # Send done signal
+                yield f"data: {json.dumps({"done": True})}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Error processing chat message: {str(e)}")
+                yield f"data: {json.dumps({"error": str(e)})}\n\n"
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream"
+        )
+        
+    except Exception as e:
+        logger.error(f"Chat endpoint error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Health check endpoint
 @app.get("/health")
