@@ -1,3 +1,9 @@
+import os
+import sys
+import json
+import glob
+import shutil
+
 from datetime import datetime, timezone, timedelta
 from typing import Annotated, List, Optional, Dict, Any
 
@@ -8,11 +14,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
-import os
-import sys
-import json
 from fastapi.responses import StreamingResponse
 
+from src.file_process.utils import get_upload_dir, get_parsed_path
 from src.agent.rag_agent import RAGAgent, RAGType
 from src.file_process.pipeline import FileProcessingPipeline
 from src.memory.memory import MemoryManager
@@ -410,13 +414,12 @@ async def delete_folder(
     knowledge_base: str = Body("default", description="Knowledge base name")
 ):
     """Delete a folder from knowledgebase"""
-    try:
-        from src.file_process.utils import get_upload_dir
-        import shutil
-        import os
+    try:        
+        # Normalize path by removing leading slashes to handle root directory paths correctly
+        normalized_path = path.lstrip('/')
         
         # Get the folder path
-        folder_path = get_upload_dir(current_user.id, knowledge_base, path)
+        folder_path = get_upload_dir(current_user.id, knowledge_base, normalized_path)
         
         # Check if folder exists
         if not os.path.exists(folder_path):
@@ -424,6 +427,11 @@ async def delete_folder(
         
         # Delete the folder and its contents
         shutil.rmtree(folder_path)
+        parsed_folder_path, folder_name = get_parsed_path(folder_path)
+        parsed_folder_path = os.path.join(parsed_folder_path, folder_name)
+        logger.info(f"Deleting parsed folder: {parsed_folder_path}")
+        if os.path.exists(parsed_folder_path):
+            shutil.rmtree(parsed_folder_path)
         
         return {
             "success": True,
@@ -446,9 +454,12 @@ async def delete_file(
         from src.file_process.utils import get_upload_dir
         import os
         
+        # Normalize path by removing leading slashes
+        normalized_path = path.lstrip('/')
+        
         # Split the path into directory and filename
-        directory = os.path.dirname(path)
-        filename = os.path.basename(path)
+        directory = os.path.dirname(normalized_path)
+        filename = os.path.basename(normalized_path)
         
         # Get the file path
         file_path = get_upload_dir(current_user.id, knowledge_base, directory)
@@ -460,27 +471,15 @@ async def delete_file(
         
         # Delete the file from filesystem
         os.remove(full_file_path)
+        parsed_file_path, filename = get_parsed_path(full_file_path)
+        if parsed_file_path:
+            for item in glob.glob(os.path.join(parsed_file_path, filename + "*")):
+                if os.path.isdir(item):
+                    shutil.rmtree(item)
+                else:
+                    os.remove(item)
         
-        # Delete the file from database
-        # First, get the knowledgebase id
-        with memory_manager.connection_pool.connection() as conn:
-            with conn.cursor() as cur:
-                # Get knowledgebase id
-                cur.execute(
-                    "SELECT id FROM knowledgebase WHERE user_id = %s AND name = %s",
-                    (current_user.id, knowledge_base)
-                )
-                knowledgebase = cur.fetchone()
-                if not knowledgebase:
-                    raise HTTPException(status_code=404, detail=f"Knowledgebase '{knowledge_base}' not found")
-                knowledgebase_id = knowledgebase[0]
-                
-                # Delete the file from database
-                cur.execute(
-                    "DELETE FROM files WHERE knowledgebase_id = %s AND filepath LIKE %s",
-                    (knowledgebase_id, f"%/{filename}")
-                )
-                conn.commit()
+        memory_manager.delete_file_by_path(full_file_path)
         
         return {
             "success": True,

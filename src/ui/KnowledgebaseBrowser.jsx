@@ -63,7 +63,7 @@ const KnowledgebaseBrowser = () => {
     setIsLoading(true);
     setError('');
     try {
-      const fullPath = currentPath.join('/');
+      const fullPath = currentPath.join('/').replace(/^\//, '');
       const response = await fetchWithAuth('/api/knowledgebase/folder', {
         method: 'POST',
         headers: {
@@ -101,7 +101,7 @@ const KnowledgebaseBrowser = () => {
     setIsLoading(true);
     setError('');
     try {
-      const fullPath = [...currentPath, folderName].join('/');
+      const fullPath = [...currentPath, folderName].join('/').replace(/^\//, '');
       const response = await fetchWithAuth('/api/knowledgebase/folder', {
         method: 'DELETE',
         headers: {
@@ -119,7 +119,7 @@ const KnowledgebaseBrowser = () => {
       }
 
       // Refresh directory contents
-      fetchDirectoryContents(currentPath.join('/'));
+      fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -136,7 +136,7 @@ const KnowledgebaseBrowser = () => {
     setIsLoading(true);
     setError('');
     try {
-      const fullPath = [...currentPath, fileName].join('/');
+      const fullPath = [...currentPath, fileName].join('/').replace(/^\//, '');
       const response = await fetchWithAuth('/api/knowledgebase/file', {
         method: 'DELETE',
         headers: {
@@ -154,7 +154,7 @@ const KnowledgebaseBrowser = () => {
       }
 
       // Refresh directory contents
-      fetchDirectoryContents(currentPath.join('/'));
+      fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -175,7 +175,7 @@ const KnowledgebaseBrowser = () => {
     setError('');
     try {
       const formData = new FormData();
-      const fullPath = currentPath.join('/');
+      const fullPath = currentPath.join('/').replace(/^\//, '');
       
       formData.append('knowledge_base', currentKnowledgebase);
       formData.append('directory', fullPath);
@@ -191,9 +191,19 @@ const KnowledgebaseBrowser = () => {
         headers: {} // Empty headers to let fetchWithAuth handle it automatically
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to upload files');
+      // Always parse the JSON response body
+      const responseData = await response.json();
+      
+      // Handle error response format
+      if (responseData.detail) {
+        throw new Error(responseData.detail);
+      }
+      
+      // Show detailed error message if any files failed
+      const failedFiles = responseData.files ? responseData.files.filter(file => file.status === 'failed') : [];
+      if (failedFiles.length > 0) {
+        const errorMessages = failedFiles.map(file => `${file.filename}: ${file.error || 'Unknown error'}`);
+        throw new Error(`Upload failed for ${failedFiles.length} file(s):\n${errorMessages.join('\n')}`);
       }
 
       // Refresh directory contents
@@ -209,7 +219,7 @@ const KnowledgebaseBrowser = () => {
 
   // Fetch directory contents when currentPath changes
   useEffect(() => {
-    fetchDirectoryContents(currentPath.join('/'));
+    fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
   }, [currentPath]);
 
   return (

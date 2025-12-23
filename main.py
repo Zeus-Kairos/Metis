@@ -49,23 +49,12 @@ try:
     print(f"Welcome to the Metis Agent with {rag_type.name} RAG!")
     print("Please ask anything you like. Type 'q' to quit.")
     
+    # Keep the main thread running to prevent daemon thread from exiting
     while True:
-        user_input = input("You: ")
-        if user_input.lower() == "q":
-            print("Goodbye!")
+        user_input = input()
+        if user_input.strip().lower() == 'q':
+            print("Shutting down...")
             break
-        
-        try:
-            rag_agent = RAGAgent(rag_type, rag_k)
-            for chunk in rag_agent.chat(user_input, knowledge_base_id=1):
-                for key, value in chunk.items():
-                    if key == "stage":
-                        print(f"{value}\n")
-                    elif key == "response":
-                        print(value, end="", flush=True)
-            print()  # New line after response
-        except Exception as e:
-            print(f"Error: {e}")
 
 except Exception as e:
     print(f"Error: {type(e).__name__}: {e}")

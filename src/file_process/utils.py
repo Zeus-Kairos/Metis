@@ -1,5 +1,9 @@
 import os
+from typing import Tuple
 import dotenv
+from src.utils.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Load environment variables
 dotenv.load_dotenv()
@@ -26,7 +30,56 @@ def get_upload_dir(user_id: int, knowledge_base: str, directory: str) -> str:
     Returns:
         Unique upload directory as a string
     """
-    return os.path.join(BASE_UPLOAD_DIR, str(user_id), knowledge_base, "origin", directory)
+    # Remove leading slash to avoid absolute path issues
+    directory = directory.lstrip('/')
+    
+    # Split directory into parts
+    parts = directory.split('/') if directory else []
+    
+    # Ensure we don't double-include 'origin' segment
+    # If parts already contains 'origin', remove it
+    if parts and parts[0] == 'origin':
+        parts = parts[1:]
+    
+    return os.path.join(BASE_UPLOAD_DIR, str(user_id), knowledge_base, "origin", *parts)
+
+def get_parsed_path(original_file_path: str) -> Tuple[str, str]:
+        """
+        Get the parsed file path from the original file path.
+        
+        Args:
+            original_file_path: Original file path
+            
+        Returns:
+            Tuple of (parsed_dir, filename) where:
+            - parsed_dir: Directory path where parsed content will be saved
+            - filename: Filename without extension (or folder name if original is a folder)
+        """
+        # Extract user_id, knowledge_base, and filename from original path
+        path_parts = original_file_path.split(os.sep)
+            
+        # Find the origin folder index
+        try:
+            origin_idx = path_parts.index("origin")
+            if origin_idx < 2:  # Need at least uploads/user_id/knowledge_base/origin
+                raise ValueError("Invalid path structure")
+                    
+            # Build parsed directory path
+            filepath_with_ext = os.sep.join(path_parts[origin_idx+1:])
+            parsed_dir_parts = path_parts[:origin_idx] + ["parsed"] + filepath_with_ext.split(os.sep)[:-1]
+            parsed_dir = os.sep.join(parsed_dir_parts)
+            
+            # Create parsed directory if it doesn't exist
+            os.makedirs(parsed_dir, exist_ok=True)
+                
+            # Get filename (handle both files with extensions and folders without)
+            filename_with_ext = filepath_with_ext.split(os.sep)[-1]
+            filename, original_ext = os.path.splitext(filename_with_ext)
+            
+            return parsed_dir, filename
+        except ValueError as e:
+            logger.error(f"Error extracting path components from {original_file_path}: {str(e)}")
+            return None
 
 def get_index_path(user_id: int, knowledgebase_name: str) -> str:
     """Generate a unique index path for the given user_id and knowledgebase_name.
@@ -39,3 +92,5 @@ def get_index_path(user_id: int, knowledgebase_name: str) -> str:
         Unique index path as a string
     """
     return f"./index/{user_id}/{knowledgebase_name}"
+
+

@@ -9,6 +9,7 @@ import pymupdf.layout
 import pymupdf4llm
 import logging
 
+from src.file_process.utils import get_parsed_path
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -150,7 +151,7 @@ class FileParser:
         """
         Parse PDF content using PyPDF2.
         """
-        parsed_dir, filename = self._get_parsed_path(file_path)
+        parsed_dir, filename = get_parsed_path(file_path)
         # copy the file to parsed_dir
         target_image_path = os.path.join(parsed_dir, f"{filename}_images")
         os.makedirs(target_image_path, exist_ok=True)
@@ -340,7 +341,7 @@ class FileParser:
         """
         try:
             # Extract user_id, knowledge_base, and filename from original path
-            parsed_dir, filename = self._get_parsed_path(original_file_path)
+            parsed_dir, filename = get_parsed_path(original_file_path)
             try:  
                 
                 # Create parsed file path with .md extension, handling conflicts
@@ -367,37 +368,4 @@ class FileParser:
             logger.error(f"Error saving parsed content for {original_file_path}: {str(e)}")
             return None
 
-    def _get_parsed_path(self, original_file_path: str, base_upload_dir: str = "uploads") -> Tuple[str, str]:
-        """
-        Get the parsed file path from the original file path.
-        
-        Returns:
-            Tuple of (parsed_dir, filename) where:
-            - parsed_dir: Directory path where parsed content will be saved
-            - filename: Filename without extension
-        """
-        # Extract user_id, knowledge_base, and filename from original path
-        path_parts = original_file_path.split(os.sep)
-            
-        # Find the origin folder index
-        try:
-            origin_idx = path_parts.index("origin")
-            if origin_idx < 2:  # Need at least uploads/user_id/knowledge_base/origin
-                raise ValueError("Invalid path structure")
-                    
-            # Build parsed directory path
-            filepath_with_ext = os.sep.join(path_parts[origin_idx+1:])
-            parsed_dir_parts = path_parts[:origin_idx] + ["parsed"] + filepath_with_ext.split(os.sep)[:-1]
-            parsed_dir = os.sep.join(parsed_dir_parts)
-            
-            # Create parsed directory if it doesn't exist
-            os.makedirs(parsed_dir, exist_ok=True)
-                
-            # Get filename without extension and original extension
-            filename_with_ext = filepath_with_ext.split(os.sep)[-1]
-            filename, original_ext = os.path.splitext(filename_with_ext)
-                
-            return parsed_dir, filename
-        except ValueError as e:
-            logger.error(f"Error extracting path components from {original_file_path}: {str(e)}")
-            return None
+    

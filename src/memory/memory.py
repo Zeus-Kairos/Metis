@@ -29,8 +29,8 @@ class MemoryManager:
         # Password hashing
         self.pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
         
-        # Create connection pool with autocommit=True to handle CREATE INDEX CONCURRENTLY
-        self.connection_pool = ConnectionPool(self.conn_str, kwargs={"autocommit": True})
+        # Create connection pool
+        self.connection_pool = ConnectionPool(self.conn_str)
         
         # Initialize database tables
         self._init_db_tables()
@@ -74,11 +74,29 @@ class MemoryManager:
                     """)
                     
                     # Add unique constraints to username and email columns if they don't exist
+                    # Check if username constraint exists first
                     cur.execute("""
-                        ALTER TABLE users 
-                        ADD CONSTRAINT users_username_key UNIQUE (username),
-                        ADD CONSTRAINT users_email_key UNIQUE (email);
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'users' 
+                        AND constraint_name = 'users_username_key';
                     """)
+                    if not cur.fetchone():
+                        cur.execute("""
+                            ALTER TABLE users ADD CONSTRAINT users_username_key UNIQUE (username);
+                        """)
+                    
+                    # Check if email constraint exists first
+                    cur.execute("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'users' 
+                        AND constraint_name = 'users_email_key';
+                    """)
+                    if not cur.fetchone():
+                        cur.execute("""
+                            ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
+                        """)
                                         
                     # Create threads table
                     cur.execute("""
@@ -114,10 +132,18 @@ class MemoryManager:
                     """)
                     
                     # Add unique constraint to knowledgebase (user_id, name) if it doesn't exist
+                    # Check if constraint exists first
                     cur.execute("""
-                        ALTER TABLE knowledgebase 
-                        ADD CONSTRAINT knowledgebase_user_id_name_key UNIQUE (user_id, name);
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'knowledgebase' 
+                        AND constraint_name = 'knowledgebase_user_id_name_key';
                     """)
+                    if not cur.fetchone():
+                        cur.execute("""
+                            ALTER TABLE knowledgebase 
+                            ADD CONSTRAINT knowledgebase_user_id_name_key UNIQUE (user_id, name);
+                        """)
                     
                     # Create kb_thread table for knowledgebase-thread mapping (one-to-many)
                     cur.execute("""
@@ -497,4 +523,27 @@ class MemoryManager:
                     return cur.rowcount > 0
         except Exception as e:
             logger.error(f"Error deleting file: {e}")
+            raise
+
+    def delete_file_by_path(self, filepath: str) -> bool:
+        """
+        Delete a file by filepath.
+        
+        Args:
+            filepath: Path of the file
+            
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM files WHERE filepath = %s",
+                        (filepath,)
+                    )
+                    conn.commit()
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error deleting file by path: {e}")
             raise
