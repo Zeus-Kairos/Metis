@@ -55,7 +55,7 @@ class UserCreate(BaseModel):
     email: str
     password: str
 
-app = FastAPI(title="Metis File Upload API", version="1.0.0")
+app = FastAPI(title="Metis API", version="1.0.0")
 
 # Configure CORS
 app.add_middleware(
@@ -271,27 +271,7 @@ async def rename_knowledgebase(
         raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint to delete a knowledgebase
-@app.delete("/api/knowledgebase/{kb_id}")
-async def delete_knowledgebase(
-    kb_id: int,
-    current_user: Annotated[User, Depends(get_current_active_user)]
-):
-    """Delete a knowledgebase."""
-    try:
-        # Use the MemoryManager method to delete the knowledgebase
-        success = memory_manager.delete_knowledgebase(current_user.id, kb_id)
-        if success:
-            return {
-                "success": True,
-                "message": "Knowledgebase deleted successfully"
-            }
-        return {
-            "success": False,
-            "message": "Failed to delete knowledgebase"
-        }
-    except Exception as e:
-        logger.error(f"Error deleting knowledgebase: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+
 
 # API endpoint to set a knowledgebase as active
 @app.patch("/api/knowledgebase/{kb_id}/active")
@@ -534,6 +514,29 @@ async def delete_file(
         raise
     except Exception as e:
         logger.error(f"Error deleting file: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to delete a knowledgebase
+@app.delete("/api/knowledgebase/{kb_id}")
+async def delete_knowledgebase(
+    kb_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """Delete a knowledgebase."""
+    try:
+        # Use the MemoryManager method to delete the knowledgebase
+        success = memory_manager.delete_knowledgebase(current_user.id, kb_id)
+        if success:
+            return {
+                "success": True,
+                "message": "Knowledgebase deleted successfully"
+            }
+        return {
+            "success": False,
+            "message": "Failed to delete knowledgebase"
+        }
+    except Exception as e:
+        logger.error(f"Error deleting knowledgebase: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/thread/create")
