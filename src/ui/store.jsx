@@ -187,19 +187,26 @@ const useChatStore = create((set, get) => {
           activeThreadId = activeThread 
             ? (activeThread.thread_id || activeThread.id)
             : (threads[0].thread_id || threads[0].id);
+          
+          // Update state with conversations, active thread, and knowledgebases
+          set({ 
+            conversations,
+            activeThreadId,
+            knowledgebases,
+            isLoading: false,
+            isInitializing: false
+          });
         } else {
-          // No threads exist - will remain null and UI will handle this state
-          activeThreadId = null;
+          // No threads exist - create a new thread automatically
+          await get().createConversation();
+          
+          // Update state with knowledgebases and loading states
+          set({ 
+            knowledgebases,
+            isLoading: false,
+            isInitializing: false
+          });
         }
-        
-        // Update state with conversations, active thread, and knowledgebases
-        set({ 
-          conversations,
-          activeThreadId,
-          knowledgebases,
-          isLoading: false,
-          isInitializing: false
-        });
         
         // If we have an active thread, call the /api/thread/set-active API to update the backend
         if (activeThreadId && userId) {

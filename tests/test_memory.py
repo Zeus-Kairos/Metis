@@ -134,7 +134,7 @@ def test_database_mode():
     try:
         # Create memory manager in database mode
         memory = MemoryManager()
-        thread_manager = ThreadManager(memory_manager=memory)
+        thread_manager = ThreadManager()
         
         # Make sure we're in database mode
         assert memory.conn_str is not None, "Expected database mode but conn_str is None"

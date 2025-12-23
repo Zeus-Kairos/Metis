@@ -647,6 +647,16 @@ class MemoryManager:
                         logger.warning(f"Knowledgebase not found or not owned by user: user_id={user_id}, knowledgebase_id={knowledgebase_id}")
                         return False
                     
+                    # Check if this is the only knowledgebase for the user
+                    cur.execute(
+                        "SELECT COUNT(*) FROM knowledgebase WHERE user_id = %s",
+                        (user_id,)
+                    )
+                    kb_count = cur.fetchone()[0]
+                    if kb_count <= 1:
+                        logger.warning(f"Cannot delete the only knowledgebase for user: user_id={user_id}, knowledgebase_id={knowledgebase_id}")
+                        raise ValueError("Cannot delete the only knowledgebase.")
+                    
                     logger.info(f"Found knowledgebase to delete: id={kb[0]}, name={kb[1]}, is_active={kb[2]}")
                     is_deleted_kb_active = kb[2]
                     

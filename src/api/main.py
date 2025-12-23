@@ -68,7 +68,7 @@ app.add_middleware(
 
 # Initialize MemoryManager
 memory_manager = MemoryManager()
-thread_manager = ThreadManager(memory_manager)
+thread_manager = ThreadManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -80,6 +80,7 @@ async def lifespan(app: FastAPI):
     if hasattr(memory_manager, 'connection_pool'):
         try:
             memory_manager.connection_pool.close()
+            thread_manager.connection_pool.close()
             logger.info("Database connection pool closed successfully")
         except Exception as e:
             logger.error(f"Error closing database connection pool: {e}")

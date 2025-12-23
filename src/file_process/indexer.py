@@ -48,6 +48,19 @@ class Indexer:
         self.vectorstore.save_local(self.index_path)
         return self.vectorstore
 
+    def delete_file_chunks(self, file_id: str) -> None:
+        """Delete all chunks for a file from the index.
+        
+        Args:
+            file_id: ID of the file to delete chunks for
+        """
+        if self.all_docs:
+            existing_chunks_ids = [doc.metadata['chunk_id'] for doc in self.all_docs if doc.metadata.get("file_id") == file_id]
+            if existing_chunks_ids:
+                self.vectorstore.delete(ids=existing_chunks_ids)
+                logger.info(f"Delete {len(existing_chunks_ids)} chunks for file_id: {file_id}")
+        self.vectorstore.save_local(self.index_path)
+
     def get_all_docs(self) -> List[Document]:
         """Get all documents in the index.
         
@@ -57,4 +70,4 @@ class Indexer:
         if self.vectorstore.index.ntotal == 0:
             return []
         all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
-        return [doc for doc, _ in all_docs_with_scores]
+        return [doc for doc, _ in all_docs_with_scores]

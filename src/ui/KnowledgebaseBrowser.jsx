@@ -250,7 +250,7 @@ const KnowledgebaseBrowser = () => {
 
       // Refresh knowledgebases by setting the newly created one as active
       const result = await response.json();
-      await setActiveKnowledgebase(result.knowledgebase_id);
+      setActiveKnowledgebase(result.knowledgebase_id);
       
       // Reset form
       setShowCreateKBModal(false);
@@ -290,12 +290,12 @@ const KnowledgebaseBrowser = () => {
       if (kbsResponse.ok) {
         const kbsData = await kbsResponse.json();
         // Update the store's knowledgebases directly
-        await useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
+        useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
         
         // Set the active knowledgebase if one exists
         const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
         if (activeKB) {
-          await setActiveKnowledgebase(activeKB.id);
+          setActiveKnowledgebase(activeKB.id);
         }
       }
     } catch (err) {
@@ -307,6 +307,12 @@ const KnowledgebaseBrowser = () => {
 
   // Delete a knowledgebase
   const deleteKnowledgebase = async (kbId, kbName) => {
+    // Prevent deletion if this is the only knowledgebase
+    if (knowledgebases.length <= 1) {
+      window.alert('Cannot delete the only knowledgebase.');
+      return;
+    }
+
     if (!window.confirm(`Are you sure you want to delete knowledgebase "${kbName}"? This action cannot be undone.`)) {
       return;
     }
@@ -328,12 +334,12 @@ const KnowledgebaseBrowser = () => {
       if (kbsResponse.ok) {
         const kbsData = await kbsResponse.json();
         // Update the store's knowledgebases directly
-        await useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
+        useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
         
         // Set the active knowledgebase if one exists
         const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
         if (activeKB) {
-          await setActiveKnowledgebase(activeKB.id);
+          setActiveKnowledgebase(activeKB.id);
         }
       }
     } catch (err) {
@@ -409,9 +415,14 @@ const KnowledgebaseBrowser = () => {
                   className="kb-knowledgebase-delete-btn"
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (knowledgebases.length <= 1) {
+                      window.alert('Cannot delete the only knowledgebase.');
+                      return;
+                    }
                     deleteKnowledgebase(kb.id, kb.name);
                   }}
-                  title="Delete knowledgebase"
+                  disabled={knowledgebases.length <= 1}
+                  title={knowledgebases.length <= 1 ? 'Cannot delete the only knowledgebase' : 'Delete knowledgebase'}
                 >
                   🗑️
                 </button>

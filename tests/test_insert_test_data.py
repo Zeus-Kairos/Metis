@@ -25,7 +25,7 @@ def insert_test_data():
         memory_manager = MemoryManager()
         
         # Create thread manager
-        thread_manager = ThreadManager(memory_manager)
+        thread_manager = ThreadManager()
         
         # Check if DB_URI is set
         if not memory_manager.conn_str:

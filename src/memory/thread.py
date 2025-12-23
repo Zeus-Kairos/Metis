@@ -1,4 +1,5 @@
 from datetime import datetime
+import os
 from typing import List, Dict, Any, Optional, Tuple, Union
 from psycopg_pool import ConnectionPool
 import logging
@@ -12,16 +13,17 @@ DEFAULT_THREAD_TITLE = "New Chat"
 class ThreadManager:
     """Manages user threads and conversation history"""
 
-    def __init__(self, memory_manager: Optional[MemoryManager] = None):
+    def __init__(self):
         """
         Initialize the thread manager.
         
         Args:
             memory_manager: MemoryManager instance
         """
-        self.connection_pool = memory_manager.connection_pool if memory_manager else None
+        self.conn_str = os.getenv("DB_URI")
 
-        if not self.connection_pool:
+        if not self.conn_str:
+            logger.error("No DB_URI found in environment. Fallback to in-memory storage.")
             # self.checkpointer = PostgresSaver(self.connection_pool)
             # try:
             #     self.checkpointer.setup()
@@ -33,6 +35,9 @@ class ThreadManager:
             self.user_thread_map = {}
             self.user_threads = {}
             self.thread_metadata = {}
+        else:
+            self.connection_pool = ConnectionPool(self.conn_str)
+            
 
     # Helper method to get the active thread_id for a user or create a new thread_id for a new user
     def _get_thread_id_for_user(self, user_id: int) -> str:

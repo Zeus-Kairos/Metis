@@ -72,55 +72,61 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
                 email = f"test_{unique_suffix}@example.com"
                 user_id = memory_manager.create_user(username=username, email=email, password=password)
                 print(f"Created unique user with ID: {user_id}, username: {username}")
-            else:
-                raise
     
     # Create knowledgebase if not exists
     kb_name = "test_pipeline_kb"
     try:
-        memory_manager.create_knowledgebase(user_id=user_id, name=kb_name, description="Test pipeline knowledgebase")
+        memory_manager.create_knowledgebase(user_id, kb_name, "Test pipeline knowledgebase")
         print(f"Successfully created knowledgebase")
-    except ValueError as e:
-        if "Knowledgebase with this name already exists" in str(e):
-            print(f"Knowledgebase already exists")
-        else:
-            raise  # Re-raise if it's not a duplicate error
     except Exception as e:
-        raise  # Re-raise any other exception
+        print(f"Knowledgebase might already exist: {e}")
+        kb_id = memory_manager.get_knowledgebase_id(user_id, kb_name)
+        print(f"Using existing knowledgebase with ID: {kb_id}")
     
-    # Process files through pipeline
-    result = await pipeline.process_files(
-        user_id=user_id,
-        knowledge_base=kb_name,
-        directory="test_directory",  # Add missing directory parameter
-        files=mock_upload_files
-    )
+    try:
+        # Process files through pipeline
+        result = await pipeline.process_files(
+            user_id=user_id,
+            knowledge_base=kb_name,
+            directory="test_directory",  # Add missing directory parameter
+            files=mock_upload_files
+        )
 
-    # Print detailed results
-    print(f"Pipeline Status: {result['status']}")
-    print(f"Total Files: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
-    print(f"Total Chunks: {result['total_chunks']}")
-    print("\nFile Details:")
-    for file_result in result['files']:
-        print(f"  - {file_result['filename']}: Status={file_result['status']}, Parsed={file_result.get('parsed', False)}, Errors={file_result.get('errors', '')}")
+        # Print detailed results
+        print(f"Pipeline Status: {result['status']}")
+        print(f"Total Files: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
+        print(f"Total Chunks: {result['total_chunks']}")
+        print("\nFile Details:")
+        for file_result in result['files']:
+            print(f"  - {file_result['filename']}: Status={file_result['status']}, Parsed={file_result.get('parsed', False)}, Errors={file_result.get('errors', '')}")
 
-    # Assertions
-    assert result["status"] == "partial_success" or result["status"] == "success"
-    assert result["total"] == 6
-    assert result["successful"] + result["skipped"] + result["failed"] == result["total"]
+        # Assertions
+        assert result["status"] == "partial_success" or result["status"] == "success"
+        assert result["total"] == 6
+        assert result["successful"] + result["skipped"] + result["failed"] == result["total"]
 
-    # Check that all supported files were processed successfully
-    for file_result in result["files"]:
-        if file_result["status"] == "success":
-            file_ext = os.path.splitext(file_result["filename"])[1].lower()
-            assert file_ext in SUPPORTED_FORMATS
-            assert "path" in file_result
-            assert "parsed_path" in file_result
-            assert file_result.get("parsed", False) == True
-        elif file_result["status"] == "skipped":
-            assert "message" in file_result
-        elif file_result["status"] == "failed":
-            assert "error" in file_result
+        # Check that all supported files were processed successfully
+        for file_result in result["files"]:
+            if file_result["status"] == "success":
+                file_ext = os.path.splitext(file_result["filename"])[1].lower()
+                assert file_ext in SUPPORTED_FORMATS
+                assert "path" in file_result
+                assert "parsed_path" in file_result
+                assert file_result.get("parsed", False) == True
+            elif file_result["status"] == "skipped":
+                assert "message" in file_result
+            elif file_result["status"] == "failed":
+                assert "error" in file_result
+
+    finally:
+        # Clean up - delete the user which will cascade delete knowledgebase and files
+        print("\nCleaning up test data...")
+        if 'user_id' in locals():
+            try:
+                memory_manager.delete_user(user_id)
+                print(f"Cleanup: Deleted user {user_id} and all related data")
+            except Exception as e:
+                print(f"Cleanup error: {e}")
 
 @pytest.mark.asyncio
 async def test_pipeline_with_mixed_files(pipeline, test_files_dir, memory_manager):
@@ -149,81 +155,89 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir, memory_manage
                 email = f"test2_{unique_suffix}@example.com"
                 user_id = memory_manager.create_user(username=username, email=email, password=password)
                 print(f"Created unique user with ID: {user_id}, username: {username}")
-            else:
-                raise
     
     # Create knowledgebase if not exists
-    kb_name = "test_mixed_kb"
+    kb_name = "test_mixed_files_kb"
     try:
-        memory_manager.create_knowledgebase(user_id=user_id, name=kb_name, description="Test mixed files knowledgebase")
+        memory_manager.create_knowledgebase(user_id, kb_name, "Test mixed files knowledgebase")
         print(f"Successfully created knowledgebase")
-    except ValueError as e:
-        if "Knowledgebase with this name already exists" in str(e):
-            print(f"Knowledgebase already exists")
-        else:
-            raise  # Re-raise if it's not a duplicate error
     except Exception as e:
-        raise  # Re-raise any other exception
+        print(f"Knowledgebase might already exist: {e}")
+        kb_id = memory_manager.get_knowledgebase_id(user_id, kb_name)
+        print(f"Using existing knowledgebase with ID: {kb_id}")
     
-    upload_files = []
-    for file in os.listdir(test_files_dir):
-        file_path = os.path.join(test_files_dir, file)
-        if os.path.isfile(file_path):
-            upload_files.append(file_path)
-    
-    print(f"Found {len(upload_files)} files to process")
-    print("Processing files through pipeline...")
-    
-    # Create mock UploadFile objects - only include supported files to avoid FAISS error
-    mock_upload_files = []
-    for file_path in upload_files:
-        file_ext = os.path.splitext(file_path)[1].lower()
-        # Only include supported files for this test
-        if file_ext in SUPPORTED_FORMATS:
-            with open(file_path, "rb") as f:
-                content = f.read()
+    try:
+        upload_files = []
+        for file in os.listdir(test_files_dir):
+            file_path = os.path.join(test_files_dir, file)
+            if os.path.isfile(file_path):
+                upload_files.append(file_path)
+        
+        print(f"Found {len(upload_files)} files to process")
+        print("Processing files through pipeline...")
+        
+        # Create mock UploadFile objects - only include supported files to avoid FAISS error
+        mock_upload_files = []
+        for file_path in upload_files:
+            file_ext = os.path.splitext(file_path)[1].lower()
+            # Only include supported files for this test
+            if file_ext in SUPPORTED_FORMATS:
+                with open(file_path, "rb") as f:
+                    content = f.read()
+                
+                mock_file = UploadFile(
+                    filename=os.path.basename(file_path),
+                    file=BytesIO(content)
+                )
+                mock_upload_files.append(mock_file)
+        
+        print(f"Using {len(mock_upload_files)} supported files for processing")
+        
+        # Process files through pipeline
+        result = await pipeline.process_files(
+            user_id=user_id,
+            knowledge_base=kb_name,
+            directory=test_files_dir,
+            files=mock_upload_files
+        )
+        
+        # Print detailed results
+        print(f"Pipeline Status: {result['status']}")
+        print(f"Total Files: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
+        print(f"Total Chunks: {result['total_chunks']}")
+        print("\nFile Details:")
+        for file_result in result['files']:
+            print(f"  - {file_result['filename']}: Status={file_result['status']}, Parsed={file_result.get('parsed', False)}, Errors={file_result.get('errors', '')}")
+        
+        # Assertions
+        assert result["status"] in ["partial_success", "success"]
+        assert result["total"] == len(mock_upload_files)
+        
+        # Check that supported files were processed
+        for file_result in result["files"]:
+            file_ext = os.path.splitext(file_result["filename"])[1].lower()
+            assert file_ext in SUPPORTED_FORMATS
             
-            mock_file = UploadFile(
-                filename=os.path.basename(file_path),
-                file=BytesIO(content)
-            )
-            mock_upload_files.append(mock_file)
-    
-    print(f"Using {len(mock_upload_files)} supported files for processing")
-    
-    # Process files through pipeline
-    result = await pipeline.process_files(
-        user_id=user_id,
-        knowledge_base=kb_name,
-        directory=test_files_dir,
-        files=mock_upload_files
-    )
-    
-    # Print detailed results
-    print(f"Pipeline Status: {result['status']}")
-    print(f"Total Files: {result['total']}, Successful: {result['successful']}, Skipped: {result['skipped']}, Failed: {result['failed']}")
-    print(f"Total Chunks: {result['total_chunks']}")
-    print("\nFile Details:")
-    for file_result in result['files']:
-        print(f"  - {file_result['filename']}: Status={file_result['status']}, Parsed={file_result.get('parsed', False)}, Errors={file_result.get('errors', '')}")
+            # Supported files should be either successful or skipped or failed
+            assert file_result["status"] in ["success", "skipped", "failed"]
+            
+            if file_result["status"] == "success":
+                assert "path" in file_result
+                assert "parsed_path" in file_result
+                assert file_result.get("parsed", False) == True
+            elif file_result["status"] == "skipped":
+                assert "message" in file_result
+            elif file_result["status"] == "failed":
+                assert "error" in file_result
 
-    # Assertions
-    assert result["status"] in ["partial_success", "success"]
-    assert result["total"] == len(mock_upload_files)
-    
-    # Check that supported files were processed
-    for file_result in result["files"]:
-        file_ext = os.path.splitext(file_result["filename"])[1].lower()
-        assert file_ext in SUPPORTED_FORMATS
+        print("\n✅ All mixed file processing tests passed!")
         
-        # Supported files should be either successful or skipped or failed
-        assert file_result["status"] in ["success", "skipped", "failed"]
-        
-        if file_result["status"] == "success":
-            assert "path" in file_result
-            assert "parsed_path" in file_result
-            assert file_result.get("parsed", False) == True
-        elif file_result["status"] == "skipped":
-            assert "message" in file_result
-        elif file_result["status"] == "failed":
-            assert "error" in file_result
+    finally:
+        # Clean up - delete the user which will cascade delete knowledgebase and files
+        print("\nCleaning up test data...")
+        if 'user_id' in locals():
+            try:
+                memory_manager.delete_user(user_id)
+                print(f"Cleanup: Deleted user {user_id} and all related data")
+            except Exception as e:
+                print(f"Cleanup error: {e}")

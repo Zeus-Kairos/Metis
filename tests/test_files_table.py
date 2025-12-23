@@ -87,11 +87,13 @@ def test_files_table_operations():
         print("All file table operations tests passed!")
         
     finally:
-        # Clean up
-        try:
-            memory_manager.delete_user(user_id)
-        except:
-            pass
+        # Clean up - delete the user which will cascade delete knowledgebase and files
+        if 'user_id' in locals():
+            try:
+                memory_manager.delete_user(user_id)
+                print(f"Cleanup: Deleted user {user_id} and all related data")
+            except Exception as e:
+                print(f"Cleanup error: {e}")
 
 if __name__ == "__main__":
     test_files_table_operations()
