@@ -195,6 +195,22 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_active
     """Get current user information."""
     return current_user
 
+# API endpoint for deleting a user
+@app.delete("/api/users/me")
+async def delete_user(current_user: Annotated[User, Depends(get_current_active_user)]):
+    """Delete the current user account."""
+    try:
+        # Call the delete_user method
+        deleted = memory_manager.delete_user(current_user.id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {
+            "success": True,
+            "message": "User deleted successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint for creating a knowledge base
 @app.post("/api/knowledgebase")
 async def create_knowledgebase(
@@ -232,9 +248,6 @@ async def list_knowledgebases(
         logger.error(f"Error listing knowledgebases: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# API endpoint to update a knowledgebase's active status
-# Removed PATCH endpoint to fix route conflict with DELETE
-
 # API endpoint to rename a knowledgebase
 @app.put("/api/knowledgebase/{kb_id}/rename")
 async def rename_knowledgebase(
@@ -270,9 +283,6 @@ async def rename_knowledgebase(
         logger.error(f"Error renaming knowledgebase: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# API endpoint to delete a knowledgebase
-
-
 # API endpoint to set a knowledgebase as active
 @app.patch("/api/knowledgebase/{kb_id}/active")
 async def set_active_knowledgebase(
@@ -295,57 +305,6 @@ async def set_active_knowledgebase(
     except Exception as e:
         logger.error(f"Error setting active knowledgebase: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-
-# API endpoint for deleting a user
-@app.delete("/api/users/me")
-async def delete_user(current_user: Annotated[User, Depends(get_current_active_user)]):
-    """Delete the current user account."""
-    try:
-        # Call the delete_user method
-        deleted = memory_manager.delete_user(current_user.id)
-        if not deleted:
-            raise HTTPException(status_code=404, detail="User not found")
-        return {
-            "success": True,
-            "message": "User deleted successfully"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-# API endpoint for file uploads
-@app.post("/api/upload")
-async def upload_files(
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    knowledge_base: str = Form(...),
-    directory: str = Form(""),
-    files: List[UploadFile] = File(...)
-):
-    """Upload one or more files to a knowledge base."""
-    try:
-        # Call the upload handler
-        pipeline = FileProcessingPipeline()
-        result = await pipeline.process_files(current_user.id, knowledge_base, files, directory)
-        return result
-    except Exception as e:
-        logger.error(f"Error processing upload: {e}")
-        # Return an error response with status code 400
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.delete("/api/thread/{user_id}/{thread_id}")
-def delete_thread(user_id: int, thread_id: str):
-    """Delete a specific thread for a user"""
-    logger.debug(f"Deleting thread {thread_id} for user {user_id}")
-    thread_manager.remove_thread(user_id, thread_id)
-    logger.debug(f"Thread {thread_id} deleted successfully for user {user_id}")
-    return {"status": "success", "message": f"Thread {thread_id} deleted successfully"}
-
-@app.delete("/api/threads/{user_id}")
-def delete_all_threads(user_id: int):
-    """Delete all threads for a user"""
-    logger.debug(f"Deleting all threads for user {user_id}")
-    thread_manager.remove_thread(user_id, None)
-    logger.debug(f"All threads deleted successfully for user {user_id}")
-    return {"status": "success", "message": f"All threads of user {user_id} deleted successfully"}
 
 # Knowledgebase endpoints
 @app.get("/api/knowledgebase/list")
@@ -538,6 +497,41 @@ async def delete_knowledgebase(
     except Exception as e:
         logger.error(f"Error deleting knowledgebase: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint for file uploads
+@app.post("/api/upload")
+async def upload_files(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    knowledge_base: str = Form(...),
+    directory: str = Form(""),
+    files: List[UploadFile] = File(...)
+):
+    """Upload one or more files to a knowledge base."""
+    try:
+        # Call the upload handler
+        pipeline = FileProcessingPipeline()
+        result = await pipeline.process_files(current_user.id, knowledge_base, files, directory)
+        return result
+    except Exception as e:
+        logger.error(f"Error processing upload: {e}")
+        # Return an error response with status code 400
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.delete("/api/thread/{user_id}/{thread_id}")
+def delete_thread(user_id: int, thread_id: str):
+    """Delete a specific thread for a user"""
+    logger.debug(f"Deleting thread {thread_id} for user {user_id}")
+    thread_manager.remove_thread(user_id, thread_id)
+    logger.debug(f"Thread {thread_id} deleted successfully for user {user_id}")
+    return {"status": "success", "message": f"Thread {thread_id} deleted successfully"}
+
+@app.delete("/api/threads/{user_id}")
+def delete_all_threads(user_id: int):
+    """Delete all threads for a user"""
+    logger.debug(f"Deleting all threads for user {user_id}")
+    thread_manager.remove_thread(user_id, None)
+    logger.debug(f"All threads deleted successfully for user {user_id}")
+    return {"status": "success", "message": f"All threads of user {user_id} deleted successfully"}
 
 @app.post("/api/thread/create")
 def create_thread(user_id: int, title: Optional[str] = None):
