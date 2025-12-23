@@ -194,81 +194,6 @@ async def read_users_me(current_user: Annotated[User, Depends(get_current_active
     """Get current user information."""
     return current_user
 
-# API endpoint to list all knowledgebases for the current user
-@app.get("/api/knowledgebase")
-async def list_knowledgebases(
-    current_user: Annotated[User, Depends(get_current_active_user)]
-):
-    """List all knowledgebases for the current user."""
-    try:
-        knowledgebases = memory_manager.get_all_knowledgebases(current_user.id)
-        
-        # Format the response
-        formatted_knowledgebases = []
-        for kb in knowledgebases:
-            formatted_knowledgebases.append({
-                "id": kb[0],
-                "name": kb[1],
-                "description": kb[2],
-                "navigation": kb[3],
-                "is_active": kb[4],
-                "created_at": kb[5],
-                "updated_at": kb[6]
-            })
-        
-        return {
-            "success": True,
-            "knowledgebases": formatted_knowledgebases
-        }
-    except Exception as e:
-        logger.error(f"Error listing knowledgebases: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-# API endpoint to update a knowledgebase's active status
-@app.patch("/api/knowledgebase/{kb_id}")
-async def update_knowledgebase(
-    kb_id: int,
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    update_data: dict
-):
-    """Update a knowledgebase, primarily for setting active status."""
-    try:
-        if "is_active" in update_data and update_data["is_active"]:
-            # Use the MemoryManager method to set the active knowledgebase
-            success = memory_manager.set_active_knowledgebase(current_user.id, kb_id)
-            if success:
-                return {
-                    "success": True,
-                    "message": f"Knowledgebase {kb_id} set as active"
-                }
-            return {
-                "success": False,
-                "message": f"Failed to set knowledgebase {kb_id} as active"
-            }
-        return {
-            "success": False,
-            "message": "Only is_active=true is supported for this endpoint"
-        }
-    except Exception as e:
-        logger.error(f"Error updating knowledgebase: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-# API endpoint for deleting a user
-@app.delete("/api/users/me")
-async def delete_user(current_user: Annotated[User, Depends(get_current_active_user)]):
-    """Delete the current user account."""
-    try:
-        # Call the delete_user method
-        deleted = memory_manager.delete_user(current_user.id)
-        if not deleted:
-            raise HTTPException(status_code=404, detail="User not found")
-        return {
-            "success": True,
-            "message": "User deleted successfully"
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
 # API endpoint for creating a knowledge base
 @app.post("/api/knowledgebase")
 async def create_knowledgebase(
@@ -289,6 +214,123 @@ async def create_knowledgebase(
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to list all knowledgebases for the current user
+@app.get("/api/knowledgebase")
+async def list_knowledgebases(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """List all knowledgebases for the current user."""
+    try:
+        knowledgebases = memory_manager.get_all_knowledgebases(current_user.id)
+            
+        return {
+            "success": True,
+            "knowledgebases": knowledgebases
+        }
+    except Exception as e:
+        logger.error(f"Error listing knowledgebases: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to update a knowledgebase's active status
+# Removed PATCH endpoint to fix route conflict with DELETE
+
+# API endpoint to rename a knowledgebase
+@app.put("/api/knowledgebase/{kb_id}/rename")
+async def rename_knowledgebase(
+    kb_id: int,
+    rename_data: dict,
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """Rename a knowledgebase."""
+    try:
+        if "name" not in rename_data:
+            return {
+                "success": False,
+                "message": "Name field is required"
+            }
+        
+        new_name = rename_data["name"]
+        
+        # Use the MemoryManager method to rename the knowledgebase
+        success = memory_manager.rename_knowledgebase(current_user.id, kb_id, new_name)
+        if success:
+            return {
+                "success": True,
+                "message": "Knowledgebase renamed successfully"
+            }
+        return {
+            "success": False,
+            "message": "Failed to rename knowledgebase"
+        }
+    except ValueError as e:
+        # Handle unique constraint violations
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error renaming knowledgebase: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to delete a knowledgebase
+@app.delete("/api/knowledgebase/{kb_id}")
+async def delete_knowledgebase(
+    kb_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """Delete a knowledgebase."""
+    try:
+        # Use the MemoryManager method to delete the knowledgebase
+        success = memory_manager.delete_knowledgebase(current_user.id, kb_id)
+        if success:
+            return {
+                "success": True,
+                "message": "Knowledgebase deleted successfully"
+            }
+        return {
+            "success": False,
+            "message": "Failed to delete knowledgebase"
+        }
+    except Exception as e:
+        logger.error(f"Error deleting knowledgebase: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint to set a knowledgebase as active
+@app.patch("/api/knowledgebase/{kb_id}/active")
+async def set_active_knowledgebase(
+    kb_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """Set a knowledgebase as active, deactivating all other knowledgebases for the user."""
+    try:
+        # Use the MemoryManager method to set the knowledgebase as active
+        success = memory_manager.set_active_knowledgebase(current_user.id, kb_id)
+        if success:
+            return {
+                "success": True,
+                "message": "Knowledgebase set as active successfully"
+            }
+        return {
+            "success": False,
+            "message": "Failed to set knowledgebase as active"
+        }
+    except Exception as e:
+        logger.error(f"Error setting active knowledgebase: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint for deleting a user
+@app.delete("/api/users/me")
+async def delete_user(current_user: Annotated[User, Depends(get_current_active_user)]):
+    """Delete the current user account."""
+    try:
+        # Call the delete_user method
+        deleted = memory_manager.delete_user(current_user.id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="User not found")
+        return {
+            "success": True,
+            "message": "User deleted successfully"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint for file uploads
 @app.post("/api/upload")
 async def upload_files(
@@ -304,6 +346,7 @@ async def upload_files(
         result = await pipeline.process_files(current_user.id, knowledge_base, files, directory)
         return result
     except Exception as e:
+        logger.error(f"Error processing upload: {e}")
         # Return an error response with status code 400
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -331,10 +374,7 @@ async def list_directory(
     knowledge_base: str = "default"
 ):
     """List directory contents for a knowledgebase"""
-    try:
-        from src.file_process.utils import get_upload_dir
-        import os
-        
+    try:       
         # Get the upload directory path
         upload_dir = get_upload_dir(current_user.id, knowledge_base, path)
         
@@ -432,6 +472,10 @@ async def delete_folder(
         logger.info(f"Deleting parsed folder: {parsed_folder_path}")
         if os.path.exists(parsed_folder_path):
             shutil.rmtree(parsed_folder_path)
+        
+        # Delete all database records for files under this folder
+        deleted_count = memory_manager.delete_files_by_path_prefix(folder_path)
+        logger.info(f"Deleted {deleted_count} database records for files under folder: {folder_path}")
         
         return {
             "success": True,

@@ -79,7 +79,12 @@ def get_parsed_path(original_file_path: str) -> Tuple[str, str]:
             return parsed_dir, filename
         except ValueError as e:
             logger.error(f"Error extracting path components from {original_file_path}: {str(e)}")
-            return None
+            # Return a default value instead of None to avoid unpacking errors
+            return os.path.join(BASE_UPLOAD_DIR, "parsed"), os.path.basename(original_file_path)
+        except Exception as e:
+            logger.error(f"Unexpected error in get_parsed_path: {str(e)}")
+            # Return a default value instead of None to avoid unpacking errors
+            return os.path.join(BASE_UPLOAD_DIR, "parsed"), os.path.basename(original_file_path)
 
 def get_index_path(user_id: int, knowledgebase_name: str) -> str:
     """Generate a unique index path for the given user_id and knowledgebase_name.
@@ -92,5 +97,6 @@ def get_index_path(user_id: int, knowledgebase_name: str) -> str:
         Unique index path as a string
     """
     return f"./index/{user_id}/{knowledgebase_name}"
+
 
 

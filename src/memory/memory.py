@@ -306,8 +306,13 @@ class MemoryManager:
                         """,
                         (user_id,)
                     )
-                    knowledgebases = cur.fetchall()
-                    return knowledgebases
+                    # Get column names
+                    columns = [desc[0] for desc in cur.description]
+                    # Convert results to dictionaries
+                    results = []
+                    for row in cur.fetchall():
+                        results.append(dict(zip(columns, row)))
+                    return results
         except Exception as e:
             logger.error(f"Error getting knowledgebases for user {user_id}: {e}")
             raise
@@ -525,6 +530,45 @@ class MemoryManager:
             logger.error(f"Error deleting file: {e}")
             raise
 
+    def delete_files_by_path_prefix(self, path_prefix: str) -> int:
+        """
+        Delete all files with filepath starting with the given prefix.
+        
+        Args:
+            path_prefix: The path prefix to match
+            
+        Returns:
+            The number of files deleted
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    logger.debug(f"Path prefix: {path_prefix}")
+                    
+                    # Properly escape backslashes for SQL LIKE pattern
+                    # Also handle both Windows and Unix path formats
+                    path_prefix_windows = path_prefix.replace('\\', '\\\\')
+                    path_prefix_unix = path_prefix.replace('\\', '/')
+                    
+                    # Use ILIKE to match case insensitively and handle both path formats
+                    cur.execute(
+                        "SELECT COUNT(*) FROM files WHERE filepath ILIKE %s OR filepath ILIKE %s",
+                        (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
+                    )
+                    count = cur.fetchone()[0]
+                    logger.debug(f"Number of files matching pattern: {count}")
+                    
+                    # Delete the files
+                    cur.execute(
+                        "DELETE FROM files WHERE filepath ILIKE %s OR filepath ILIKE %s",
+                        (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
+                    )
+                    conn.commit()
+                    return cur.rowcount
+        except Exception as e:
+            logger.error(f"Error deleting files by path prefix: {e}")
+            raise
+
     def delete_file_by_path(self, filepath: str) -> bool:
         """
         Delete a file by filepath.
@@ -546,4 +590,133 @@ class MemoryManager:
                     return cur.rowcount > 0
         except Exception as e:
             logger.error(f"Error deleting file by path: {e}")
+            raise
+    
+    def rename_knowledgebase(self, user_id: int, knowledgebase_id: int, new_name: str) -> bool:
+        """
+        Rename a knowledgebase for a user.
+        
+        Args:
+            user_id: ID of the user
+            knowledgebase_id: ID of the knowledgebase to rename
+            new_name: New name for the knowledgebase
+            
+        Returns:
+            True if renaming was successful, False otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Update the knowledgebase name
+                    cur.execute(
+                        "UPDATE knowledgebase SET name = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s",
+                        (new_name, knowledgebase_id, user_id)
+                    )
+                    conn.commit()
+                    return cur.rowcount > 0
+        except Exception as e:
+            # Check if this is a unique constraint violation
+            error_message = str(e)
+            if 'duplicate key value' in error_message:
+                raise ValueError("Knowledgebase with this name already exists")
+            logger.error(f"Error renaming knowledgebase: {e}")
+            raise
+    
+    def delete_knowledgebase(self, user_id: int, knowledgebase_id: int) -> bool:
+        """
+        Delete a knowledgebase for a user.
+        
+        Args:
+            user_id: ID of the user
+            knowledgebase_id: ID of the knowledgebase to delete
+            
+        Returns:
+            True if deletion was successful, False otherwise
+        """
+        try:
+            logger.info(f"Attempting to delete knowledgebase: user_id={user_id}, knowledgebase_id={knowledgebase_id}")
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # First check if the knowledgebase exists and belongs to the user
+                    cur.execute(
+                        "SELECT id, name, is_active FROM knowledgebase WHERE id = %s AND user_id = %s",
+                        (knowledgebase_id, user_id)
+                    )
+                    kb = cur.fetchone()
+                    if not kb:
+                        logger.warning(f"Knowledgebase not found or not owned by user: user_id={user_id}, knowledgebase_id={knowledgebase_id}")
+                        return False
+                    
+                    logger.info(f"Found knowledgebase to delete: id={kb[0]}, name={kb[1]}, is_active={kb[2]}")
+                    is_deleted_kb_active = kb[2]
+                    
+                    # Delete the knowledgebase - files will be deleted automatically due to ON DELETE CASCADE
+                    cur.execute(
+                        "DELETE FROM knowledgebase WHERE id = %s AND user_id = %s",
+                        (knowledgebase_id, user_id)
+                    )
+                    conn.commit()
+                    logger.info(f"Successfully deleted knowledgebase: affected rows={cur.rowcount}")
+                    
+                    # If the deleted knowledgebase was active, set the most recently updated one as active
+                    if is_deleted_kb_active:
+                        # Find the most recently updated knowledgebase for this user (excluding the deleted one)
+                        cur.execute(
+                            """
+                            SELECT id FROM knowledgebase 
+                            WHERE user_id = %s 
+                            AND id != %s
+                            ORDER BY updated_at DESC 
+                            LIMIT 1
+                            """,
+                            (user_id, knowledgebase_id)
+                        )
+                        remaining_kb = cur.fetchone()
+                        
+                        if remaining_kb:
+                            # Set the most recently updated knowledgebase as active
+                            cur.execute(
+                                """
+                                UPDATE knowledgebase 
+                                SET is_active = true 
+                                WHERE id = %s AND user_id = %s
+                                """,
+                                (remaining_kb[0], user_id)
+                            )
+                            conn.commit()
+                            logger.info(f"Set knowledgebase {remaining_kb[0]} as active after deleting active knowledgebase {knowledgebase_id}")
+                        else:
+                            logger.info(f"No remaining knowledgebases after deleting active knowledgebase {knowledgebase_id}")
+                    
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error deleting knowledgebase: {e}", exc_info=True)
+            raise
+
+    def get_user_by_username(self, username: str) -> Optional[dict]:
+        """
+        Get a user by their username.
+        
+        Args:
+            username: User's username
+            
+        Returns:
+            User dictionary if found, None otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id, username, email FROM users WHERE username = %s",
+                        (username,)
+                    )
+                    user = cur.fetchone()
+                    if user:
+                        return {
+                            "id": user[0],
+                            "username": user[1],
+                            "email": user[2]
+                        }
+                    return None
+        except Exception as e:
             raise

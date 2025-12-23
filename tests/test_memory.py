@@ -8,7 +8,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Add the src directory to the path - fix the path construction
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+src_dir = os.path.join(parent_dir, 'src')
+sys.path.append(src_dir)
+print(f"Added src directory to path: {src_dir}")
 
 from src.memory.thread import ThreadManager
 from src.memory.memory import MemoryManager
@@ -372,6 +376,95 @@ def test_database_tables_creation():
         traceback.print_exc()
         return False
 
+def test_knowledgebase_active_after_deletion():    
+    print("Testing knowledgebase active after deletion...")
+    
+    # Check if DB_URI is set
+    db_uri = os.environ.get("DB_URI")
+    if not db_uri:
+        print("DB_URI not found in environment variables - skipping knowledgebase deletion tests")
+        print("=" * 50)
+        return True
+    
+    try:
+        # Create memory manager in database mode
+        memory = MemoryManager()
+        
+        # Create a user for testing
+        from src.agent.tools import create_user
+        user_id = create_user("test_kb_user", "test_kb@example.com", "password123")
+        print(f"Created user with ID: {user_id}")
+        
+        # Create first knowledgebase
+        kb1_id = memory.create_knowledgebase(user_id, "kb1", "First knowledgebase")
+        print(f"Created knowledgebase 1: {kb1_id}")
+        
+        # Create second knowledgebase (this will be active)
+        kb2_id = memory.create_knowledgebase(user_id, "kb2", "Second knowledgebase")
+        print(f"Created knowledgebase 2: {kb2_id}")
+        
+        # Create third knowledgebase (this will be active)
+        kb3_id = memory.create_knowledgebase(user_id, "kb3", "Third knowledgebase")
+        print(f"Created knowledgebase 3: {kb3_id}")
+        
+        # Verify kb3 is active
+        knowledgebases = memory.get_all_knowledgebases(user_id)
+        active_kb = [kb for kb in knowledgebases if kb['is_active']][0]
+        assert active_kb['id'] == kb3_id, f"Expected kb3 ({kb3_id}) to be active, but found kb{active_kb['id']}"
+        print(f"✓ kb3 ({kb3_id}) is currently active")
+        
+        # Delete the active knowledgebase (kb3)
+        deletion_result = memory.delete_knowledgebase(user_id, kb3_id)
+        assert deletion_result, "Failed to delete knowledgebase 3"
+        print(f"✓ Successfully deleted active knowledgebase 3 ({kb3_id})")
+        
+        # Verify kb2 becomes active (it was created second most recently)
+        knowledgebases = memory.get_all_knowledgebases(user_id)
+        active_kb = [kb for kb in knowledgebases if kb['is_active']][0]
+        assert active_kb['id'] == kb2_id, f"Expected kb2 ({kb2_id}) to be active, but found kb{active_kb['id']}"
+        print(f"✓ kb2 ({kb2_id}) is now active after deleting kb3")
+        
+        # Delete the newly active knowledgebase (kb2)
+        deletion_result = memory.delete_knowledgebase(user_id, kb2_id)
+        assert deletion_result, "Failed to delete knowledgebase 2"
+        print(f"✓ Successfully deleted active knowledgebase 2 ({kb2_id})")
+        
+        # Verify kb1 becomes active
+        knowledgebases = memory.get_all_knowledgebases(user_id)
+        active_kb = [kb for kb in knowledgebases if kb['is_active']][0]
+        assert active_kb['id'] == kb1_id, f"Expected kb1 ({kb1_id}) to be active, but found kb{active_kb['id']}"
+        print(f"✓ kb1 ({kb1_id}) is now active after deleting kb2")
+        
+        # Delete the last knowledgebase (kb1)
+        deletion_result = memory.delete_knowledgebase(user_id, kb1_id)
+        assert deletion_result, "Failed to delete knowledgebase 1"
+        print(f"✓ Successfully deleted active knowledgebase 1 ({kb1_id})")
+        
+        # Verify no knowledgebases remain
+        knowledgebases = memory.get_all_knowledgebases(user_id)
+        assert len(knowledgebases) == 0, f"Expected no knowledgebases, but found {len(knowledgebases)}"
+        print("✓ No knowledgebases remain after deleting all")
+        
+        print("Knowledgebase deletion and active knowledgebase tests completed successfully!")
+        print("=" * 50)
+        return True
+    except Exception as e:
+        print(f"Test failed with error: {e}")
+        traceback.print_exc()
+        return False
+    finally:
+        # Clean up user if created
+        try:
+            if 'user_id' in locals():
+                with MemoryManager().connection_pool.connection() as conn:
+                    with conn.cursor() as cur:
+                        # Delete user (cascades to knowledgebases and files)
+                        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+                        conn.commit()
+        except Exception as e:
+            print(f"Warning: Cleanup failed - {e}")
+
+
 if __name__ == "__main__":
     print("Testing thread refactoring...")
     print("=" * 50)
@@ -381,6 +474,7 @@ if __name__ == "__main__":
         test_in_memory_mode()
         test_database_tables_creation()
         test_database_mode()
+        test_knowledgebase_active_after_deletion()
         
         print("All tests passed!")
         print("The thread refactoring is working correctly.")

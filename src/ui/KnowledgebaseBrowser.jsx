@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fetchWithAuth } from './store';
 import useChatStore from './store';
 import './KnowledgebaseBrowser.css';
@@ -15,6 +15,13 @@ const KnowledgebaseBrowser = () => {
   const [newFolderName, setNewFolderName] = useState('');
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  // New state variables for knowledgebase management
+  const [showCreateKBModal, setShowCreateKBModal] = useState(false);
+  const [newKBName, setNewKBName] = useState('');
+  const [newKBDescription, setNewKBDescription] = useState('');
+  const [showRenameKBModal, setShowRenameKBModal] = useState(false);
+  const [kbToRename, setKBToRename] = useState(null);
+  const [renameKBName, setRenameKBName] = useState('');
   
   // Update currentKnowledgebase when knowledgebases change
   useEffect(() => {
@@ -24,8 +31,8 @@ const KnowledgebaseBrowser = () => {
     }
   }, [knowledgebases]);
 
-  // Fetch directory contents
-  const fetchDirectoryContents = async (path) => {
+  // Fetch directory contents - memoized with useCallback to prevent infinite loops
+  const fetchDirectoryContents = useCallback(async (path) => {
     setIsLoading(true);
     setError('');
     try {
@@ -41,7 +48,7 @@ const KnowledgebaseBrowser = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentKnowledgebase]);
 
   // Navigate to a folder
   const navigateToFolder = (folderName) => {
@@ -217,10 +224,129 @@ const KnowledgebaseBrowser = () => {
     }
   };
 
+  // Create a new knowledgebase
+  const createKnowledgebase = async () => {
+    if (!newKBName.trim()) return;
+
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await fetchWithAuth('/api/knowledgebase', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: newKBName,
+          description: newKBDescription,
+          navigation: {}
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to create knowledgebase');
+      }
+
+      // Refresh knowledgebases by setting the newly created one as active
+      const result = await response.json();
+      await setActiveKnowledgebase(result.knowledgebase_id);
+      
+      // Reset form
+      setShowCreateKBModal(false);
+      setNewKBName('');
+      setNewKBDescription('');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Rename a knowledgebase
+  const renameKnowledgebase = async () => {
+    if (!renameKBName.trim() || !kbToRename) return;
+
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await fetchWithAuth(`/api/knowledgebase/${kbToRename.id}/rename`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: renameKBName
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to rename knowledgebase');
+      }
+
+      // Refresh knowledgebases by fetching them again
+      const kbsResponse = await fetchWithAuth('/api/knowledgebase');
+      if (kbsResponse.ok) {
+        const kbsData = await kbsResponse.json();
+        // Update the store's knowledgebases directly
+        await useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
+        
+        // Set the active knowledgebase if one exists
+        const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
+        if (activeKB) {
+          await setActiveKnowledgebase(activeKB.id);
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Delete a knowledgebase
+  const deleteKnowledgebase = async (kbId, kbName) => {
+    if (!window.confirm(`Are you sure you want to delete knowledgebase "${kbName}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await fetchWithAuth(`/api/knowledgebase/${kbId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to delete knowledgebase');
+      }
+
+      // Refresh knowledgebases by fetching them again
+      const kbsResponse = await fetchWithAuth('/api/knowledgebase');
+      if (kbsResponse.ok) {
+        const kbsData = await kbsResponse.json();
+        // Update the store's knowledgebases directly
+        await useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
+        
+        // Set the active knowledgebase if one exists
+        const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
+        if (activeKB) {
+          await setActiveKnowledgebase(activeKB.id);
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Fetch directory contents when currentPath changes
   useEffect(() => {
     fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
-  }, [currentPath]);
+  }, [currentPath, fetchDirectoryContents]);
 
   return (
     <div className="knowledgebase-browser">
@@ -249,19 +375,58 @@ const KnowledgebaseBrowser = () => {
       {/* Knowledgebase Selector */}
       <div className="kb-knowledgebase-selector">
         <div className="kb-knowledgebase-label">Knowledgebase:</div>
-        <div className="kb-knowledgebase-list">
-          {knowledgebases.map((kb) => (
-            <div 
+        <div className="kb-knowledgebase-list-wrapper">
+          <div className="kb-knowledgebase-list">
+            {knowledgebases.map((kb) => (
+              <div 
               key={kb.id}
               className={`kb-knowledgebase-item ${kb.is_active ? 'active' : ''}`}
-              onClick={() => {
-                setActiveKnowledgebase(kb.id);
-              }}
             >
-              {kb.name}
-              {kb.is_active && <span className="kb-knowledgebase-active-indicator">✓</span>}
+              <div 
+                className="kb-knowledgebase-name"
+                onClick={() => {
+                  setActiveKnowledgebase(kb.id);
+                }}
+              >
+                {kb.name}
+                {kb.is_active && <span className="kb-knowledgebase-active-indicator">✓</span>}
+              </div>
+              <div className="kb-knowledgebase-actions">
+                {/* Rename button commented out to hide it temporarily */}
+                {/* <button 
+                  className="kb-knowledgebase-rename-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setKBToRename(kb);
+                    setRenameKBName(kb.name);
+                    setShowRenameKBModal(true);
+                  }}
+                  title="Rename knowledgebase"
+                >
+                  ✎
+                </button> */}
+                <button 
+                  className="kb-knowledgebase-delete-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteKnowledgebase(kb.id, kb.name);
+                  }}
+                  title="Delete knowledgebase"
+                >
+                  🗑️
+                </button>
+              </div>
             </div>
-          ))}
+            ))}
+          </div>
+          <button 
+            onClick={() => setShowCreateKBModal(true)} 
+            className="kb-btn kb-btn-tertiary kb-new-kb-btn"
+            disabled={isLoading}
+            title="Create new knowledgebase"
+          >
+            +
+          </button>
         </div>
       </div>
 
@@ -415,6 +580,123 @@ const KnowledgebaseBrowser = () => {
           </div>
         </div>
       )}
+
+      {/* Create Knowledgebase Modal */}
+      {showCreateKBModal && (
+        <div className="kb-dialog-overlay">
+          <div className="kb-dialog">
+            <div className="dialog-header">
+              <h3>Create New Knowledgebase</h3>
+              <button 
+                className="dialog-close"
+                onClick={() => {
+                  setShowCreateKBModal(false);
+                  setNewKBName('');
+                  setNewKBDescription('');
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dialog-body">
+              <div className="form-group">
+                <label htmlFor="new-kb-name">Name *</label>
+                <input
+                  type="text"
+                  id="new-kb-name"
+                  value={newKBName}
+                  onChange={(e) => setNewKBName(e.target.value)}
+                  placeholder="Enter knowledgebase name"
+                  autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="new-kb-description">Description</label>
+                <textarea
+                  id="new-kb-description"
+                  value={newKBDescription}
+                  onChange={(e) => setNewKBDescription(e.target.value)}
+                  placeholder="Enter knowledgebase description (optional)"
+                  rows="3"
+                />
+              </div>
+            </div>
+            <div className="dialog-footer">
+              <button 
+                onClick={() => {
+                  setShowCreateKBModal(false);
+                  setNewKBName('');
+                  setNewKBDescription('');
+                }}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={createKnowledgebase}
+                className="dialog-primary"
+                disabled={isLoading || !newKBName.trim()}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Knowledgebase Modal */}
+      {/* Commented out to hide rename functionality temporarily */}
+      {/* {showRenameKBModal && kbToRename && (
+        <div className="kb-dialog-overlay">
+          <div className="kb-dialog">
+            <div className="dialog-header">
+              <h3>Rename Knowledgebase</h3>
+              <button 
+                className="dialog-close"
+                onClick={() => {
+                  setShowRenameKBModal(false);
+                  setKBToRename(null);
+                  setRenameKBName('');
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dialog-body">
+              <div className="form-group">
+                <label htmlFor="rename-kb-name">Name *</label>
+                <input
+                  type="text"
+                  id="rename-kb-name"
+                  value={renameKBName}
+                  onChange={(e) => setRenameKBName(e.target.value)}
+                  placeholder="Enter new knowledgebase name"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="dialog-footer">
+              <button 
+                onClick={() => {
+                  setShowRenameKBModal(false);
+                  setKBToRename(null);
+                  setRenameKBName('');
+                }}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={renameKnowledgebase}
+                className="dialog-primary"
+                disabled={isLoading || !renameKBName.trim()}
+              >
+                Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )} */}
     </div>
   );
 };

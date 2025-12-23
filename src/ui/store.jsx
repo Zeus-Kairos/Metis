@@ -235,10 +235,9 @@ const useChatStore = create((set, get) => {
     // Update the active knowledgebase
     setActiveKnowledgebase: async (kbId) => {
       try {
-        // Call API to update active knowledgebase
-        const response = await fetchWithAuth(`/api/knowledgebase/${kbId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ is_active: true })
+        // Call API to update active knowledgebase using the new endpoint
+        const response = await fetchWithAuth(`/api/knowledgebase/${kbId}/active`, {
+          method: 'PATCH'
         });
         
         if (response.ok) {

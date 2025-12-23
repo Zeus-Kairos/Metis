@@ -54,5 +54,7 @@ class Indexer:
         Returns:
             List of all documents in the index
         """
+        if self.vectorstore.index.ntotal == 0:
+            return []
         all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
-        return [doc for doc, _ in all_docs_with_scores]
+        return [doc for doc, _ in all_docs_with_scores]

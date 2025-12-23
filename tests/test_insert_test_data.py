@@ -7,11 +7,11 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Append src to path
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src'))
+# Append project root to path to make src importable as a package
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from memory.memory import MemoryManager
-from memory.thread import ThreadManager
+from src.memory.memory import MemoryManager
+from src.memory.thread import ThreadManager
 
 
 def insert_test_data():
