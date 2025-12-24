@@ -57,6 +57,7 @@ const useChatStore = create((set, get) => {
     isInitializing: false,
     authChecked: false,
     error: null,
+    fileBrowserRefreshTrigger: 0,
 
     // Initialize app by getting active user and threads
     initializeApp: async () => {
@@ -738,6 +739,13 @@ const useChatStore = create((set, get) => {
         isLoading: false,
         error: null
       });
+    },
+    
+    // Trigger file browser refresh
+    refreshFileBrowser: () => {
+      set((state) => ({
+        fileBrowserRefreshTrigger: state.fileBrowserRefreshTrigger + 1
+      }));
     }
   };
 });

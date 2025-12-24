@@ -4,7 +4,7 @@ import useChatStore from './store';
 import './KnowledgebaseBrowser.css';
 
 const KnowledgebaseBrowser = () => {
-  const { knowledgebases, setActiveKnowledgebase } = useChatStore();
+  const { knowledgebases, setActiveKnowledgebase, refreshFileBrowser } = useChatStore();
   const [currentKnowledgebase, setCurrentKnowledgebase] = useState(knowledgebases.find(kb => kb.is_active)?.name || 'default');
   const [currentPath, setCurrentPath] = useState(['']);
   const [folders, setFolders] = useState([]);
@@ -90,6 +90,7 @@ const KnowledgebaseBrowser = () => {
 
       // Refresh directory contents
       fetchDirectoryContents(fullPath);
+      refreshFileBrowser(); // Trigger sidebar refresh
       setShowNewFolderInput(false);
       setNewFolderName('');
     } catch (err) {
@@ -127,6 +128,7 @@ const KnowledgebaseBrowser = () => {
 
       // Refresh directory contents
       fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
+      refreshFileBrowser(); // Trigger sidebar refresh
     } catch (err) {
       setError(err.message);
     } finally {
@@ -162,6 +164,7 @@ const KnowledgebaseBrowser = () => {
 
       // Refresh directory contents
       fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
+      refreshFileBrowser(); // Trigger sidebar refresh
     } catch (err) {
       setError(err.message);
     } finally {
@@ -215,6 +218,7 @@ const KnowledgebaseBrowser = () => {
 
       // Refresh directory contents
       fetchDirectoryContents(fullPath);
+      refreshFileBrowser(); // Trigger sidebar refresh
       setShowUploadDialog(false);
       setSelectedFiles([]);
     } catch (err) {
