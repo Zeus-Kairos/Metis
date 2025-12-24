@@ -71,39 +71,41 @@ const useChatStore = create((set, get) => {
         set({ isLoading: true, error: null, isInitializing: true });
         
         // Check if we have a token
-        const token = getToken();
-        
-        if (!token) {
-          // No token found, set user_id to null and return
+      const token = getToken();
+      
+      if (!token) {
+        // No token found, set user_id to null and return
+        set({ 
+          isLoading: false, 
+          isInitializing: false,
+          authChecked: true,
+          user_id: null,
+          activeThreadId: null,
+          conversations: {}
+        });
+        return;
+      }
+      
+      // Step 1: Get active user from /api/users/me endpoint
+      const userResponse = await fetchWithAuth('/api/users/me');
+      
+      if (!userResponse.ok) {
+        if (userResponse.status === 401) {
+          // Token is invalid or expired, remove it
+          localStorage.removeItem('token');
           set({ 
             isLoading: false, 
             isInitializing: false,
+            authChecked: true,
             user_id: null,
             activeThreadId: null,
             conversations: {}
           });
-          return;
+        } else {
+          throw new Error(`Failed to get active user: ${userResponse.status}`);
         }
-        
-        // Step 1: Get active user from /api/users/me endpoint
-        const userResponse = await fetchWithAuth('/api/users/me');
-        
-        if (!userResponse.ok) {
-          if (userResponse.status === 401) {
-            // Token is invalid or expired, remove it
-            localStorage.removeItem('token');
-            set({ 
-              isLoading: false, 
-              isInitializing: false,
-              user_id: null,
-              activeThreadId: null,
-              conversations: {}
-            });
-          } else {
-            throw new Error(`Failed to get active user: ${userResponse.status}`);
-          }
-          return;
-        }
+        return;
+      }
         
         // Try to parse response as JSON, handle case where HTML is returned
         const contentType = userResponse.headers.get('content-type');

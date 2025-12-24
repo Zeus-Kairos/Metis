@@ -3,6 +3,7 @@ import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 import useChatStore from './store';
 import Sidebar from './Sidebar';
+import RightSidebar from './RightSidebar';
 import SystemPrompt from './SystemPrompt';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
 import './ChatContainer.css';
@@ -21,6 +22,7 @@ const ChatContainer = () => {
     renameConversation
   } = useChatStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editingTitle, setEditingTitle] = useState('');
   const [initialized, setInitialized] = useState(false);
@@ -68,7 +70,7 @@ const ChatContainer = () => {
 
   return (
     <div className="chat-container">
-      {/* Sidebar */}
+      {/* Left Sidebar */}
       <Sidebar 
         isOpen={sidebarOpen} 
         onToggle={toggleSidebar}
@@ -77,7 +79,7 @@ const ChatContainer = () => {
       />
       
       {/* Main Chat Area */}
-      <div className={`main-chat-area ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'}`}>
+      <div className={`main-chat-area ${sidebarOpen ? 'sidebar-open' : 'sidebar-closed'} ${rightSidebarOpen ? 'right-sidebar-open' : 'right-sidebar-closed'}`}>
         {/* Header */}
         <header className="chat-header">
           <div className="title-container">
@@ -201,6 +203,13 @@ const ChatContainer = () => {
         {/* Input Area */}
         {view === 'chat' && <MessageInput />}
       </div>
+      
+      {/* Right Sidebar */}
+      <RightSidebar 
+        isOpen={rightSidebarOpen} 
+        onToggle={() => setRightSidebarOpen(!rightSidebarOpen)}
+        onExpand={() => setView('knowledgebase')}
+      />
     </div>
   );
 };

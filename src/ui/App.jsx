@@ -17,13 +17,13 @@ function App() {
     init();
   }, [initializeApp]);
 
-  // Show loading while initializing
-  if (isLoading && isInitializing && !authChecked) {
+  // Show loading while auth is being checked
+  if (!authChecked) {
     return <div className="loading">Loading...</div>;
   }
 
   // Show login if not authenticated
-  if (authChecked && !user_id) {
+  if (!user_id) {
     return <Login />;
   }
 

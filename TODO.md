@@ -1,3 +1,4 @@
 - Add doc search tool to list all headers in a file.
 - Add evaluation metrics for the RAG agent.
 - Add image support for the RAG agent.
+- Extract table data and save to database. Add a sql tool to query the database.
