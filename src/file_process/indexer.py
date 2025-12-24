@@ -30,35 +30,35 @@ class Indexer:
                 index_to_docstore_id={})   
             self.all_docs = []
     
-    def index_chunks(self, chunks: Dict[str, List[Document]]) -> FAISS:
+    def index_chunks(self, chunks: Dict[int, List[Document]]) -> FAISS:
         """Index file chunks into faiss index.
         
         Args:
             chunks: Dict of file chunks to index, keyed by file_id
         """
-        for file_id, chunk_list in chunks.items():
-            if self.all_docs:
-                existing_chunks_ids = [doc.metadata['chunk_id'] for doc in self.all_docs if doc.metadata.get("file_id") == file_id]
-                if existing_chunks_ids:     
-                    self.vectorstore.delete(ids=existing_chunks_ids)              
-                    logger.info(f"Delete {len(existing_chunks_ids)} existing chunks for file_id: {file_id}")
-                    
+        file_ids = list(chunks.keys())
+        self.delete_file_chunks(file_ids)
+
+        for chunk_list in chunks.values():                    
             ids = [chunk.metadata['chunk_id'] for chunk in chunk_list]
             self.vectorstore.add_documents(documents=chunk_list, ids=ids)
+            self.all_docs.extend(chunk_list)
         self.vectorstore.save_local(self.index_path)
         return self.vectorstore
 
-    def delete_file_chunks(self, file_id: str) -> None:
+    def delete_file_chunks(self, file_ids: List[int]) -> None:
         """Delete all chunks for a file from the index.
         
         Args:
-            file_id: ID of the file to delete chunks for
+            file_ids: List of file IDs to delete chunks for
         """
         if self.all_docs:
-            existing_chunks_ids = [doc.metadata['chunk_id'] for doc in self.all_docs if doc.metadata.get("file_id") == file_id]
+            existing_chunks_ids = [doc.metadata['chunk_id'] for doc in self.all_docs if doc.metadata.get("file_id") in file_ids]
             if existing_chunks_ids:
                 self.vectorstore.delete(ids=existing_chunks_ids)
-                logger.info(f"Delete {len(existing_chunks_ids)} chunks for file_id: {file_id}")
+                logger.info(f"Delete {len(existing_chunks_ids)} chunks for file_ids: {file_ids}")
+                self.all_docs = [doc for doc in self.all_docs if doc.metadata.get("file_id") not in file_ids]
+                logger.info(f"{len(self.all_docs)} chunks left in vectorstore")
         self.vectorstore.save_local(self.index_path)
 
     def get_all_docs(self) -> List[Document]:

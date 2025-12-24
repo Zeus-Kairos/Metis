@@ -190,7 +190,7 @@ const ChatContainer = () => {
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#BDC1C6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
               <h3>Start a conversation</h3>
-              <p>Begin chatting to get assistance with your planning needs.</p>
+              <p>Begin asking questions about your knowledge base</p>
             </div>
           ) : (
             <MessageList 
