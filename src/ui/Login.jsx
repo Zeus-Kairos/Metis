@@ -3,7 +3,9 @@ import useChatStore from './store';
 import './Login.css';
 
 const Login = () => {
+  const [isLogin, setIsLogin] = useState(true);
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -61,12 +63,102 @@ const Login = () => {
     }
   };
 
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setError('');
+    setIsLoading(true);
+
+    try {
+      console.log('Signup attempt with username:', username, 'email:', email, 'password:', password);
+      
+      // Call the signup endpoint to create a new user
+      const response = await fetch('http://localhost:8000/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          username: username,
+          email: email,
+          password: password
+        })
+      });
+
+      console.log('Signup response status:', response.status);
+      console.log('Signup response headers:', response.headers);
+      
+      const responseText = await response.text();
+      console.log('Signup response text:', responseText);
+      
+      const data = JSON.parse(responseText);
+      console.log('Signup response data:', data);
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Failed to create user');
+      }
+
+      // After successful signup, automatically log in the user
+      console.log('User created successfully, now logging in...');
+      
+      // Call the login endpoint to get JWT token
+      const loginResponse = await fetch('http://localhost:8000/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          username: username,
+          password: password
+        })
+      });
+
+      if (!loginResponse.ok) {
+        throw new Error('Failed to log in after signup');
+      }
+
+      const loginData = JSON.parse(await loginResponse.text());
+      const { access_token } = loginData;
+      
+      // Store the token in localStorage
+      localStorage.setItem('token', access_token);
+      console.log('Token stored in localStorage:', localStorage.getItem('token'));
+
+      // Initialize the app now that we have the token
+      console.log('Calling initializeApp...');
+      await initializeApp();
+      console.log('initializeApp completed');
+    } catch (err) {
+      console.error('Signup error:', err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const toggleMode = () => {
+    setIsLogin(!isLogin);
+    setError('');
+  };
+
   return (
     <div className="login-container">
       <div className="login-form">
-        <h2>Login to Metis</h2>
+        <h2>{isLogin ? 'Login to Metis' : 'Create an Account'}</h2>
         {error && <div className="login-error">{error}</div>}
-        <form onSubmit={handleLogin}>
+        <form onSubmit={isLogin ? handleLogin : handleSignup}>
+          {!isLogin && (
+            <div className="form-group">
+              <label htmlFor="email">Email</label>
+              <input
+                type="email"
+                id="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter email"
+                required
+              />
+            </div>
+          )}
           <div className="form-group">
             <label htmlFor="username">Username</label>
             <input
@@ -90,9 +182,17 @@ const Login = () => {
             />
           </div>
           <button type="submit" className="login-button" disabled={isLoading}>
-            {isLoading ? 'Logging in...' : 'Login'}
+            {isLoading ? (isLogin ? 'Logging in...' : 'Signing up...') : (isLogin ? 'Login' : 'Sign Up')}
           </button>
         </form>
+        <div className="toggle-mode">
+          <p>
+            {isLogin ? "Don't have an account?" : "Already have an account?"}
+            <button onClick={toggleMode} className="toggle-button">
+              {isLogin ? 'Sign Up' : 'Login'}
+            </button>
+          </p>
+        </div>
       </div>
     </div>
   );

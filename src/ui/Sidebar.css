@@ -18,6 +18,32 @@
   width: 60px;
 }
 
+/* User info section */
+.sidebar-user-info {
+  padding: 16px;
+  border-bottom: 1px solid #E8EAED;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  transition: all 0.3s ease;
+}
+
+.user-name {
+  font-weight: 500;
+  color: #202124;
+  font-size: 14px;
+}
+
+/* Hide user info when sidebar is closed */
+.sidebar.closed .sidebar-user-info {
+  justify-content: center;
+  padding: 8px 0;
+}
+
+.sidebar.closed .user-name {
+  display: none;
+}
+
 /* Sidebar toggle button - REMOVED */
 
 /* Sidebar header */

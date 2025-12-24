@@ -49,16 +49,25 @@ const useChatStore = create((set, get) => {
   return {
     // Initial state
     user_id: null,
+    username: null,
     activeThreadId: null,
     conversations: {},
     knowledgebases: [],
     isLoading: false,
     isInitializing: false,
+    authChecked: false,
     error: null,
 
     // Initialize app by getting active user and threads
     initializeApp: async () => {
       try {
+        // Check if we're already initializing or initialized
+        const currentState = get();
+        if (currentState.isInitializing || (currentState.user_id && currentState.authChecked)) {
+          // Already initializing or initialized, no need to proceed
+          return;
+        }
+        
         set({ isLoading: true, error: null, isInitializing: true });
         
         // Check if we have a token
@@ -107,13 +116,14 @@ const useChatStore = create((set, get) => {
         
         const userData = await userResponse.json();
         const userId = userData.id; // Using 'id' instead of 'user_id' from response
+        const username = userData.username;
         
         if (!userId) {
           throw new Error('Invalid user data received from server');
         }
         
-        // Update user_id in state
-        set({ user_id: userId });
+        // Update user_id and username in state
+        set({ user_id: userId, username: username });
         
         // Step 2: Get all knowledgebases for the user
         const knowledgebasesResponse = await fetchWithAuth('/api/knowledgebase');
@@ -194,7 +204,8 @@ const useChatStore = create((set, get) => {
             activeThreadId,
             knowledgebases,
             isLoading: false,
-            isInitializing: false
+            isInitializing: false,
+            authChecked: true
           });
         } else {
           // No threads exist - create a new thread automatically
@@ -204,7 +215,8 @@ const useChatStore = create((set, get) => {
           set({ 
             knowledgebases,
             isLoading: false,
-            isInitializing: false
+            isInitializing: false,
+            authChecked: true
           });
         }
         
@@ -224,19 +236,20 @@ const useChatStore = create((set, get) => {
         }
         
       } catch (err) {
-        console.error('Failed to initialize app:', err);
-        set({ 
-          isLoading: false, 
-          isInitializing: false,
-          error: err.message
-        });
-        
-        // Check if error is due to authentication
-        if (err.message.includes('401')) {
-          localStorage.removeItem('token');
-          set({ user_id: null });
-        }
+      console.error('Failed to initialize app:', err);
+      set({ 
+        isLoading: false, 
+        isInitializing: false,
+        authChecked: true,
+        error: err.message
+      });
+      
+      // Check if error is due to authentication
+      if (err.message.includes('401')) {
+        localStorage.removeItem('token');
+        set({ user_id: null });
       }
+    }
     },
 
     // Update the active knowledgebase

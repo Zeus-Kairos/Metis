@@ -42,7 +42,7 @@ const ChatContainer = () => {
     
     // Call the init function
     init();
-  }, [initializeApp, initialized, activeThreadId, currentMessages.length]);
+  }, [initializeApp, initialized]);
 
   const handleNewChat = async () => {
     // If user_id is null, show error and don't attempt to create conversation

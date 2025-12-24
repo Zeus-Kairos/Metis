@@ -3,9 +3,10 @@ import useChatStore from './store';
 import './Sidebar.css';
 
 const Sidebar = ({ isOpen, onToggle }) => {
-  const { conversations, createConversation, switchConversation, activeThreadId, renameConversation, removeConversation } = useChatStore();
+  const { conversations, createConversation, switchConversation, activeThreadId, renameConversation, removeConversation, username } = useChatStore();
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [showUserMenu, setShowUserMenu] = useState(false);
 
   const handleTitleUpdate = (threadId, e) => {
     // 确保停止事件传播，即使e可能是undefined
@@ -65,8 +66,14 @@ const Sidebar = ({ isOpen, onToggle }) => {
 
   return (
     <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
-      {/* Toggle button - REMOVED */}
-      {/* Header - Moved below calendar */}
+      {/* User Info Section */}
+      {username && (
+        <div className="sidebar-user-info">
+          <div className="user-name">{username}</div>
+        </div>
+      )}
+      
+      {/* Header - Moved below user info */}
       <div className="sidebar-header">
         <h2>Conversations</h2>
         

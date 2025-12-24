@@ -75,3 +75,27 @@
   margin-bottom: 1rem;
   font-size: 0.9rem;
 }
+
+.toggle-mode {
+  margin-top: 1rem;
+  text-align: center;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.toggle-button {
+  background: none;
+  border: none;
+  color: #007bff;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-left: 0.5rem;
+  padding: 0;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.toggle-button:hover {
+  color: #0056b3;
+}

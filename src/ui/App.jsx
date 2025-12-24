@@ -6,14 +6,12 @@ import useChatStore from './store';
 import Login from './Login';
 
 function App() {
-  const { initializeApp, isLoading, error, isInitializing, user_id } = useChatStore();
-  const [authChecked, setAuthChecked] = useState(false);
+  const { initializeApp, isLoading, error, isInitializing, user_id, authChecked } = useChatStore();
 
   // Initialize the app when it loads
   useEffect(() => {
     const init = async () => {
       await initializeApp();
-      setAuthChecked(true);
     };
     
     init();
