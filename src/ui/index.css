@@ -87,6 +87,30 @@ body {
   font-size: 16px;
   line-height: 1.6;
   color: inherit;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.markdown-renderer pre {
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.markdown-renderer code {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.markdown-renderer p,
+.markdown-renderer ul,
+.markdown-renderer ol,
+.markdown-renderer blockquote,
+.markdown-renderer table {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .markdown-renderer h1,

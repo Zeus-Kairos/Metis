@@ -47,7 +47,7 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
           ref={el => messageRefs.current[index] = el}
           className={`message ${message.role}`}
           style={{ 
-            // Card-like container for both avatar and message
+            // Card-like container for the message
             backgroundColor: message.role === 'assistant' ? '#FFF8F0' : '#F0FAFC',
             backdropFilter: message.role === 'user' ? 'blur(8px)' : 'none',
             border: message.role === 'user' ? '1px solid rgba(255, 255, 255, 0.8)' : 'none',
@@ -55,57 +55,61 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
             borderRadius: message.role === 'user' ? '10px' : '18px',
             padding: message.role === 'user' ? '12px' : '12px', 
             marginBottom: '12px',
-            display: 'flex',
-            flexDirection: message.role === 'user' ? 'row' : 'row',
-            alignItems: 'flex-start',
-            gap: '12px',
-            maxWidth: '70%',
+            maxWidth: '100%',
             alignSelf: message.role === 'user' ? 'flex-start' : 'flex-start', 
             position: message.role === 'assistant' ? 'relative' : 'static',
             marginTop: message.role === 'assistant' ? '16px' : '0',
+            display: 'block',
+            width: 'fit-content',
+            minWidth: '50px',
+            boxSizing: 'border-box',
           }}
         >
-          <div style={{ flex: 1 }}>
-            <div 
-              className={`message-content ${!message.complete ? 'streaming' : ''}`}
-              style={{ 
-                  color: message.role === 'user' ? '#202124' : '#202124',
-                  wordWrap: 'break-word',
-                  lineHeight: '1.5',
-                  fontFamily: '"Roboto", sans-serif',
-                  // For streaming messages, ensure smooth updates
-                  transition: message.role === 'assistant' && !message.complete 
-                    ? 'padding-bottom 0.3s ease' 
-                    : 'none',
-                }}
-            >
-              {message.role === 'assistant' ? (
-                <MarkdownRenderer content={message.content || ''} />
-              ) : (
-                message.content
-              )}
-              {message.role === 'assistant' && !message.complete && (
-                <div className="typing-indicator" style={{ 
-                  display: 'flex',
-                  gap: '4px',
-                  marginTop: '8px',
-                  justifyContent: 'flex-start', 
-                }}>
-                  {[1, 2, 3].map(dot => (
-                    <div 
-                      key={dot} 
-                      style={{ 
-                        width: '8px',
-                        height: '8px',
-                        borderRadius: '50%',
-                        backgroundColor: '#5F6368',
-                        animation: `typing 1.4s infinite both ${dot * 0.2}s`,
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
+          <div 
+            className={`message-content ${!message.complete ? 'streaming' : ''}`}
+            style={{ 
+                color: message.role === 'user' ? '#202124' : '#202124',
+                wordWrap: 'break-word',
+                overflowWrap: 'break-word',
+                lineHeight: '1.5',
+                fontFamily: '"Roboto", sans-serif',
+                // For streaming messages, ensure smooth updates
+                transition: message.role === 'assistant' && !message.complete 
+                  ? 'padding-bottom 0.3s ease' 
+                  : 'none',
+                display: 'block',
+                width: '100%',
+                overflowX: 'auto',
+                overflowY: 'hidden',
+                boxSizing: 'border-box',
+              }}
+          >
+            {message.role === 'assistant' ? (
+              <MarkdownRenderer content={message.content || ''} />
+            ) : (
+              message.content
+            )}
+            {message.role === 'assistant' && !message.complete && (
+              <div className="typing-indicator" style={{ 
+                display: 'flex',
+                gap: '4px',
+                marginTop: '8px',
+                justifyContent: 'flex-start', 
+              }}>
+                {[1, 2, 3].map(dot => (
+                  <div 
+                    key={dot} 
+                    style={{ 
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: '#5F6368',
+                      animation: `typing 1.4s infinite both ${dot * 0.2}s`,
+                    }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -123,7 +127,8 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
             alignItems: 'center',
             gap: '12px',
             maxWidth: '70%',
-            alignSelf: 'flex-start', 
+            alignSelf: 'flex-start',
+            width: 'fit-content',
           }}
         >
           <div

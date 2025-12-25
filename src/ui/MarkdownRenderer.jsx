@@ -41,6 +41,8 @@ const MarkdownRenderer = ({ content }) => {
       style={{
         lineHeight: '1.6',
         fontSize: '16px',
+        width: '100%',
+        display: 'block',
       }}
     />
   );

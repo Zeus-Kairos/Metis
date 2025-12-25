@@ -180,16 +180,12 @@
   margin-left: 8px;
 }
 
-.sidebar.closed .sidebar-header h2 {
+.sidebar.closed .sidebar-header {
   display: none;
 }
 
-.sidebar.closed .sidebar-header .add-plan-section {
-  margin: 0;
-}
-
-.sidebar.closed .sidebar-header {
-  justify-content: center;
+.sidebar.closed .conversations-list {
+  display: none;
 }
 /* New conversation button */
 .new-conversation-btn {

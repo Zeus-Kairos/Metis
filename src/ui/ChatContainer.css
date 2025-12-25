@@ -104,8 +104,9 @@
   margin-right: 60px;
 }
 
-/* When in knowledgebase view, remove right sidebar margin */
-.main-chat-area:has(.knowledgebase-browser) {
+/* When in knowledgebase view OR chat view, remove right sidebar margin */
+.main-chat-area:has(.knowledgebase-browser),
+.main-chat-area:has(.message-list) {
   margin-right: 0 !important;
 }
 
