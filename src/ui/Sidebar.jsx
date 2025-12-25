@@ -1,12 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useChatStore from './store';
 import './Sidebar.css';
 
 const Sidebar = ({ isOpen, onToggle }) => {
-  const { conversations, createConversation, switchConversation, activeThreadId, renameConversation, removeConversation, username } = useChatStore();
+  const { conversations, createConversation, switchConversation, activeThreadId, renameConversation, removeConversation, username, logout } = useChatStore();
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef(null);
+  
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
+        setShowUserMenu(false);
+      }
+    };
+    
+    if (showUserMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUserMenu]);
+  
+  // Handle menu item clicks
+  const handleMenuItemClick = (item) => {
+    setShowUserMenu(false);
+    
+    switch (item) {
+      case 'logout':
+        logout();
+        break;
+      // Add other cases for configuration items when implemented
+      default:
+        console.log(`Clicked on: ${item}`);
+    }
+  };
 
   const handleTitleUpdate = (threadId, e) => {
     // 确保停止事件传播，即使e可能是undefined
@@ -68,11 +100,49 @@ const Sidebar = ({ isOpen, onToggle }) => {
     <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       {/* User Info Section */}
       {username && (
-        <div className="sidebar-user-info">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="user-icon">
-            <path d="M12 4.354a4 4 0 1 1 0 5.292M15 21H3v-1a6 6 0 0 1 12 0v1zm0 0h6v-1a6 6 0 0 0-9-5.197M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" stroke="#5F6368" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          <div className="user-name">{username}</div>
+        <div className="sidebar-user-info" ref={userMenuRef}>
+          {/* User icon and name - Hide when sidebar is closed, positioned left */}
+          <div className="user-menu-container" onClick={() => setShowUserMenu(!showUserMenu)}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="user-icon">
+              <path d="M12 4.354a4 4 0 1 1 0 5.292M15 21H3v-1a6 6 0 0 1 12 0v1zm0 0h6v-1a6 6 0 0 0-9-5.197M13 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z" stroke="#5F6368" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <div className="user-name">{username}</div>
+          </div>
+          
+          {/* Sidebar Toggle Button - Always visible, positioned right */}
+          <button 
+            onClick={onToggle} 
+            className="sidebar-toggle-button"
+            title={isOpen ? 'Close Sidebar' : 'Open Sidebar'}
+          >
+            {isOpen ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 18L9 12L15 6" stroke="#5F6368" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="1" fill="#5F6368"/>
+                <circle cx="16" cy="12" r="1" fill="#5F6368"/>
+                <circle cx="8" cy="12" r="1" fill="#5F6368"/>
+              </svg>
+            )}
+          </button>
+          
+          {showUserMenu && (
+            <div className="user-menu-popup">
+              <div className="user-menu-item" onClick={() => handleMenuItemClick('user-profile')}>User Profile</div>
+              <div className="user-menu-item" onClick={() => handleMenuItemClick('api-configuration')}>API Configuration</div>
+              <div className="user-menu-divider"></div>
+              <div className="user-menu-item logout-item" onClick={() => handleMenuItemClick('logout')}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="logout-icon">
+                  <path d="M9 21H5C3.89543 21 3 20.1046 3 19V5C3 3.89543 3.89543 3 5 3H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M16 17L21 12L16 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>Logout</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
       

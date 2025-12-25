@@ -83,12 +83,6 @@ const ChatContainer = () => {
         {/* Header */}
         <header className="chat-header">
           <div className="title-container">
-            <button 
-              onClick={toggleSidebar} 
-              className={`sidebar-toggle ${sidebarOpen ? 'open' : ''}`}
-            >
-              {sidebarOpen ? '◀' : '▶'}
-            </button>
             <div className="chat-title-container">
               {isEditingTitle ? (
                 <input
@@ -139,7 +133,7 @@ const ChatContainer = () => {
                 onClick={() => setView('knowledgebase')}
                 title="Knowledge Base"
               >
-                📚
+                📖
               </button>
             </div>
           </div>
@@ -208,7 +202,8 @@ const ChatContainer = () => {
       <RightSidebar 
         isOpen={rightSidebarOpen} 
         onToggle={() => setRightSidebarOpen(!rightSidebarOpen)}
-        onExpand={() => setView('knowledgebase')}
+        onExpand={() => setView(view === 'knowledgebase' ? 'chat' : 'knowledgebase')}
+        isKnowledgebaseView={view === 'knowledgebase'}
       />
     </div>
   );

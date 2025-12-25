@@ -746,6 +746,24 @@ const useChatStore = create((set, get) => {
       set((state) => ({
         fileBrowserRefreshTrigger: state.fileBrowserRefreshTrigger + 1
       }));
+    },
+    
+    // Logout function
+    logout: () => {
+      // Remove token from localStorage
+      localStorage.removeItem('token');
+      // Reset store state
+      set({
+        user_id: null,
+        username: null,
+        activeThreadId: null,
+        conversations: {},
+        knowledgebases: [],
+        isLoading: false,
+        isInitializing: false,
+        authChecked: true,
+        error: null
+      });
     }
   };
 });

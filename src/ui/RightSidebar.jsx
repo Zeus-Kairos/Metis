@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import useChatStore, { fetchWithAuth } from './store';
 import './RightSidebar.css';
 
-const RightSidebar = ({ isOpen, onToggle, onExpand }) => {
+const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
   const { knowledgebases, fileBrowserRefreshTrigger } = useChatStore();
   const [activeKB, setActiveKB] = useState(knowledgebases.find(kb => kb.is_active));
   
@@ -449,13 +449,16 @@ const RightSidebar = ({ isOpen, onToggle, onExpand }) => {
             <h3>Knowledge Base</h3>
             <div className="right-sidebar-actions">
               <button 
-                className="expand-button"
+                className={`expand-button ${isKnowledgebaseView ? 'active checked' : ''}`}
                 onClick={onExpand}
-                title="Open Knowledge Base Browser"
+                title={isKnowledgebaseView ? "Close Knowledge Base Browser" : "Open Knowledge Base Browser"}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M3 3v18h18M19 9l-7 7-7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
+                <span className="toggle-indicator">
+                  {isKnowledgebaseView ? '✓' : ''}
+                </span>
               </button>
               <button 
                 className="toggle-button"
