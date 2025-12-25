@@ -412,9 +412,21 @@ class ThreadManager:
         # Use provided thread_id or get active thread
         if thread_id:
             # Verify thread belongs to user
-            if (user_id in self.user_threads and 
-                thread_id in self.user_threads[user_id]):
-                return {"configurable": {"thread_id": thread_id}}
+            if self.connection_pool:
+                # Check in database
+                with self.connection_pool.connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT thread_id FROM threads WHERE user_id = %s AND thread_id = %s",
+                            (user_id, thread_id)
+                        )
+                        if cur.fetchone():
+                            return {"configurable": {"thread_id": thread_id}}
+            else:
+                # Check in in-memory storage
+                if (user_id in self.user_threads and 
+                    thread_id in self.user_threads[user_id]):
+                    return {"configurable": {"thread_id": thread_id}}
         
         # Get or create active thread
         thread_id = self._get_thread_id_for_user(user_id)

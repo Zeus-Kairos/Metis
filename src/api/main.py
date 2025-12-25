@@ -14,10 +14,8 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
-from fastapi.responses import StreamingResponse
 
 from src.file_process.utils import get_upload_dir, get_parsed_path
-from src.agent.rag_agent import RAGAgent, RAGType
 from src.file_process.pipeline import FileProcessingPipeline
 from src.memory.memory import MemoryManager
 from src.memory.thread import ThreadManager
@@ -520,61 +518,7 @@ async def upload_files(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-class ChatRequest(BaseModel):
-    message: str
-    user_id: int
-    thread_id: str
 
-# Replace the chat_endpoint with this updated version
-@app.post("/api/chat")
-def chat_endpoint(request: ChatRequest):
-    """Chat endpoint that processes user messages and returns streaming responses."""
-    message = request.message
-    user_id = request.user_id
-    thread_id = request.thread_id
-    
-    logger.debug(f"Received chat request from user {user_id}, thread {thread_id}: {message}")
-    
-    try:
-        # Get RAG settings from environment variables
-        try:
-            rag_type_str = os.getenv("RAG_TYPE", "simple").lower()
-            rag_type = RAGType(rag_type_str)
-        except ValueError:
-            rag_type = RAGType.SIMPLE
-            
-        rag_k = int(os.getenv("RAG_K", 10))
-        
-        # Create RAGAgent instance
-        rag_agent = RAGAgent(rag_type, rag_k)
-        
-        # Process the message
-        def generate_stream():
-            try:
-                for chunk in rag_agent.chat(message, knowledge_base_id=1):
-                    for key, value in chunk.items():
-                        if key == "stage":
-                            # Send stage information
-                            yield f"data: {json.dumps({key: value})}\n\n"
-                        elif key == "response":
-                            # Send response chunk
-                            yield f"data: {json.dumps({key: value})}\n\n"
-                
-                # Send done signal
-                yield f"data: {json.dumps({"done": True})}\n\n"
-                
-            except Exception as e:
-                logger.error(f"Error processing chat message: {str(e)}")
-                yield f"data: {json.dumps({"error": str(e)})}\n\n"
-        
-        return StreamingResponse(
-            generate_stream(),
-            media_type="text/event-stream"
-        )
-        
-    except Exception as e:
-        logger.error(f"Chat endpoint error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
 
 # Health check endpoint
 @app.get("/health")

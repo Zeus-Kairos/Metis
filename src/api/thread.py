@@ -1,8 +1,12 @@
 from typing import Optional
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import os
+import json
 from src.memory.thread import ThreadManager
 from src.utils.logging_config import get_logger
+from src.agent.rag_agent import RAGAgent, RAGType
 
 logger = get_logger(__name__)
 
@@ -17,6 +21,11 @@ class ThreadTitleUpdate(BaseModel):
     user_id: int
     thread_id: str
     title: str
+
+class ChatRequest(BaseModel):
+    message: str
+    user_id: int
+    thread_id: str
 
 # Thread-related endpoints
 @router.delete("/thread/{user_id}/{thread_id}")
@@ -95,4 +104,56 @@ def get_thread_history(user_id: int, thread_id: str):
         return {"status": "success", "history": history}
     else:
         logger.error(f"Message history not found for thread {thread_id} of user {user_id}")
-        raise HTTPException(status_code=404, detail=f"Message history not found for thread {thread_id} of user {user_id}") 
+        raise HTTPException(status_code=404, detail=f"Message history not found for thread {thread_id} of user {user_id}")
+
+@router.post("/chat")
+def chat_endpoint(request: ChatRequest):
+    """Chat endpoint that processes user messages and returns streaming responses."""
+    message = request.message
+    user_id = request.user_id
+    thread_id = request.thread_id
+    
+    logger.info(f"Received chat request from user {user_id}, thread {thread_id}: {message}")
+    
+    try:
+        # Get RAG settings from environment variables
+        try:
+            rag_type_str = os.getenv("RAG_TYPE", "simple").lower()
+            rag_type = RAGType(rag_type_str)
+        except ValueError:
+            rag_type = RAGType.SIMPLE
+            
+        rag_k = int(os.getenv("RAG_K", 10))
+        
+        # Create RAGAgent instance
+        rag_agent = RAGAgent(rag_type, rag_k)
+
+        config = thread_manager.get_config_for_user(user_id, thread_id)
+        
+        # Process the message
+        def generate_stream():
+            try:
+                for chunk in rag_agent.chat(message, knowledge_base_id=1, config=config):
+                    for key, value in chunk.items():
+                        if key == "stage":
+                            # Send stage information
+                            yield f"data: {json.dumps({key: value})}\n\n"
+                        elif key == "response":
+                            # Send response chunk
+                            yield f"data: {json.dumps({key: value})}\n\n"
+                
+                # Send done signal
+                yield f"data: {json.dumps({"done": True})}\n\n"
+                
+            except Exception as e:
+                logger.error(f"Error processing chat message: {str(e)}")
+                yield f"data: {json.dumps({"error": str(e)})}\n\n"
+        
+        return StreamingResponse(
+            generate_stream(),
+            media_type="text/event-stream"
+        )
+        
+    except Exception as e:
+        logger.error(f"Chat endpoint error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) 

@@ -1,5 +1,6 @@
 from ast import Str
 import logging
+import os
 from re import search
 from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 
@@ -9,6 +10,7 @@ from langchain.agents import create_agent
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.agent.tools import retrieve_tool
@@ -61,8 +63,8 @@ class RAGAgent:
         self.llm_runner = LLMRunner()
         self.rag_k = rag_k
         self.on_langgraph_server = on_langgraph_server
-        
-        self.graph = self._build_graph()
+        self.conn_str = os.getenv("DB_URI")
+        self.builder = self._build_graph()
 
         self.update_dict = {
             "classify_intent": "User intent classified",
@@ -77,12 +79,8 @@ class RAGAgent:
         """
         Build the graph for the agent.
         """
-        graph = self._build_base_graph()
-
-        if self.on_langgraph_server:
-            return graph.compile()
-        else:
-            return graph.compile(checkpointer=InMemorySaver())
+        builder = self._build_base_graph()
+        return builder
 
     def _classify_intent(self, state: AgentState) -> AgentState:
         """
@@ -336,7 +334,7 @@ class RAGAgent:
 
         return graph
     
-    def chat(self, query: str, knowledge_base_id: int = 1) -> Generator[Dict[str, Any], None, None]:
+    def chat(self, query: str, knowledge_base_id: int = 1, config: Dict[str, Any] = None) -> Generator[Dict[str, Any], None, None]:
         """
         Chat with the agent.
         """
@@ -350,25 +348,59 @@ class RAGAgent:
             "knowledge_base_item": knowledge_base_item,
         }
 
-        config = {"configurable": {"thread_id": 1}}
+        if self.on_langgraph_server:
+            graph = self.builder.compile()
+        else:
+            if not self.conn_str:
+                graph = self.builder.compile(checkpointer=InMemorySaver())
 
-        # Streaming mode: yield chunks as they become available                
-        for mode, chunk in self.graph.stream(initial_state, 
+            with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
+                checkpointer.setup()
+                graph = self.builder.compile(checkpointer=checkpointer)
+
+        if self.conn_str:
+            with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
+                checkpointer.setup()
+                graph = self.builder.compile(checkpointer=checkpointer)
+                # Streaming mode: yield chunks as they become available                
+                for mode, chunk in graph.stream(initial_state, 
+                                                config=config, 
+                                                stream_mode=["updates", "messages"]):
+                    if mode == "updates":
+                        for node, state in chunk.items():
+                            if node in self.update_dict:
+                                yield {
+                                    "stage": self.update_dict[node],
+                                }
+                    elif mode == "messages":
+                        message, meta = chunk
+                        if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "complement_answer"]:
+                            last_assistant_message = message.content   
+                            yield {
+                                "response": last_assistant_message,
+                            }
+        else:
+            if self.on_langgraph_server:
+                graph = self.builder.compile()
+            else:
+                graph = self.builder.compile(checkpointer=InMemorySaver())
+            
+            # Streaming mode: yield chunks as they become available                
+            for mode, chunk in graph.stream(initial_state, 
                                             config=config, 
                                             stream_mode=["updates", "messages"]):
-            if mode == "updates":
-                for node, state in chunk.items():
-                    if node in self.update_dict:
+                if mode == "updates":
+                    for node, state in chunk.items():
+                        if node in self.update_dict:
+                            yield {
+                                    "stage": self.update_dict[node],
+                                }
+                elif mode == "messages":
+                    message, meta = chunk
+                    if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "complement_answer"]:
+                        last_assistant_message = message.content   
                         yield {
-                            "stage": self.update_dict[node],
+                            "response": last_assistant_message,
                         }
-            elif mode == "messages":
-                message, meta = chunk
-                if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "complement_answer"]:
-                    last_assistant_message = message.content   
-                    yield {
-                        "response": last_assistant_message,
-                    }
-
 
         

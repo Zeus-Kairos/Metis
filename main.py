@@ -38,23 +38,9 @@ def start_api_server():
         host=API_HOST,
         port=API_PORT,
         log_level=log_level.lower(),
-        reload=False
+        reload=True,
+        reload_dirs=["./src"],
     )
 
-try:   
-    api_thread = threading.Thread(target=start_api_server, daemon=True)
-    api_thread.start()
-    
-    print(f"API server started at http://{API_HOST}:{API_PORT}")
-    print(f"Welcome to the Metis Agent with {rag_type.name} RAG!")
-    print("Please ask anything you like. Type 'q' to quit.")
-    
-    # Keep the main thread running to prevent daemon thread from exiting
-    while True:
-        user_input = input()
-        if user_input.strip().lower() == 'q':
-            print("Shutting down...")
-            break
-
-except Exception as e:
-    print(f"Error: {type(e).__name__}: {e}")
+if __name__ == "__main__":   
+    start_api_server()
