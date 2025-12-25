@@ -1,6 +1,7 @@
 from datetime import datetime
 import os
 from typing import List, Dict, Any, Optional, Tuple, Union
+from langchain_core.messages import HumanMessage
 from psycopg_pool import ConnectionPool
 import logging
 
@@ -449,16 +450,18 @@ class ThreadManager:
         
         # Get state history
         state_history = self.get_state_history_for_user(user_id, thread_id, graph)
+        logger.info(f"Fetched {len(state_history)} states for user {user_id}, thread {thread_id}")
         
         # Extract conversation messages
         conversation = []
-        for state in state_history:
-            if hasattr(state, 'messages'):
-                for msg in state.messages:
-                    conversation.append({
-                        "role": msg.role,
-                        "content": msg.content
-                    })
+        last_state = state_history[0]
+        if hasattr(last_state, 'values') and 'messages' in last_state.values:
+            for msg in last_state.values['messages']:
+                conversation.append({
+                    "role": "user" if isinstance(msg, HumanMessage) else "assistant",
+                    "content": msg.content
+                })
+        logger.debug(f"Conversation History: {conversation}")
         
         return conversation
 

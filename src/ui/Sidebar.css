@@ -350,8 +350,7 @@
 .conversation-date {
   font-size: 12px;
   color: #5F6368;
-  flex-shrink: 0; /* Prevent date from shrinking */
-  margin-left: auto; /* Push date to the right */
+  margin-bottom: 4px;
 }
 
 .delete-conversation-btn:hover {

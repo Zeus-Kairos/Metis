@@ -13,6 +13,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.prebuilt import ToolNode, tools_condition
 
+from src.memory.thread import ThreadManager
 from src.agent.tools import retrieve_tool
 from src.agent.prompts import (
     classify_intent_prompt,
@@ -55,15 +56,19 @@ class DeepRAGState(AgentState):
     retrieve_tries: int = 0
 
 class RAGAgent:
-    def __init__(self, rag_type: RAGType = RAGType.SIMPLE, rag_k: int = 10, on_langgraph_server: bool = False):
+    def __init__(self, rag_type: RAGType = RAGType.SIMPLE, rag_k: int = 10, thread_manager: ThreadManager = None, on_langgraph_server: bool = False):
         """
         Initialize the agent.
         """
         self.rag_type = rag_type
         self.llm_runner = LLMRunner()
         self.rag_k = rag_k
+        self.thread_manager = thread_manager
         self.on_langgraph_server = on_langgraph_server
         self.conn_str = os.getenv("DB_URI")
+        if self.conn_str:
+            with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
+                checkpointer.setup()
         self.builder = self._build_graph()
 
         self.update_dict = {
@@ -333,6 +338,18 @@ class RAGAgent:
             graph.add_edge("format_answer", END)     
 
         return graph
+
+    def get_conversation_history(self, user_id: int, thread_id: str) -> List[Dict[str, Any]]:
+        """
+        Get the conversation history for a user and thread.
+        """
+        if self.conn_str:
+            with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
+                graph = self.builder.compile(checkpointer=checkpointer)
+                return self.thread_manager.get_conversation_history(user_id, thread_id, graph)
+        else:      
+            graph = self.builder.compile(checkpointer=InMemorySaver())
+            return self.thread_manager.get_conversation_history(user_id, thread_id, graph)
     
     def chat(self, query: str, knowledge_base_id: int = 1, config: Dict[str, Any] = None) -> Generator[Dict[str, Any], None, None]:
         """
@@ -348,19 +365,8 @@ class RAGAgent:
             "knowledge_base_item": knowledge_base_item,
         }
 
-        if self.on_langgraph_server:
-            graph = self.builder.compile()
-        else:
-            if not self.conn_str:
-                graph = self.builder.compile(checkpointer=InMemorySaver())
-
-            with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
-                checkpointer.setup()
-                graph = self.builder.compile(checkpointer=checkpointer)
-
         if self.conn_str:
             with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
-                checkpointer.setup()
                 graph = self.builder.compile(checkpointer=checkpointer)
                 # Streaming mode: yield chunks as they become available                
                 for mode, chunk in graph.stream(initial_state, 

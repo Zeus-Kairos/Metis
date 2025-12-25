@@ -12,6 +12,14 @@ logger = get_logger(__name__)
 
 # Create a thread manager instance
 thread_manager = ThreadManager()
+try:
+    rag_type_str = os.getenv("RAG_TYPE", "simple").lower()
+    rag_type = RAGType(rag_type_str)
+except ValueError:
+    rag_type = RAGType.SIMPLE            
+rag_k = int(os.getenv("RAG_K", 10))        
+# Create RAGAgent instance
+rag_agent = RAGAgent(rag_type, rag_k, thread_manager)
 
 # Create a router for thread-related endpoints
 router = APIRouter(prefix="/api", tags=["threads"])
@@ -98,7 +106,7 @@ def update_thread_title_endpoint(update_data: ThreadTitleUpdate):
 def get_thread_history(user_id: int, thread_id: str): 
     """Get a specific thread by ID"""
     logger.debug(f"Fetching thread history for thread {thread_id} of user {user_id}")
-    history = thread_manager.get_conversation_history(user_id, thread_id)
+    history = rag_agent.get_conversation_history(user_id, thread_id)
     if history:
         logger.debug(f"Found {len(history)} messages in thread {thread_id} for user {user_id}")
         return {"status": "success", "history": history}
@@ -117,17 +125,6 @@ def chat_endpoint(request: ChatRequest):
     
     try:
         # Get RAG settings from environment variables
-        try:
-            rag_type_str = os.getenv("RAG_TYPE", "simple").lower()
-            rag_type = RAGType(rag_type_str)
-        except ValueError:
-            rag_type = RAGType.SIMPLE
-            
-        rag_k = int(os.getenv("RAG_K", 10))
-        
-        # Create RAGAgent instance
-        rag_agent = RAGAgent(rag_type, rag_k)
-
         config = thread_manager.get_config_for_user(user_id, thread_id)
         
         # Process the message
