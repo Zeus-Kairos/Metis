@@ -518,6 +518,32 @@ class KnowledgebaseManager:
             logger.error(f"Error renaming knowledgebase: {e}")
             raise
     
+    def update_knowledgebase_description(self, user_id: int, knowledgebase_id: int, description: str) -> bool:
+        """
+        Update a knowledgebase description for a user.
+        
+        Args:
+            user_id: ID of the user
+            knowledgebase_id: ID of the knowledgebase to update
+            description: New description for the knowledgebase
+            
+        Returns:
+            True if update was successful, False otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Update the knowledgebase description
+                    cur.execute(
+                        "UPDATE knowledgebase SET description = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s AND user_id = %s",
+                        (description, knowledgebase_id, user_id)
+                    )
+                    conn.commit()
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Error updating knowledgebase description: {e}")
+            raise
+    
     def delete_knowledgebase(self, user_id: int, knowledgebase_id: int) -> bool:
         """
         Delete a knowledgebase for a user.

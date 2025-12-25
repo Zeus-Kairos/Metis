@@ -22,6 +22,10 @@ const KnowledgebaseBrowser = () => {
   const [showRenameKBModal, setShowRenameKBModal] = useState(false);
   const [kbToRename, setKBToRename] = useState(null);
   const [renameKBName, setRenameKBName] = useState('');
+  // State variables for editing knowledgebase descriptions
+  const [showEditKBDescriptionModal, setShowEditKBDescriptionModal] = useState(false);
+  const [kbToEditDescription, setKBToEditDescription] = useState(null);
+  const [editKBDescription, setEditKBDescription] = useState('');
   
   // Update currentKnowledgebase when knowledgebases change
   useEffect(() => {
@@ -309,6 +313,48 @@ const KnowledgebaseBrowser = () => {
     }
   };
 
+  // Edit knowledgebase description
+  const editKnowledgebaseDescription = async () => {
+    if (!kbToEditDescription) return;
+
+    setIsLoading(true);
+    setError('');
+    try {
+      const response = await fetchWithAuth(`/api/knowledgebase/${kbToEditDescription.id}/description`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          description: editKBDescription
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to update knowledgebase description');
+      }
+
+      // Refresh knowledgebases by fetching them again
+      const kbsResponse = await fetchWithAuth('/api/knowledgebase');
+      if (kbsResponse.ok) {
+        const kbsData = await kbsResponse.json();
+        // Update the store's knowledgebases directly
+        useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
+        
+        // Set the active knowledgebase if one exists
+        const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
+        if (activeKB) {
+          setActiveKnowledgebase(activeKB.id);
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Delete a knowledgebase
   const deleteKnowledgebase = async (kbId, kbName) => {
     // Prevent deletion if this is the only knowledgebase
@@ -402,19 +448,18 @@ const KnowledgebaseBrowser = () => {
                 {kb.is_active && <span className="kb-knowledgebase-active-indicator">✓</span>}
               </div>
               <div className="kb-knowledgebase-actions">
-                {/* Rename button commented out to hide it temporarily */}
-                {/* <button 
-                  className="kb-knowledgebase-rename-btn"
+                <button 
+                  className="kb-knowledgebase-edit-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setKBToRename(kb);
-                    setRenameKBName(kb.name);
-                    setShowRenameKBModal(true);
+                    setKBToEditDescription(kb);
+                    setEditKBDescription(kb.description || '');
+                    setShowEditKBDescriptionModal(true);
                   }}
-                  title="Rename knowledgebase"
+                  title="Edit knowledgebase description"
                 >
                   ✎
-                </button> */}
+                </button>
                 <button 
                   className="kb-knowledgebase-delete-btn"
                   onClick={(e) => {
@@ -444,6 +489,22 @@ const KnowledgebaseBrowser = () => {
           </button>
         </div>
       </div>
+
+      {/* Active Knowledgebase Description */}
+      {(() => {
+        const activeKB = knowledgebases.find(kb => kb.is_active);
+        if (activeKB && activeKB.description) {
+          return (
+            <div className="kb-active-description">
+              <div className="kb-active-description-title">Description:</div>
+              <div className="kb-active-description-content">
+                {activeKB.description}
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })()}
 
       {/* Breadcrumb Navigation */}
       <div className="kb-breadcrumb">
@@ -653,6 +714,69 @@ const KnowledgebaseBrowser = () => {
                 disabled={isLoading || !newKBName.trim()}
               >
                 Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Knowledgebase Description Modal */}
+      {showEditKBDescriptionModal && kbToEditDescription && (
+        <div className="kb-dialog-overlay">
+          <div className="kb-dialog">
+            <div className="dialog-header">
+              <h3>Edit Knowledgebase Description</h3>
+              <button 
+                className="dialog-close"
+                onClick={() => {
+                  setShowEditKBDescriptionModal(false);
+                  setKBToEditDescription(null);
+                  setEditKBDescription('');
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dialog-body">
+              <div className="form-group">
+                <label htmlFor="edit-kb-name">Knowledgebase</label>
+                <input
+                  type="text"
+                  id="edit-kb-name"
+                  value={kbToEditDescription.name}
+                  readOnly
+                  className="read-only-input"
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="edit-kb-description">Description</label>
+                <textarea
+                  id="edit-kb-description"
+                  value={editKBDescription}
+                  onChange={(e) => setEditKBDescription(e.target.value)}
+                  placeholder="Enter knowledgebase description"
+                  rows="4"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="dialog-footer">
+              <button 
+                onClick={() => {
+                  setShowEditKBDescriptionModal(false);
+                  setKBToEditDescription(null);
+                  setEditKBDescription('');
+                }}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={editKnowledgebaseDescription}
+                className="dialog-primary"
+                disabled={isLoading}
+              >
+                Save
               </button>
             </div>
           </div>

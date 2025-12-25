@@ -283,6 +283,38 @@ async def rename_knowledgebase(
         logger.error(f"Error renaming knowledgebase: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
+# API endpoint to update knowledgebase description
+@app.put("/api/knowledgebase/{kb_id}/description")
+async def update_knowledgebase_description(
+    kb_id: int,
+    description_data: dict,
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """Update knowledgebase description."""
+    try:
+        if "description" not in description_data:
+            return {
+                "success": False,
+                "message": "Description field is required"
+            }
+        
+        new_description = description_data["description"]
+        
+        # Use the KnowledgebaseManager method to update the knowledgebase description
+        success = memory_manager.knowledgebase_manager.update_knowledgebase_description(current_user.id, kb_id, new_description)
+        if success:
+            return {
+                "success": True,
+                "message": "Knowledgebase description updated successfully"
+            }
+        return {
+            "success": False,
+            "message": "Failed to update knowledgebase description"
+        }
+    except Exception as e:
+        logger.error(f"Error updating knowledgebase description: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # API endpoint to set a knowledgebase as active
 @app.patch("/api/knowledgebase/{kb_id}/active")
 async def set_active_knowledgebase(
