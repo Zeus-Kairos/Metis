@@ -222,7 +222,7 @@ async def create_knowledgebase(
     """Create a new knowledge base for the user."""
     try:
         # Call the create_knowledgebase method
-        knowledgebase_id = memory_manager.create_knowledgebase(current_user.id, name, description, navigation)
+        knowledgebase_id = memory_manager.knowledgebase_manager.create_knowledgebase(current_user.id, name, description, navigation)
         return {
             "success": True,
             "knowledgebase_id": knowledgebase_id,
@@ -238,7 +238,7 @@ async def list_knowledgebases(
 ):
     """List all knowledgebases for the current user."""
     try:
-        knowledgebases = memory_manager.get_all_knowledgebases(current_user.id)
+        knowledgebases = memory_manager.knowledgebase_manager.get_all_knowledgebases(current_user.id)
             
         return {
             "success": True,
@@ -265,8 +265,8 @@ async def rename_knowledgebase(
         
         new_name = rename_data["name"]
         
-        # Use the MemoryManager method to rename the knowledgebase
-        success = memory_manager.rename_knowledgebase(current_user.id, kb_id, new_name)
+        # Use the KnowledgebaseManager method to rename the knowledgebase
+        success = memory_manager.knowledgebase_manager.rename_knowledgebase(current_user.id, kb_id, new_name)
         if success:
             return {
                 "success": True,
@@ -291,8 +291,8 @@ async def set_active_knowledgebase(
 ):
     """Set a knowledgebase as active, deactivating all other knowledgebases for the user."""
     try:
-        # Use the MemoryManager method to set the knowledgebase as active
-        success = memory_manager.set_active_knowledgebase(current_user.id, kb_id)
+        # Use the KnowledgebaseManager method to set the knowledgebase as active
+        success = memory_manager.knowledgebase_manager.set_active_knowledgebase(current_user.id, kb_id)
         if success:
             return {
                 "success": True,
@@ -414,7 +414,7 @@ async def delete_folder(
             shutil.rmtree(parsed_folder_path)
         
         # Delete all database records for files under this folder
-        deleted_count = memory_manager.delete_files_by_path_prefix(folder_path)
+        deleted_count = memory_manager.knowledgebase_manager.delete_files_by_path_prefix(folder_path)
         logger.info(f"Deleted {deleted_count} database records for files under folder: {folder_path}")
         
         return {
@@ -463,7 +463,7 @@ async def delete_file(
                 else:
                     os.remove(item)
         
-        memory_manager.delete_file_by_path(full_file_path)
+        memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
         
         return {
             "success": True,
@@ -483,8 +483,8 @@ async def delete_knowledgebase(
 ):
     """Delete a knowledgebase."""
     try:
-        # Use the MemoryManager method to delete the knowledgebase
-        success = memory_manager.delete_knowledgebase(current_user.id, kb_id)
+        # Use the KnowledgebaseManager method to delete the knowledgebase
+        success = memory_manager.knowledgebase_manager.delete_knowledgebase(current_user.id, kb_id)
         if success:
             return {
                 "success": True,

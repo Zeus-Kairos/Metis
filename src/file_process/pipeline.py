@@ -62,7 +62,7 @@ class FileProcessingPipeline:
 
                     # Step 3: Add file to database and get file_id
                     try:
-                        file_id = self.memory_manager.add_file_by_knowledgebase_name(
+                        file_id = self.memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
                             filename=filename,
                             filepath=file_path,
                             parsed_path=parse_result["parsed_file"],
