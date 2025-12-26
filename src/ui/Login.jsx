@@ -17,46 +17,36 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      console.log('Login attempt with username:', username, 'password:', password);
-      
       // Call the login endpoint to get JWT token
-      const response = await fetch('http://localhost:8000/api/token', {
+      // Using relative URL to support both HTTP and HTTPS
+      const response = await fetch('/api/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
+        credentials: 'include',
         body: new URLSearchParams({
           username: username,
           password: password
         })
       });
 
-      console.log('Login response status:', response.status);
-      console.log('Login response headers:', response.headers);
-      
       const responseText = await response.text();
-      console.log('Login response text:', responseText);
-      
       const data = JSON.parse(responseText);
-      console.log('Login response data:', data);
 
       if (!response.ok) {
         throw new Error('Invalid username or password');
       }
 
       const { access_token } = data;
-      console.log('Access token received:', access_token);
 
       // Store the token in localStorage
       localStorage.setItem('token', access_token);
-      console.log('Token stored in localStorage:', localStorage.getItem('token'));
 
       // Initialize the app now that we have the token
-      console.log('Calling initializeApp...');
       await initializeApp();
-      console.log('initializeApp completed');
     } catch (err) {
-      console.error('Login error:', err);
+      console.error('Login error:', err.message);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -69,14 +59,14 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      console.log('Signup attempt with username:', username, 'email:', email, 'password:', password);
-      
       // Call the signup endpoint to create a new user
-      const response = await fetch('http://localhost:8000/api/users', {
+      // Using relative URL to support both HTTP and HTTPS
+      const response = await fetch('/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           username: username,
           email: email,
@@ -84,28 +74,21 @@ const Login = () => {
         })
       });
 
-      console.log('Signup response status:', response.status);
-      console.log('Signup response headers:', response.headers);
-      
       const responseText = await response.text();
-      console.log('Signup response text:', responseText);
-      
       const data = JSON.parse(responseText);
-      console.log('Signup response data:', data);
 
       if (!response.ok) {
         throw new Error(data.detail || 'Failed to create user');
       }
 
       // After successful signup, automatically log in the user
-      console.log('User created successfully, now logging in...');
-      
       // Call the login endpoint to get JWT token
-      const loginResponse = await fetch('http://localhost:8000/api/token', {
+      const loginResponse = await fetch('/api/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
         },
+        credentials: 'include',
         body: new URLSearchParams({
           username: username,
           password: password
@@ -121,14 +104,11 @@ const Login = () => {
       
       // Store the token in localStorage
       localStorage.setItem('token', access_token);
-      console.log('Token stored in localStorage:', localStorage.getItem('token'));
 
       // Initialize the app now that we have the token
-      console.log('Calling initializeApp...');
       await initializeApp();
-      console.log('initializeApp completed');
     } catch (err) {
-      console.error('Signup error:', err);
+      console.error('Signup error:', err.message);
       setError(err.message);
     } finally {
       setIsLoading(false);
@@ -145,17 +125,21 @@ const Login = () => {
       <div className="login-form">
         <h2>{isLogin ? 'Login to Metis' : 'Create an Account'}</h2>
         {error && <div className="login-error">{error}</div>}
-        <form onSubmit={isLogin ? handleLogin : handleSignup}>
+        <form onSubmit={isLogin ? handleLogin : handleSignup} method="POST" action={isLogin ? "/api/token" : "/api/users"} autoComplete="on">
           {!isLogin && (
             <div className="form-group">
               <label htmlFor="email">Email</label>
               <input
                 type="email"
                 id="email"
+                name="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter email"
                 required
+                spellCheck="false"
+                autoCapitalize="off"
+                autoComplete="email"
               />
             </div>
           )}
@@ -164,10 +148,14 @@ const Login = () => {
             <input
               type="text"
               id="username"
+              name="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter username"
               required
+              spellCheck="false"
+              autoCapitalize="off"
+              autoComplete={isLogin ? "username" : "new-username"}
             />
           </div>
           <div className="form-group">
@@ -175,10 +163,13 @@ const Login = () => {
             <input
               type="password"
               id="password"
+              name="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter password"
               required
+              spellCheck="false"
+              autoComplete={isLogin ? "current-password" : "new-password"}
             />
           </div>
           <button type="submit" className="login-button" disabled={isLoading}>

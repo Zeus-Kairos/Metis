@@ -4,7 +4,6 @@ import threading
 import warnings
 
 import uvicorn
-from src.agent.rag_agent import RAGAgent, RAGType
 from src.utils.logging_config import setup_logging
 from dotenv import load_dotenv
 
@@ -17,14 +16,6 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 # Add src directory to Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-
-try:
-    rag_type_str = os.getenv("RAG_TYPE", "simple").lower()
-    rag_type = RAGType(rag_type_str)
-except ValueError:
-    rag_type = RAGType.SIMPLE
-    
-rag_k = int(os.getenv("RAG_K", 10))
 
 # API server configuration
 API_HOST = os.getenv("API_HOST", "127.0.0.1")

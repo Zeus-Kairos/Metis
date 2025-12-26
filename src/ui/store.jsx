@@ -23,25 +23,32 @@ export const fetchWithAuth = async (url, options = {}) => {
 
   // Use direct backend URL instead of proxy
   const fullUrl = url.startsWith('http') ? url : `http://localhost:8000${url}`;
+  
+  console.debug('Making API request to:', fullUrl);
 
-  const response = await fetch(fullUrl, {
-    ...options,
-    headers
-  });
+  try {
+    const response = await fetch(fullUrl, {
+      ...options,
+      headers
+    });
 
-  // Check if response is 401 Unauthorized
-  if (response.status === 401) {
-    // Token is invalid or expired, remove it and log out
-    localStorage.removeItem('token');
-    
-    // Get the store instance and call logout to reset state
-    const store = useChatStore.getState();
-    if (store.logout) {
-      store.logout();
+    // Check if response is 401 Unauthorized
+    if (response.status === 401) {
+      // Token is invalid or expired, remove it and log out
+      localStorage.removeItem('token');
+      
+      // Get the store instance and call logout to reset state
+      const store = useChatStore.getState();
+      if (store.logout) {
+        store.logout();
+      }
     }
-  }
 
-  return response;
+    return response;
+  } catch (fetchError) {
+    console.error('Fetch failed for URL:', fullUrl, 'Error:', fetchError);
+    throw fetchError;
+  }
 };
 
 const useChatStore = create((set, get) => {

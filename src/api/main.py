@@ -6,7 +6,7 @@ import shutil
 
 from typing import Annotated, List, Optional, Dict, Any
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, Depends, status
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, Depends, status, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
@@ -60,6 +60,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    # Security headers to prevent various attacks and improve Chrome security
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+    return response
 
 # Include thread-related endpoints
 app.include_router(thread_router)
@@ -117,7 +129,7 @@ async def get_current_active_user(current_user: Annotated[User, Depends(get_curr
 
 # Authentication endpoints
 @app.post("/api/token", response_model=Token)
-async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], response: Response):
     """Login endpoint to get JWT access token."""
     # Authenticate user using memory manager
     user_dict = memory_manager.authenticate_user(form_data.username, form_data.password)
@@ -131,6 +143,17 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     # Create access token using memory manager   
     access_token = memory_manager.create_access_token(
         data={"sub": user_dict["username"], "user_id": user_dict["id"]},     
+    )
+    
+    # Return token in both JSON response and secure cookie
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,  # Prevent JavaScript access
+        secure=False,  # Set to True in production with HTTPS
+        samesite="strict",  # Prevent CSRF attacks
+        max_age=3600,  # 1 hour
+        path="/"
     )
     
     return {"access_token": access_token, "token_type": "bearer"}

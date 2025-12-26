@@ -28,6 +28,7 @@ from src.agent.prompts import (
 )
 from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
+from src.agent.api_llm import ApiLLMRunner
 from src.utils.knowledge_base_reader import KnowledgeBaseItem, KnowledgeBaseReader
 from src.utils.merger import merge_documents
 
@@ -56,13 +57,30 @@ class DeepRAGState(AgentState):
     retrieve_tries: int = 0
 
 class RAGAgent:
-    def __init__(self, rag_type: RAGType = RAGType.SIMPLE, rag_k: int = 10, thread_manager: ThreadManager = None, on_langgraph_server: bool = False):
+    def __init__(self, thread_manager: ThreadManager = None, user_id: int = None, on_langgraph_server: bool = False):
         """
         Initialize the agent.
+        
+        Args:
+            thread_manager: Thread manager instance
+            user_id: User ID to use for API configuration
+            on_langgraph_server: Whether running on LangGraph server
         """
-        self.rag_type = rag_type
-        self.llm_runner = LLMRunner()
-        self.rag_k = rag_k
+        try:
+            rag_type_str = os.getenv("RAG_TYPE", "simple").lower()
+            rag_type = RAGType(rag_type_str)
+        except ValueError:
+            rag_type = RAGType.SIMPLE        
+        self.rag_type = rag_type    
+        self.rag_k = int(os.getenv("RAG_K", 10))      
+        
+        # Initialize LLM runner based on user ID (uses ApiLLMRunner if user_id is provided)
+        if user_id:
+            self.llm_runner = ApiLLMRunner(user_id)
+        else:
+            self.llm_runner = LLMRunner()
+            
+        self.user_id = user_id
         self.thread_manager = thread_manager
         self.on_langgraph_server = on_langgraph_server
         self.conn_str = os.getenv("DB_URI")
