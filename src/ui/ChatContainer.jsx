@@ -6,6 +6,7 @@ import Sidebar from './Sidebar';
 import RightSidebar from './RightSidebar';
 import SystemPrompt from './SystemPrompt';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
+import ApiConfiguration from './ApiConfiguration';
 import './ChatContainer.css';
 
 
@@ -27,6 +28,7 @@ const ChatContainer = () => {
   const [editingTitle, setEditingTitle] = useState('');
   const [initialized, setInitialized] = useState(false);
   const [view, setView] = useState('chat'); // 'chat' or 'knowledgebase'
+  const [showApiConfig, setShowApiConfig] = useState(false);
   // Fix: Access messages through active conversation, not as a function
   const currentMessages = conversations[activeThreadId]?.messages || [];
   const currentConversation = conversations[activeThreadId];
@@ -76,6 +78,11 @@ const ChatContainer = () => {
         onToggle={toggleSidebar}
         activeThreadId={activeThreadId}
         conversations={conversations}
+        onMenuItemClick={(item) => {
+          if (item === 'api-configuration') {
+            setShowApiConfig(true);
+          }
+        }}
       />
       
       {/* Main Chat Area */}
@@ -201,9 +208,15 @@ const ChatContainer = () => {
       {/* Right Sidebar */}
       <RightSidebar 
         isOpen={rightSidebarOpen} 
-        onToggle={() => setRightSidebarOpen(!rightSidebarOpen)}
-        onExpand={() => setView(view === 'knowledgebase' ? 'chat' : 'knowledgebase')}
+        onToggle={() => setRightSidebarOpen(!rightSidebarOpen)} 
         isKnowledgebaseView={view === 'knowledgebase'}
+        onExpand={() => setView(view === 'knowledgebase' ? 'chat' : 'knowledgebase')}
+      />
+      
+      {/* API Configuration Modal */}
+      <ApiConfiguration
+        isOpen={showApiConfig}
+        onClose={() => setShowApiConfig(false)}
       />
     </div>
   );

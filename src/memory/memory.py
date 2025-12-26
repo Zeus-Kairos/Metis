@@ -1,18 +1,31 @@
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Tuple, Union
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.store.base import BaseStore
 from langgraph.store.memory import InMemoryStore
 from psycopg_pool import ConnectionPool
-from passlib.context import CryptContext      
+from passlib.context import CryptContext
+from jose import JWTError, jwt      
 
 from .knowledgebase import KnowledgebaseManager
 
 import logging
 logger = logging.getLogger(__name__)
+
+# Authentication settings
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+SECRET_KEY = os.getenv("SECRET_KEY")
+
+def _get_secret_key() -> str:
+    """Get and validate the secret key, raising an error if not set."""
+    key = os.getenv("SECRET_KEY")
+    if not key:
+        raise RuntimeError("SECRET_KEY environment variable must be set")
+    return key
 
 class MemoryManager:
     """Manages user memory and conversation history using LangGraph MemorySaver and MemoryStore"""
@@ -121,6 +134,19 @@ class MemoryManager:
                         CREATE INDEX IF NOT EXISTS idx_threads_user_id ON threads(user_id)
                     """)
                     
+                    # Create user_configure table
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS user_configure (
+                            user_id INTEGER PRIMARY KEY,
+                            api_key VARCHAR(255),
+                            llm_model VARCHAR(255),
+                            embedding_model VARCHAR(255),
+                            model_provider VARCHAR(255),
+                            api_base_url VARCHAR(255),
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        )
+                    """)
+                    
                     conn.commit()
         except Exception as e:
             logger.error(f"Error initializing database tables: {e}")
@@ -212,3 +238,176 @@ class MemoryManager:
                     return None
         except Exception as e:
             raise
+            
+    def update_user_configuration(self, user_id: int, api_key: Optional[str] = None, 
+                                llm_model: Optional[str] = None, embedding_model: Optional[str] = None, 
+                                model_provider: Optional[str] = None, api_base_url: Optional[str] = None) -> dict:
+        """
+        Update or insert user configuration.
+        
+        Args:
+            user_id: User's ID
+            api_key: API key
+            llm_model: LLM model name
+            embedding_model: Embedding model name
+            model_provider: Model provider
+            api_base_url: API base URL
+            
+        Returns:
+            The updated user configuration
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Use UPSERT to handle both insert and update cases
+                    cur.execute("""
+                        INSERT INTO user_configure (
+                            user_id, api_key, llm_model, embedding_model, model_provider, api_base_url
+                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (user_id) DO UPDATE SET
+                            api_key = EXCLUDED.api_key,
+                            llm_model = EXCLUDED.llm_model,
+                            embedding_model = EXCLUDED.embedding_model,
+                            model_provider = EXCLUDED.model_provider,
+                            api_base_url = EXCLUDED.api_base_url
+                        RETURNING *
+                    """, (user_id, api_key, llm_model, embedding_model, model_provider, api_base_url))
+                    
+                    updated_config = cur.fetchone()
+                    conn.commit()
+                    
+                    return {
+                        "user_id": updated_config[0],
+                        "api_key": updated_config[1],
+                        "llm_model": updated_config[2],
+                        "embedding_model": updated_config[3],
+                        "model_provider": updated_config[4],
+                        "api_base_url": updated_config[5]
+                    }
+        except Exception as e:
+            logger.error(f"Error updating user configuration: {e}")
+            raise
+            
+    def get_user_configuration(self, user_id: int) -> Optional[dict]:
+        """
+        Get user configuration by user ID.
+        
+        Args:
+            user_id: User's ID
+            
+        Returns:
+            User configuration dictionary if found, None otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT * FROM user_configure WHERE user_id = %s",
+                        (user_id,)
+                    )
+                    config = cur.fetchone()
+                    if config:
+                        return {
+                            "user_id": config[0],
+                            "api_key": config[1],
+                            "llm_model": config[2],
+                            "embedding_model": config[3],
+                            "model_provider": config[4],
+                            "api_base_url": config[5]
+                        }
+                    return None
+        except Exception as e:
+            logger.error(f"Error getting user configuration: {e}")
+            raise
+            
+    def get_user_by_username_with_password(self, username: str) -> Optional[dict]:
+        """
+        Get a user by their username including password for authentication.
+        
+        Args:
+            username: User's username
+            
+        Returns:
+            User dictionary with password if found, None otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT id, username, email, password FROM users WHERE username = %s",
+                        (username,)
+                    )
+                    user = cur.fetchone()
+                    if user:
+                        return {
+                            "id": user[0],
+                            "username": user[1],
+                            "email": user[2],
+                            "password": user[3]
+                        }
+                    return None
+        except Exception as e:
+            raise
+            
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        """
+        Verify a password against a hashed password.
+        
+        Args:
+            plain_password: Plain text password
+            hashed_password: Hashed password
+            
+        Returns:
+            True if password matches, False otherwise
+        """
+        return self.pwd_context.verify(plain_password, hashed_password)
+        
+    def authenticate_user(self, username: str, password: str) -> Optional[dict]:
+        """
+        Authenticate a user with username and password.
+        
+        Args:
+            username: User's username
+            password: User's password
+            
+        Returns:
+            User dictionary if authenticated, None otherwise
+        """
+        user = self.get_user_by_username_with_password(username)
+        if not user or not self.verify_password(password, user["password"]):
+            return None
+        # Remove password from the returned user data
+        user.pop("password")
+        return user
+        
+    def create_access_token(self, data: dict) -> str:
+        """
+        Create a JWT access token.
+        
+        Args:
+            data: Data to encode in the token
+            
+        Returns:
+            Encoded JWT token
+        """
+        to_encode = data.copy()
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + (access_token_expires or timedelta(minutes=15))
+        to_encode.update({"exp": expire})
+        return jwt.encode(to_encode, _get_secret_key(), algorithm=ALGORITHM)
+    
+    def decode_token(self, token: str) -> Optional[dict]:
+        """
+        Decode and validate a JWT token.
+        
+        Args:
+            token: JWT token to decode
+            
+        Returns:
+            Decoded token payload if valid, None otherwise
+        """
+        try:
+            payload = jwt.decode(token, _get_secret_key(), algorithms=[ALGORITHM])
+            return payload
+        except JWTError:
+            return None

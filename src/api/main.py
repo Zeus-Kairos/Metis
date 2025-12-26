@@ -4,14 +4,11 @@ import json
 import glob
 import shutil
 
-from datetime import datetime, timezone, timedelta
 from typing import Annotated, List, Optional, Dict, Any
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
-from passlib.context import CryptContext
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
@@ -24,15 +21,6 @@ from src.api.thread import router as thread_router
 
 logger = get_logger(__name__)
 
-# Authentication settings
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise RuntimeError("SECRET_KEY environment variable must be set")
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
 
 # Pydantic models for authentication
@@ -53,6 +41,14 @@ class UserCreate(BaseModel):
     username: str
     email: str
     password: str
+
+# Pydantic model for user configuration update
+class UserConfigUpdate(BaseModel):
+    api_key: Optional[str] = None
+    llm_model: Optional[str] = None
+    embedding_model: Optional[str] = None
+    model_provider: Optional[str] = None
+    api_base_url: Optional[str] = None
 
 app = FastAPI(title="Metis API", version="1.0.0")
 
@@ -85,46 +81,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Error closing database connection pool: {e}")
 
-# Authentication helper functions
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_user_by_username(username: str):
-    """Get user from database by username."""
-    if not memory_manager.conn_str:
-        raise ValueError("Cannot get user in in-memory mode")
-    
-    with memory_manager.connection_pool.connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, username, email, password FROM users WHERE username = %s",
-                (username,)
-            )
-            result = cur.fetchone()
-            if result:
-                return UserInDB(
-                    id=result[0],
-                    username=result[1],
-                    email=result[2],
-                    hashed_password=result[3],
-                    disabled=False  # Default to enabled
-                )
-            return None
-
-def authenticate_user(username: str, password: str):
-    """Authenticate a user with username and password."""
-    user = get_user_by_username(username)
-    if not user or not verify_password(password, user.hashed_password):
-        return None
-    return user
-
-def create_access_token(data: dict, expires_delta: timedelta | None = None):
-    """Create a JWT access token."""
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=15))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     """Get the current user from the token."""
     credentials_exception = HTTPException(
@@ -132,19 +88,26 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise credentials_exception
-    except JWTError:
+    
+    payload = memory_manager.decode_token(token)
+    if payload is None:
         raise credentials_exception
     
-    user = get_user_by_username(username)
-    if user is None:
+    username: str = payload.get("sub")
+    if username is None:
         raise credentials_exception
     
-    return user
+    # Get user with password from memory manager
+    user_dict = memory_manager.get_user_by_username_with_password(username)
+    if user_dict:
+        return UserInDB(
+            id=user_dict["id"],
+            username=user_dict["username"],
+            email=user_dict["email"],
+            hashed_password=user_dict["password"],
+            disabled=False  # Default to enabled
+        )
+    return None
 
 async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]):
     """Get the current active user."""
@@ -156,18 +119,18 @@ async def get_current_active_user(current_user: Annotated[User, Depends(get_curr
 @app.post("/api/token", response_model=Token)
 async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
     """Login endpoint to get JWT access token."""
-    user = authenticate_user(form_data.username, form_data.password)
-    if not user:
+    # Authenticate user using memory manager
+    user_dict = memory_manager.authenticate_user(form_data.username, form_data.password)
+    if not user_dict:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username, "user_id": user.id},
-        expires_delta=access_token_expires
+    # Create access token using memory manager   
+    access_token = memory_manager.create_access_token(
+        data={"sub": user_dict["username"], "user_id": user_dict["id"]},     
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
@@ -194,6 +157,55 @@ async def create_user(
 async def read_users_me(current_user: Annotated[User, Depends(get_current_active_user)]):
     """Get current user information."""
     return current_user
+
+# API endpoint for updating user configuration
+@app.patch("/api/users/config")
+async def update_user_configuration(
+    config_data: UserConfigUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """Update user configuration settings."""
+    try:
+        # Call the update_user_configuration method from memory_manager
+        updated_config = memory_manager.update_user_configuration(
+            user_id=current_user.id,
+            api_key=config_data.api_key,
+            llm_model=config_data.llm_model,
+            embedding_model=config_data.embedding_model,
+            model_provider=config_data.model_provider,
+            api_base_url=config_data.api_base_url
+        )
+        return {
+            "success": True,
+            "message": "User configuration updated successfully",
+            "config": updated_config
+        }
+    except Exception as e:
+        logger.error(f"Error updating user configuration: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint for getting user configuration
+@app.get("/api/users/config")
+async def get_user_configuration(
+    current_user: Annotated[User, Depends(get_current_active_user)]
+):
+    """Get user configuration settings."""
+    try:
+        # Call the get_user_configuration method from memory_manager
+        config = memory_manager.get_user_configuration(user_id=current_user.id)
+        if config:
+            return {
+                "success": True,
+                "config": config
+            }
+        return {
+            "success": True,
+            "config": None,
+            "message": "No configuration found for user"
+        }
+    except Exception as e:
+        logger.error(f"Error getting user configuration: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 # API endpoint for deleting a user
 @app.delete("/api/users/me")

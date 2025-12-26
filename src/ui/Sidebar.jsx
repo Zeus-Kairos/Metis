@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import useChatStore from './store';
 import './Sidebar.css';
 
-const Sidebar = ({ isOpen, onToggle }) => {
+const Sidebar = ({ isOpen, onToggle, onMenuItemClick }) => {
   const { conversations, createConversation, switchConversation, activeThreadId, renameConversation, removeConversation, username, logout } = useChatStore();
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
@@ -34,9 +34,12 @@ const Sidebar = ({ isOpen, onToggle }) => {
       case 'logout':
         logout();
         break;
-      // Add other cases for configuration items when implemented
       default:
         console.log(`Clicked on: ${item}`);
+        // Call the onMenuItemClick prop if provided
+        if (onMenuItemClick) {
+          onMenuItemClick(item);
+        }
     }
   };
 

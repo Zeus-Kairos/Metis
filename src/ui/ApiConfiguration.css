@@ -1,0 +1,196 @@
+/* API Configuration Modal */
+.api-config-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.api-config-modal {
+  background-color: white;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+}
+
+.api-config-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.api-config-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.api-config-close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: all 0.2s ease;
+}
+
+.api-config-close-btn:hover {
+  background-color: #f5f5f5;
+  color: #333;
+}
+
+.api-config-close-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.api-config-modal-content {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.api-config-message {
+  padding: 12px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.api-config-message.success {
+  background-color: #e8f5e8;
+  color: #2e7d32;
+  border: 1px solid #c8e6c9;
+}
+
+.api-config-message.error {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #ffcdd2;
+}
+
+.api-config-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+  color: #666;
+  font-size: 14px;
+}
+
+.api-config-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.api-config-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.api-config-form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.api-config-form-group input {
+  padding: 10px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: border-color 0.2s ease;
+}
+
+.api-config-form-group input:focus {
+  outline: none;
+  border-color: #4285f4;
+  box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+}
+
+.api-config-form-group input:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.api-config-form-group input[type="password"] {
+  font-family: monospace;
+}
+
+.api-config-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #e0e0e0;
+  background-color: #fafafa;
+}
+
+.api-config-cancel-btn, .api-config-save-btn {
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.api-config-cancel-btn {
+  background-color: white;
+  color: #666;
+  border: 1px solid #d0d0d0;
+}
+
+.api-config-cancel-btn:hover:not(:disabled) {
+  background-color: #f5f5f5;
+  border-color: #b0b0b0;
+}
+
+.api-config-save-btn {
+  background-color: #4285f4;
+  color: white;
+  border: none;
+}
+
+.api-config-save-btn:hover:not(:disabled) {
+  background-color: #3367d6;
+}
+
+.api-config-cancel-btn:disabled, .api-config-save-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .api-config-modal {
+    margin: 16px;
+    width: calc(100% - 32px);
+  }
+  
+  .api-config-modal-header,
+  .api-config-modal-content,
+  .api-config-modal-footer {
+    padding: 16px;
+  }
+}
