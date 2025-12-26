@@ -18,6 +18,7 @@ from src.memory.memory import MemoryManager
 from src.memory.thread import ThreadManager
 from src.utils.logging_config import get_logger
 from src.api.thread import router as thread_router
+from src.api.thread import rag_agents
 
 logger = get_logger(__name__)
 
@@ -197,7 +198,14 @@ async def update_user_configuration(
             embedding_model=config_data.embedding_model,
             model_provider=config_data.model_provider,
             api_base_url=config_data.api_base_url
-        )
+        )       
+        
+        # If there's an existing RAGAgent instance for this user, remove it
+        # so a new one will be created with updated configuration on next request
+        if current_user.id in rag_agents:
+            del rag_agents[current_user.id]
+            logger.info(f"Removed existing RAGAgent for user {current_user.id} to apply updated configuration")
+        
         return {
             "success": True,
             "message": "User configuration updated successfully",
