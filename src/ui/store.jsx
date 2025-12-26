@@ -78,6 +78,7 @@ const useChatStore = create((set, get) => {
     isInitializing: false,
     authChecked: false,
     error: null,
+    showErrorModal: false,
     fileBrowserRefreshTrigger: 0,
 
     // Initialize app by getting active user and threads
@@ -605,6 +606,42 @@ const useChatStore = create((set, get) => {
                   if (jsonData.response) {
                     // Only append the response content, not the entire JSON
                     partialContent += jsonData.response;
+                  } else if (jsonData.error) {
+                    // Handle error from SSE
+                    const errorMsg = jsonData.error;
+                    let displayError = errorMsg;
+                    
+                    // Check for specific error pattern
+                    if (errorMsg.includes('Error invoking chat model')) {
+                      displayError = 'Error invoking chat model. Please check your API configuration.';
+                    }
+                    
+                    // Show error in modal and remove the assistant message with loading effect
+                    set((state) => {
+                      const updatedMessages = [...state.conversations[activeThreadId].messages];
+                      // Find and remove the assistant message we added for streaming
+                      const assistantMessageIndex = updatedMessages.findIndex(msg => msg.id === assistantMessageId);
+                      if (assistantMessageIndex !== -1) {
+                        updatedMessages.splice(assistantMessageIndex, 1);
+                      }
+                      
+                      return {
+                        conversations: {
+                          ...state.conversations,
+                          [activeThreadId]: {
+                            ...state.conversations[activeThreadId],
+                            messages: updatedMessages,
+                            updatedAt: new Date().toISOString()
+                          }
+                        },
+                        isLoading: false,
+                        error: displayError,
+                        showErrorModal: true
+                      };
+                    });
+                    
+                    // Break out of loops since we encountered an error
+                    return;
                   }
                 } catch (e) {
                   console.error('Error parsing SSE data:', e);
@@ -675,15 +712,15 @@ const useChatStore = create((set, get) => {
             updatedMessages[userMessageIndex] = { ...updatedMessages[userMessageIndex], isLoading: false };
           }
           
-          // Add an error message
-          updatedMessages.push({
-            id: `msg_${Date.now()}_error`,
-            role: 'system',
-            content: 'Error: ' + error.message,
-            metadata: {},
-            timestamp: new Date().toISOString()
-          });
+          let errorMsg = error.message;
+          let displayError = errorMsg;
           
+          // Check for specific error pattern
+          if (errorMsg.includes('Error invoking chat model')) {
+            displayError = 'Error invoking chat model. Please check your API configuration.';
+          }
+          
+          // Show error in modal instead of adding to conversation
           return {
             conversations: {
               ...state.conversations,
@@ -694,7 +731,8 @@ const useChatStore = create((set, get) => {
               }
             },
             isLoading: false,
-            error: error.message
+            error: displayError,
+            showErrorModal: true
           };
         });
       }
@@ -749,6 +787,16 @@ const useChatStore = create((set, get) => {
     // Set error message
     setError: (error) => {
       set({ error });
+    },
+
+    // Show error modal
+    showError: (error) => {
+      set({ error, showErrorModal: true });
+    },
+
+    // Hide error modal
+    hideErrorModal: () => {
+      set({ showErrorModal: false });
     },
 
     // Reset the store

@@ -114,11 +114,13 @@
 }
 
 .api-config-form-group input {
+  width: 100%;
   padding: 10px 12px;
   border: 1px solid #d0d0d0;
   border-radius: 4px;
   font-size: 14px;
   transition: border-color 0.2s ease;
+  box-sizing: border-box;
 }
 
 .api-config-form-group input:focus {
@@ -135,6 +137,53 @@
 
 .api-config-form-group input[type="password"] {
   font-family: monospace;
+}
+
+/* API Key Toggle Button */
+.api-key-input-container {
+  position: relative;
+  width: 100%;
+}
+
+/* Override padding for API key input to make room for toggle button */
+.api-key-input-container input {
+  padding-right: 40px !important;
+}
+
+.api-key-toggle-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: all 0.2s ease;
+  border-radius: 4px;
+  z-index: 10;
+}
+
+.api-key-toggle-btn:hover:not(:disabled) {
+  color: #333;
+  background-color: #f5f5f5;
+}
+
+.api-key-toggle-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.api-key-toggle-btn svg {
+  width: 18px;
+  height: 18px;
 }
 
 .api-config-modal-footer {

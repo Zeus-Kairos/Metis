@@ -7,6 +7,7 @@ import RightSidebar from './RightSidebar';
 import SystemPrompt from './SystemPrompt';
 import KnowledgebaseBrowser from './KnowledgebaseBrowser';
 import ApiConfiguration from './ApiConfiguration';
+import ErrorModal from './ErrorModal';
 import './ChatContainer.css';
 
 
@@ -20,7 +21,9 @@ const ChatContainer = () => {
     conversations,
     activeThreadId,
     setError,
-    renameConversation
+    renameConversation,
+    showErrorModal,
+    hideErrorModal
   } = useChatStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true);
@@ -155,7 +158,7 @@ const ChatContainer = () => {
                 <span>Initializing application...</span>
               </div>
             </div>
-          ) : error ? (
+          ) : error && isInitializing ? (
             <div className="error-state">
               <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="12" cy="12" r="10" stroke="#EA4335" strokeWidth="2"/>
@@ -217,6 +220,13 @@ const ChatContainer = () => {
       <ApiConfiguration
         isOpen={showApiConfig}
         onClose={() => setShowApiConfig(false)}
+      />
+      
+      {/* Error Modal */}
+      <ErrorModal
+        isOpen={showErrorModal}
+        onClose={hideErrorModal}
+        error={error}
       />
     </div>
   );
