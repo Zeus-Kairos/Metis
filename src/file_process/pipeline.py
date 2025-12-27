@@ -1,7 +1,7 @@
 import os
 from typing import List, Dict, Any
 from fastapi import UploadFile
-from src.file_process.utils import SUPPORTED_FORMATS, get_index_path
+from src.file_process.utils import SUPPORTED_FORMATS, get_index_path, get_upload_dir
 from src.file_process.indexer import Indexer
 from src.file_process.file_splitter import FileSplitter
 from src.file_process.file_upload import FileUploader
@@ -68,7 +68,8 @@ class FileProcessingPipeline:
                             parsed_path=parse_result["parsed_file"],
                             user_id=user_id,
                             knowledgebase_name=knowledge_base,
-                            file_size=file_size
+                            file_size=file_size,
+                            parentFolder=get_upload_dir(user_id, knowledge_base, directory)
                         )
                         file_result["file_id"] = file_id
                     except Exception as e:

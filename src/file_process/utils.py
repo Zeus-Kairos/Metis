@@ -36,11 +36,6 @@ def get_upload_dir(user_id: int, knowledge_base: str, directory: str) -> str:
     # Split directory into parts
     parts = directory.split('/') if directory else []
     
-    # Ensure we don't double-include 'origin' segment
-    # If parts already contains 'origin', remove it
-    if parts and parts[0] == 'origin':
-        parts = parts[1:]
-    
     return os.path.join(BASE_UPLOAD_DIR, str(user_id), knowledge_base, "origin", *parts)
 
 def get_parsed_path(original_file_path: str) -> Tuple[str, str]:

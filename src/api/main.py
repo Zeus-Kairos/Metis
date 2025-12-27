@@ -431,10 +431,7 @@ async def create_folder(
     knowledge_base: str = Body("default", description="Knowledge base name")
 ):
     """Create a new folder in knowledgebase"""
-    try:
-        from src.file_process.utils import get_upload_dir
-        import os
-        
+    try:       
         # Validate folder name
         if not name or name.strip() == "":
             raise HTTPException(status_code=400, detail="Folder name cannot be empty")
@@ -450,6 +447,11 @@ async def create_folder(
             raise HTTPException(status_code=400, detail=f"Folder '{name}' already exists")
         
         os.makedirs(new_folder_path, exist_ok=True)
+        parsed_folder_path, folder_name = get_parsed_path(new_folder_path)
+        parsed_folder_path = os.path.join(parsed_folder_path, folder_name)
+
+        memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
+            name, new_folder_path, parsed_folder_path, current_user.id, knowledge_base, type="folder", parentFolder=parent_dir)
         
         return {
             "success": True,
@@ -474,12 +476,11 @@ async def delete_folder(
         normalized_path = path.lstrip('/')
         
         # Get the folder path
-        folder_path = get_upload_dir(current_user.id, knowledge_base, normalized_path)
-        
+        folder_path = get_upload_dir(current_user.id, knowledge_base, normalized_path)      
         # Check if folder exists
         if not os.path.exists(folder_path):
             raise HTTPException(status_code=404, detail=f"Folder '{path}' not found")
-        
+
         # Delete the folder and its contents
         shutil.rmtree(folder_path)
         parsed_folder_path, folder_name = get_parsed_path(folder_path)
@@ -489,8 +490,7 @@ async def delete_folder(
             shutil.rmtree(parsed_folder_path)
         
         # Delete all database records for files under this folder
-        deleted_count = memory_manager.knowledgebase_manager.delete_files_by_path_prefix(folder_path)
-        logger.info(f"Deleted {deleted_count} database records for files under folder: {folder_path}")
+        memory_manager.knowledgebase_manager.delete_file_by_path(folder_path)
         
         return {
             "success": True,

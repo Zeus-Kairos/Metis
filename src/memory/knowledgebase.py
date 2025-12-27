@@ -5,6 +5,8 @@ from typing import List, Dict, Any, Optional, Tuple, Union
 from psycopg_pool import ConnectionPool
 
 import logging
+
+from src.file_process.utils import get_upload_dir
 logger = logging.getLogger(__name__)
 
 class KnowledgebaseManager:
@@ -20,6 +22,7 @@ class KnowledgebaseManager:
             connection_pool: Database connection pool for database operations
         """
         self.connection_pool = connection_pool
+        self._init_knowledgebase_tables()
         
     def _init_knowledgebase_tables(self):
         """
@@ -62,7 +65,7 @@ class KnowledgebaseManager:
                             thread_id VARCHAR(255) NOT NULL,
                             PRIMARY KEY (knowledgebase_id, thread_id),
                             FOREIGN KEY (knowledgebase_id) REFERENCES knowledgebase(id) ON DELETE CASCADE,
-                            FOREIGN KEY (thread_id) REFERENCES threads(id) ON DELETE CASCADE,
+                            FOREIGN KEY (thread_id) REFERENCES threads(thread_id) ON DELETE CASCADE,
                             UNIQUE (thread_id)  -- Ensure each thread maps to at most one knowledgebase
                         )
                     """)
@@ -82,9 +85,27 @@ class KnowledgebaseManager:
                             uploaded_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             knowledgebase_id INTEGER NOT NULL,
                             file_size INTEGER,
-                            FOREIGN KEY (knowledgebase_id) REFERENCES knowledgebase(id) ON DELETE CASCADE
+                            description TEXT,
+                            type VARCHAR(10) NOT NULL CHECK (type IN ('file', 'folder')),
+                            parent INTEGER,
+                            FOREIGN KEY (knowledgebase_id) REFERENCES knowledgebase(id) ON DELETE CASCADE,
+                            FOREIGN KEY (parent) REFERENCES files(file_id) ON DELETE CASCADE,
+                            CHECK (type != 'file' OR file_size IS NOT NULL)
                         )
                     """)
+                    
+                    # Create unique constraint on filepath if it doesn't exist
+                    cur.execute("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'files' 
+                        AND constraint_name = 'files_filepath_key';
+                    """)
+                    if not cur.fetchone():
+                        cur.execute("""
+                            ALTER TABLE files 
+                            ADD CONSTRAINT files_filepath_key UNIQUE (filepath);
+                        """)
                     
                     # Create index on files.knowledgebase_id for efficient queries
                     cur.execute("""
@@ -128,6 +149,17 @@ class KnowledgebaseManager:
                         (user_id, name, description, navigation_json, True)
                     )
                     knowledgebase_id = cur.fetchone()[0]
+
+                    # Create root folder
+                    root_path = get_upload_dir(user_id, name, "")
+                    cur.execute(
+                        """
+                        INSERT INTO files (filename, filepath, parsed_path, knowledgebase_id, file_size, description, type, parent)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        RETURNING file_id
+                        """,
+                        ('root', root_path, 'root', knowledgebase_id, None, 'root folder for the knowledgebase', 'folder', None)
+                    )
                     
                     # Set all other knowledgebases for this user to inactive
                     cur.execute(
@@ -210,7 +242,7 @@ class KnowledgebaseManager:
             logger.error(f"Error setting active knowledgebase for user {user_id}: {e}")
             raise
     
-    def add_file_by_knowledgebase_name(self, filename: str, filepath: str, parsed_path: str, user_id: int, knowledgebase_name: str, file_size: int = None) -> int:
+    def add_file_by_knowledgebase_name(self, filename: str, filepath: str, parsed_path: str, user_id: int, knowledgebase_name: str, file_size: int = None, description: str = None, type: str = 'file', parentFolder: str = "") -> int:
         """
         Add a new file record to the database using knowledgebase name and user ID.
         
@@ -220,7 +252,10 @@ class KnowledgebaseManager:
             parsed_path: Path to the parsed file
             user_id: ID of the user who owns the knowledgebase
             knowledgebase_name: Name of the knowledgebase associated with the file
-            file_size: Size of the file in bytes (optional)
+            file_size: Size of the file in bytes (required for file type)
+            description: Description of the file or folder
+            type: Type of the item (file or folder)
+            parentFolder: Path to the parent folder
             
         Returns:
             The created file ID
@@ -239,13 +274,13 @@ class KnowledgebaseManager:
                     knowledgebase_id = knowledgebase[0]
                     
                     # Call the main add_file method with knowledgebase_id
-                    return self.add_file(filename, filepath, parsed_path, knowledgebase_id, file_size)
+                    return self.add_file(filename, filepath, parsed_path, knowledgebase_id, file_size, description, type, parentFolder)
 
         except Exception as e:
             logger.error(f"Error adding file: {e}")
             raise
     
-    def add_file(self, filename: str, filepath: str, parsed_path: str, knowledgebase_id: int, file_size: int = None) -> int:
+    def add_file(self, filename: str, filepath: str, parsed_path: str, knowledgebase_id: int, file_size: int = None, description: str = None, type: str = 'file', parentFolder: str = "") -> int:
         """
         Add a new file record to the database.
         
@@ -254,7 +289,10 @@ class KnowledgebaseManager:
             filepath: Path to the uploaded file
             parsed_path: Path to the parsed file
             knowledgebase_id: ID of the knowledgebase associated with the file
-            file_size: Size of the file in bytes (optional)
+            file_size: Size of the file in bytes (required for file type)
+            description: Description of the file or folder
+            type: Type of the item (file or folder)
+            parentFolder: Path to the parent folder
             
         Returns:
             The created file ID
@@ -271,19 +309,25 @@ class KnowledgebaseManager:
                     if not cur.fetchone():
                         raise ValueError(f"Knowledgebase ID {knowledgebase_id} does not exist")
                     
+                    # Resolve parent folder ID from parentFolder path
+                    parent_id = self.get_parent_id(knowledgebase_id, parentFolder)
+
                     # Insert the file record with UPSERT (update if filepath exists)
                     cur.execute(
                         """
-                        INSERT INTO files (filename, filepath, parsed_path, knowledgebase_id, file_size)
-                        VALUES (%s, %s, %s, %s, %s)
+                        INSERT INTO files (filename, filepath, parsed_path, knowledgebase_id, file_size, description, type, parent)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (filepath) DO UPDATE
                         SET filename = EXCLUDED.filename,
                             parsed_path = EXCLUDED.parsed_path,
                             file_size = EXCLUDED.file_size,
+                            description = EXCLUDED.description,
+                            type = EXCLUDED.type,
+                            parent = EXCLUDED.parent,
                             uploaded_time = CURRENT_TIMESTAMP
                         RETURNING file_id
                         """,
-                        (filename, filepath, parsed_path, knowledgebase_id, file_size)
+                        (filename, filepath, parsed_path, knowledgebase_id, file_size, description, type, parent_id)
                     )
                     file_id = cur.fetchone()[0]
                     
@@ -297,6 +341,34 @@ class KnowledgebaseManager:
                     return file_id
         except Exception as e:
             logger.error(f"Error adding file: {e}")
+            raise
+
+    def get_parent_id(self, knowledgebase_id: int, parentFolder: str) -> int:
+        """
+        Get the parent folder ID for a given path.
+        
+        Args:
+            knowledgebase_id: ID of the knowledgebase
+            parentFolder: Path to the parent folder
+                       
+        Returns:
+            Parent folder ID if found, None otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Find the parent folder by its filepath
+                    cur.execute(
+                        "SELECT file_id FROM files WHERE filepath = %s AND knowledgebase_id = %s AND type = 'folder'",
+                        (parentFolder, knowledgebase_id)
+                    )
+                    parent = cur.fetchone()
+                    if parent:
+                        return parent[0]
+                    else:
+                        return None
+        except Exception as e:
+            logger.error(f"Error getting parent folder ID: {e}")
             raise
     
     def get_files_by_knowledgebase_id(self, knowledgebase_id: int) -> list:
@@ -314,7 +386,7 @@ class KnowledgebaseManager:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id, file_size
+                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id, file_size, description, type, parent
                         FROM files
                         WHERE knowledgebase_id = %s
                         ORDER BY uploaded_time DESC
@@ -342,7 +414,7 @@ class KnowledgebaseManager:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id, file_size
+                        SELECT file_id, filename, filepath, parsed_path, uploaded_time, knowledgebase_id, file_size, description, type, parent
                         FROM files
                         WHERE file_id = %s
                         """,
