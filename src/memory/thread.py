@@ -454,13 +454,14 @@ class ThreadManager:
         
         # Extract conversation messages
         conversation = []
-        last_state = state_history[0]
-        if hasattr(last_state, 'values') and 'messages' in last_state.values:
-            for msg in last_state.values['messages']:
-                conversation.append({
-                    "role": "user" if isinstance(msg, HumanMessage) else "assistant",
-                    "content": msg.content
-                })
+        if state_history:
+            last_state = state_history[0]
+            if hasattr(last_state, 'values') and 'messages' in last_state.values:
+                for msg in last_state.values['messages']:
+                    conversation.append({
+                        "role": "user" if isinstance(msg, HumanMessage) else "assistant",
+                        "content": msg.content
+                    })
         logger.debug(f"Conversation History: {conversation}")
         
         return conversation

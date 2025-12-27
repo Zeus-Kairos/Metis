@@ -218,7 +218,7 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
       
       return updatedTree;
     });
-  }, [updateFileTree, fetchDirectoryContents, fetchFolderContents]);
+  }, [updateFileTree, fetchDirectoryContents]);
   
   // Recursive component to render the file tree
   const FileTreeItem = ({ item, depth = 0 }) => {
