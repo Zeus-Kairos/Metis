@@ -691,13 +691,13 @@
 
 /* Form styles for modals */
 .form-group {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .form-group label {
   display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
+  margin-bottom: 4px;
+  font-size: 12px;
   font-weight: 500;
   color: #333;
 }
@@ -705,11 +705,12 @@
 .form-group input,
 .form-group textarea {
   width: 100%;
-  padding: 8px 12px;
+  padding: 6px 8px;
   border: 1px solid #dfe1e5;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 13px;
   transition: all 0.2s ease;
+  box-sizing: border-box;
 }
 
 .form-group input:focus,
@@ -721,43 +722,44 @@
 
 .form-group textarea {
   resize: vertical;
-  min-height: 80px;
+  min-height: 60px;
 }
 
 /* Edit Descriptions Modal Styles */
 .edit-descriptions-list {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
 .edit-description-item {
   background-color: #f8f9fa;
-  padding: 16px;
-  border-radius: 8px;
+  padding: 12px;
+  border-radius: 6px;
   border: 1px solid #e0e0e0;
 }
 
 .edit-description-item-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .edit-description-item-header .item-icon {
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .edit-description-item-header .item-name {
   font-weight: 600;
   color: #333;
+  font-size: 14px;
 }
 
 .edit-description-item-header .item-size {
-  font-size: 12px;
+  font-size: 11px;
   color: #666;
-  margin-left: 8px;
+  margin-left: 6px;
 }
 
 /* Responsive adjustments */

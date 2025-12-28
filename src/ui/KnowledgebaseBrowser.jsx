@@ -902,7 +902,7 @@ const KnowledgebaseBrowser = () => {
       {/* Edit File/Folder Descriptions Modal */}
       {showEditDescriptionsModal && (
         <div className="kb-dialog-overlay">
-          <div className="kb-dialog" style={{ maxWidth: '800px', maxHeight: '90vh' }}>
+          <div className="kb-dialog" style={{ maxWidth: '780px', maxHeight: '90vh' }}>
             <div className="dialog-header">
               <h3>Edit File & Folder Descriptions</h3>
               <button 
@@ -915,7 +915,7 @@ const KnowledgebaseBrowser = () => {
                 ×
               </button>
             </div>
-            <div className="dialog-body" style={{ overflowY: 'auto', maxHeight: '60vh' }}>
+            <div className="dialog-body" style={{ overflowY: 'auto', maxHeight: '65vh' }}>
               {isLoading ? (
                 <div className="kb-loading">Loading files...</div>
               ) : editingFiles.length === 0 ? (
@@ -944,7 +944,8 @@ const KnowledgebaseBrowser = () => {
                             ));
                           }}
                           placeholder="Enter description for this file/folder"
-                          rows="3"
+                          rows="2"
+                          style={{ fontSize: '13px', padding: '6px 8px' }}
                         />
                       </div>
                     </div>
