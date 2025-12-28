@@ -760,7 +760,7 @@ const useChatStore = create((set, get) => {
         }
         
         // Create a new conversations object without the deleted thread
-        const { [threadId]: deletedConversation, ...remainingConversations } = conversations;
+        const { [threadId]: _deletedConversation, ...remainingConversations } = conversations;
         
         // If the deleted conversation was the active one, set a new active thread
         let newActiveThreadId = get().activeThreadId;

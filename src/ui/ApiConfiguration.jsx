@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import useChatStore, { fetchWithAuth } from './store';
+import { fetchWithAuth } from './store';
 import './ApiConfiguration.css';
 
 const ApiConfiguration = ({ isOpen, onClose }) => {

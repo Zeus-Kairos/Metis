@@ -7,8 +7,6 @@ const KnowledgebaseBrowser = () => {
   const { knowledgebases, setActiveKnowledgebase, refreshFileBrowser } = useChatStore();
   const [currentKnowledgebase, setCurrentKnowledgebase] = useState(knowledgebases.find(kb => kb.is_active)?.name || 'default');
   const [currentPath, setCurrentPath] = useState(['']);
-  const [folders, setFolders] = useState([]);
-  const [files, setFiles] = useState([]);
   const [fileItems, setFileItems] = useState([]); // Contains files and folders with their descriptions
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -20,11 +18,7 @@ const KnowledgebaseBrowser = () => {
   const [showCreateKBModal, setShowCreateKBModal] = useState(false);
   const [newKBName, setNewKBName] = useState('');
   const [newKBDescription, setNewKBDescription] = useState('');
-  const [showRenameKBModal, setShowRenameKBModal] = useState(false);
-  const [kbToRename, setKBToRename] = useState(null);
-  const [renameKBName, setRenameKBName] = useState('');
   // State variables for editing knowledgebase descriptions
-  const [showEditKBDescriptionModal, setShowEditKBDescriptionModal] = useState(false);
   const [showInlineEdit, setShowInlineEdit] = useState(false);
   const [kbToEditDescription, setKBToEditDescription] = useState(null);
   const [editKBDescription, setEditKBDescription] = useState('');
@@ -58,13 +52,6 @@ const KnowledgebaseBrowser = () => {
         throw new Error('Failed to fetch directory contents');
       }
       const data = await response.json();
-      
-      // Extract just the names for backward compatibility with existing UI
-      const folderNames = data.folders?.map(folder => folder.name) || [];
-      const fileNames = data.files?.map(file => file.name) || [];
-      
-      setFolders(folderNames);
-      setFiles(fileNames);
       
       // Store the full file items with their metadata for display
       const allItems = [];
@@ -104,19 +91,12 @@ const KnowledgebaseBrowser = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [currentKnowledgebase, knowledgebases]);
+  }, [knowledgebases]);
 
   // Navigate to a folder
   const navigateToFolder = (folderName) => {
     const newPath = [...currentPath, folderName];
     setCurrentPath(newPath);
-  };
-
-  // Navigate up one level
-  const navigateUp = () => {
-    if (currentPath.length > 1) {
-      setCurrentPath(currentPath.slice(0, -1));
-    }
   };
 
   // Create a new folder
@@ -322,49 +302,6 @@ const KnowledgebaseBrowser = () => {
       setIsLoading(false);
     }
   };
-
-  // Rename a knowledgebase
-  const renameKnowledgebase = async () => {
-    if (!renameKBName.trim() || !kbToRename) return;
-
-    setIsLoading(true);
-    setError('');
-    try {
-      const response = await fetchWithAuth(`/api/knowledgebase/${kbToRename.id}/rename`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: renameKBName
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to rename knowledgebase');
-      }
-
-      // Refresh knowledgebases by fetching them again
-      const kbsResponse = await fetchWithAuth('/api/knowledgebase');
-      if (kbsResponse.ok) {
-        const kbsData = await kbsResponse.json();
-        // Update the store's knowledgebases directly
-        useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
-        
-        // Set the active knowledgebase if one exists
-        const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
-        if (activeKB) {
-          setActiveKnowledgebase(activeKB.id);
-        }
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
 
   // Delete a knowledgebase
   const deleteKnowledgebase = async (kbId, kbName) => {

@@ -357,7 +357,7 @@ const STTSettings = ({ onSettingsChange, initialSettings = {}, isVisible, onClos
                     <select
                       value={settings.wake_words}
                       onChange={handleWakeWordChange}
-                      onMouseEnter={(e) => setHoveredWakeWord(settings.wake_words)}
+                      onMouseEnter={() => setHoveredWakeWord(settings.wake_words)}
                       onMouseLeave={() => setHoveredWakeWord(null)}
                       style={{
                         width: '100%',

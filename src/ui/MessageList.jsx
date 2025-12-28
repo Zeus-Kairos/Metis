@@ -1,10 +1,9 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import MarkdownRenderer from './MarkdownRenderer';
-import useChatStore from './store';
 
 const MessageList = ({ messages, isLoading = false, isInitializing = false }) => {
   // Use messages from props which are passed from ChatContainer
-  const messagesArray = messages || [];
+  const messagesArray = useMemo(() => messages || [], [messages]);
   const endOfMessagesRef = useRef(null);
   const messageRefs = useRef({});
 

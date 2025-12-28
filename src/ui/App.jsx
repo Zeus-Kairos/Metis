@@ -1,12 +1,12 @@
 import ChatContainer from './ChatContainer';
 import './index.css';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import SystemPrompt from './SystemPrompt';
 import useChatStore from './store';
 import Login from './Login';
 
 function App() {
-  const { initializeApp, isLoading, error, isInitializing, user_id, authChecked } = useChatStore();
+  const { initializeApp, user_id, authChecked } = useChatStore();
 
   // Initialize the app when it loads
   useEffect(() => {
