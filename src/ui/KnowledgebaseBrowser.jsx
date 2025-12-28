@@ -27,6 +27,16 @@ const KnowledgebaseBrowser = () => {
   const [showEditDescriptionsModal, setShowEditDescriptionsModal] = useState(false);
   const [editingFiles, setEditingFiles] = useState([]);
   
+  // State variables for confirm dialogs
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmDialogConfig, setConfirmDialogConfig] = useState({
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    confirmText: 'Confirm',
+    cancelText: 'Cancel'
+  });
+  
   // Update currentKnowledgebase when knowledgebases change
   useEffect(() => {
     const activeKB = knowledgebases.find(kb => kb.is_active);
@@ -138,74 +148,90 @@ const KnowledgebaseBrowser = () => {
 
   // Delete a folder
   const deleteFolder = async (folderName) => {
-    if (!window.confirm(`Are you sure you want to delete folder "${folderName}"?`)) {
-      return;
-    }
+    const handleDelete = async () => {
+      setIsLoading(true);
+      setError('');
+      try {
+        const fullPath = [...currentPath, folderName].join('/').replace(/^\//, '');
+        const response = await fetchWithAuth('/api/knowledgebase/folder', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            path: fullPath,
+            knowledge_base: currentKnowledgebase,
+          }),
+        });
 
-    setIsLoading(true);
-    setError('');
-    try {
-      const fullPath = [...currentPath, folderName].join('/').replace(/^\//, '');
-      const response = await fetchWithAuth('/api/knowledgebase/folder', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          path: fullPath,
-          knowledge_base: currentKnowledgebase,
-        }),
-      });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Failed to delete folder');
+        }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to delete folder');
+        // Refresh directory contents
+        fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
+        refreshFileBrowser(); // Trigger sidebar refresh
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      // Refresh directory contents
-      fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
-      refreshFileBrowser(); // Trigger sidebar refresh
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    // Show confirm dialog
+    setConfirmDialogConfig({
+      title: 'Delete Folder',
+      message: `All files and subfolders in "${folderName}" will be deleted. Are you sure you want to continue?`,
+      onConfirm: handleDelete,
+      confirmText: 'Delete',
+      cancelText: 'Cancel'
+    });
+    setShowConfirmDialog(true);
   };
 
   // Delete a file
   const deleteFile = async (fileName) => {
-    if (!window.confirm(`Are you sure you want to delete file "${fileName}"?`)) {
-      return;
-    }
+    const handleDelete = async () => {
+      setIsLoading(true);
+      setError('');
+      try {
+        const fullPath = [...currentPath, fileName].join('/').replace(/^\//, '');
+        const response = await fetchWithAuth('/api/knowledgebase/file', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            path: fullPath,
+            knowledge_base: currentKnowledgebase,
+          }),
+        });
 
-    setIsLoading(true);
-    setError('');
-    try {
-      const fullPath = [...currentPath, fileName].join('/').replace(/^\//, '');
-      const response = await fetchWithAuth('/api/knowledgebase/file', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          path: fullPath,
-          knowledge_base: currentKnowledgebase,
-        }),
-      });
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Failed to delete file');
+        }
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to delete file');
+        // Refresh directory contents
+        fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
+        refreshFileBrowser(); // Trigger sidebar refresh
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      // Refresh directory contents
-      fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
-      refreshFileBrowser(); // Trigger sidebar refresh
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
+    // Show confirm dialog
+    setConfirmDialogConfig({
+      title: 'Delete File',
+      message: `Are you sure you want to delete file "${fileName}"?`,
+      onConfirm: handleDelete,
+      confirmText: 'Delete',
+      cancelText: 'Cancel'
+    });
+    setShowConfirmDialog(true);
   };
 
   // Handle file selection for upload
@@ -307,44 +333,59 @@ const KnowledgebaseBrowser = () => {
   const deleteKnowledgebase = async (kbId, kbName) => {
     // Prevent deletion if this is the only knowledgebase
     if (knowledgebases.length <= 1) {
-      window.alert('Cannot delete the only knowledgebase.');
-      return;
-    }
-
-    if (!window.confirm(`Are you sure you want to delete knowledgebase "${kbName}"? This action cannot be undone.`)) {
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-    try {
-      const response = await fetchWithAuth(`/api/knowledgebase/${kbId}`, {
-        method: 'DELETE',
+      setConfirmDialogConfig({
+        title: 'Cannot Delete',
+        message: 'Cannot delete the only knowledgebase.',
+        onConfirm: () => {},
+        confirmText: 'OK',
+        cancelText: 'Cancel'
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to delete knowledgebase');
-      }
-
-      // Refresh knowledgebases by fetching them again
-      const kbsResponse = await fetchWithAuth('/api/knowledgebase');
-      if (kbsResponse.ok) {
-        const kbsData = await kbsResponse.json();
-        // Update the store's knowledgebases directly
-        useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
-        
-        // Set the active knowledgebase if one exists
-        const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
-        if (activeKB) {
-          setActiveKnowledgebase(activeKB.id);
-        }
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
+      setShowConfirmDialog(true);
+      return;
     }
+
+    const handleDelete = async () => {
+      setIsLoading(true);
+      setError('');
+      try {
+        const response = await fetchWithAuth(`/api/knowledgebase/${kbId}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Failed to delete knowledgebase');
+        }
+
+        // Refresh knowledgebases by fetching them again
+        const kbsResponse = await fetchWithAuth('/api/knowledgebase');
+        if (kbsResponse.ok) {
+          const kbsData = await kbsResponse.json();
+          // Update the store's knowledgebases directly
+          useChatStore.setState({ knowledgebases: kbsData.knowledgebases || [] });
+          
+          // Set the active knowledgebase if one exists
+          const activeKB = kbsData.knowledgebases.find(kb => kb.is_active);
+          if (activeKB) {
+            setActiveKnowledgebase(activeKB.id);
+          }
+        }
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    // Show confirm dialog
+    setConfirmDialogConfig({
+      title: 'Delete Knowledgebase',
+      message: `All files and subfolders in knowledgebase "${kbName}" will be deleted. Are you sure you want to continue? This action cannot be undone.`,
+      onConfirm: handleDelete,
+      confirmText: 'Delete',
+      cancelText: 'Cancel'
+    });
+    setShowConfirmDialog(true);
   };
 
   // Use current directory's items when edit descriptions modal is opened
@@ -415,10 +456,6 @@ const KnowledgebaseBrowser = () => {
                   className="kb-knowledgebase-delete-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (knowledgebases.length <= 1) {
-                      window.alert('Cannot delete the only knowledgebase.');
-                      return;
-                    }
                     deleteKnowledgebase(kb.id, kb.name);
                   }}
                   disabled={knowledgebases.length <= 1}
@@ -948,6 +985,44 @@ const KnowledgebaseBrowser = () => {
                 disabled={isLoading}
               >
                 Save All Descriptions
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Confirm Dialog */}
+      {showConfirmDialog && (
+        <div className="kb-dialog-overlay">
+          <div className="kb-dialog">
+            <div className="dialog-header">
+              <h3>{confirmDialogConfig.title}</h3>
+              <button 
+                className="dialog-close"
+                onClick={() => setShowConfirmDialog(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dialog-body">
+              <p>{confirmDialogConfig.message}</p>
+            </div>
+            <div className="dialog-footer">
+              <button 
+                onClick={() => setShowConfirmDialog(false)}
+                disabled={isLoading}
+              >
+                {confirmDialogConfig.cancelText}
+              </button>
+              <button 
+                onClick={() => {
+                  confirmDialogConfig.onConfirm();
+                  setShowConfirmDialog(false);
+                }}
+                className="dialog-primary"
+                disabled={isLoading}
+              >
+                {confirmDialogConfig.confirmText}
               </button>
             </div>
           </div>
