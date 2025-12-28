@@ -3,7 +3,7 @@ import useChatStore, { fetchWithAuth } from './store';
 import './RightSidebar.css';
 
 const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
-  const { knowledgebases, fileBrowserRefreshTrigger } = useChatStore();
+  const { knowledgebases, fileBrowserRefreshTrigger, fileBrowserLastModifiedPath } = useChatStore();
   const [activeKB, setActiveKB] = useState(knowledgebases.find(kb => kb.is_active));
   
   // Define file tree structure state
@@ -17,43 +17,84 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
     error: ''
   });
   
+  // Cache for directory contents - key is path, value is the fetched data
+  const [directoryCache, setDirectoryCache] = useState({});
+  
+  // Ref to access the latest directoryCache without triggering re-renders
+  const directoryCacheRef = React.useRef(directoryCache);
+  
+  // Update the ref whenever directoryCache changes
+  useEffect(() => {
+    directoryCacheRef.current = directoryCache;
+  }, [directoryCache]);
 
   
   // Fetch directory contents for a specific folder path
-  const fetchDirectoryContents = useCallback(async (folderPath) => {
-    if (!activeKB) return;
-    
-    const fullPath = folderPath.join('/').replace(/^\//, '');
-    // Use kb_id instead of knowledge_base name for better performance
-    const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(fullPath)}&kb_id=${activeKB.id}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
-    
-    if (!response.ok) {
-      throw new Error('Failed to fetch directory contents');
+  const fetchDirectoryContents = useCallback(async (folderPath, forceRefresh = false) => {
+    if (!activeKB || !activeKB.id || !activeKB.name) {
+      console.error('Active knowledgebase not properly defined:', activeKB);
+      return [];
     }
     
-    const data = await response.json();
+    const fullPath = folderPath.join('/').replace(/^\//, '');
     
-    // Create children array with folders first, then files
-    const children = [
-      // Convert folders to tree items (now objects with metadata)
-      ...(data.folders || []).map(folder => ({
-        type: 'folder',
-        name: folder.name,
-        path: [...folderPath, folder.name],
-        isExpanded: true,
-        isLoading: false,
-        children: [],
-        error: ''
-      })),
-      // Convert files to tree items (now objects with metadata)
-      ...(data.files || []).map(file => ({
-        type: 'file',
-        name: file.name,
-        path: [...folderPath, file.name]
-      }))
-    ];
+    // Create cache key based on knowledgebase and path
+    const cacheKey = `${activeKB.id}:${fullPath}`;
     
-    return children;
+    // Check if we have cached data for this path using the ref, unless forceRefresh is true
+    if (!forceRefresh && directoryCacheRef.current[cacheKey]) {
+      // Return cached data immediately
+      return directoryCacheRef.current[cacheKey];
+    }
+    
+    try {
+      // Use kb_id instead of knowledge_base name for better performance
+      const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(fullPath)}&kb_id=${activeKB.id}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch directory contents: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // Create children array with folders first, then files
+      const children = [
+        // Convert folders to tree items (now objects with metadata)
+        ...(data.folders || []).map(folder => ({
+          type: 'folder',
+          name: folder.name,
+          path: [...folderPath, folder.name],
+          isExpanded: true,
+          isLoading: false,
+          children: [],
+          error: ''
+        })),
+        // Convert files to tree items (now objects with metadata)
+        ...(data.files || []).map(file => ({
+          type: 'file',
+          name: file.name,
+          path: [...folderPath, file.name]
+        }))
+      ];
+      
+      // Cache the result
+      setDirectoryCache(prev => ({
+        ...prev,
+        [cacheKey]: children
+      }));
+      
+      // Also update the ref immediately
+      directoryCacheRef.current = {
+        ...directoryCacheRef.current,
+        [cacheKey]: children
+      };
+      
+      return children;
+    } catch (error) {
+      console.error('Error fetching directory contents:', error);
+      // Return empty array on error to prevent further issues
+      return [];
+    }
   }, [activeKB]);
   
   // Recursive function to update the file tree
@@ -360,35 +401,253 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
   // Refresh file browser when triggered from elsewhere (e.g., file upload/delete)
   useEffect(() => {
     if (activeKB) {
-      // Reset and refresh the entire file tree
-      setFileTree({
-        type: 'folder',
-        name: 'Root',
-        path: [''],
-        isExpanded: true,
-        isLoading: true,
-        children: [],
-        error: ''
-      });
+      // Function to update a specific path in the file tree
+      const updateSpecificPath = async (tree, targetPathParts) => {
+        // If we've reached the end of the path parts, this is the folder we need to update
+        if (targetPathParts.length === 0) {
+          // This is the target folder, fetch its contents
+          const currentPath = tree.path.join('/').replace(/^\//, '');
+          try {
+            const currentCacheKey = `${activeKB.id}:${currentPath}`;
+            // Get old children from cache BEFORE fetching fresh data
+            const oldChildren = directoryCacheRef.current[currentCacheKey] || [];
+            
+            // Fetch fresh data for this path
+            const children = await fetchDirectoryContents(tree.path, true);
+            
+            // Clear cache for any deleted folders and their subfolders recursively
+            if (activeKB) {
+              // Get current child folder names from the new data
+              const newFolderNames = new Set(
+                children.filter(child => child.type === 'folder').map(child => child.name)
+              );
+              
+              // Compare old cached children with new data to detect deletions
+              oldChildren.forEach(child => {
+                if (child.type === 'folder' && !newFolderNames.has(child.name)) {
+                  // This folder was deleted, clear its cache and all subfolders recursively
+                  const childPathParts = [...tree.path, child.name];
+                  const childFullPath = childPathParts.join('/').replace(/^\//, '');
+                  const deletedCachePrefix = `${activeKB.id}:${childFullPath}`;
+                  
+                  // Function to recursively clear cache for this folder and all subfolders
+                  const clearCacheRecursively = (cache) => {
+                    const updatedCache = { ...cache };
+                    Object.keys(updatedCache).forEach(key => {
+                      // Delete if the key matches the exact folder or starts with the folder path followed by /
+                      if (key === deletedCachePrefix || key.startsWith(`${deletedCachePrefix}/`)) {
+                        delete updatedCache[key];
+                      }
+                    });
+                    return updatedCache;
+                  };
+                  
+                  // Clear from state
+                  setDirectoryCache(prev => clearCacheRecursively(prev));
+                  
+                  // Clear from ref immediately
+                  directoryCacheRef.current = clearCacheRecursively(directoryCacheRef.current);
+                }
+              });
+            }
+            
+            return {
+              ...tree,
+              children: children,
+              isLoading: false,
+              error: ''
+            };
+          } catch (err) {
+            console.error('Error updating target folder:', currentPath, err);
+            return {
+              ...tree,
+              children: [],
+              isLoading: false,
+              error: err.message
+            };
+          }
+        }
+        
+        // Find the next folder in the path
+        const nextFolderName = targetPathParts[0];
+        const folderIndex = tree.children.findIndex(child => 
+          child.type === 'folder' && child.name === nextFolderName
+        );
+        
+        if (folderIndex === -1) {
+          // Folder not found, this shouldn't happen in a valid path
+          return tree;
+        }
+        
+        // Recursively update the child folder with the remaining path parts
+        const updatedChild = await updateSpecificPath(
+          { ...tree.children[folderIndex], isLoading: true },
+          targetPathParts.slice(1)
+        );
+        
+        // Update the tree with the updated child
+        const updatedChildren = [...tree.children];
+        updatedChildren[folderIndex] = updatedChild;
+        
+        return {
+          ...tree,
+          children: updatedChildren,
+          isLoading: false
+        };
+      };
       
-      // Fetch root contents immediately
+      // Function to recursively update the file tree starting from the root
+      const updateFileTreeRecursively = async (tree, pathParts, isRoot = false) => {
+        // Create the full path for the current folder
+        const currentPath = pathParts.join('/').replace(/^\//, '');
+        
+        // Only refresh if it's the modified folder, not the root folder
+        const shouldRefresh = currentPath === fileBrowserLastModifiedPath;
+        
+        if (shouldRefresh) {
+          try {
+            const currentPathCacheKey = `${activeKB.id}:${currentPath}`;
+            // Get old children from cache BEFORE fetching fresh data
+            const oldChildren = directoryCacheRef.current[currentPathCacheKey] || [];
+            
+            // Fetch fresh data for this path
+            const children = await fetchDirectoryContents(pathParts, true);
+            
+            // Get current child folder names from the new data
+            const newFolderNames = new Set(
+              children.filter(child => child.type === 'folder').map(child => child.name)
+            );
+            
+            // Clear cache for any folders that were in the old cache but not in the new data (deleted folders)
+            oldChildren.forEach(child => {
+              if (child.type === 'folder' && !newFolderNames.has(child.name)) {
+                // This folder was deleted, clear its cache and all subfolders recursively
+                const childPathParts = [...pathParts, child.name];
+                const childFullPath = childPathParts.join('/').replace(/^\//, '');
+                const deletedCachePrefix = `${activeKB.id}:${childFullPath}`;
+                
+                // Function to recursively clear cache for this folder and all subfolders
+                const clearCacheRecursively = (cache) => {
+                  const updatedCache = { ...cache };
+                  Object.keys(updatedCache).forEach(key => {
+                    // Delete if the key matches the exact folder or starts with the folder path followed by /
+                    if (key === deletedCachePrefix || key.startsWith(`${deletedCachePrefix}/`)) {
+                      delete updatedCache[key];
+                    }
+                  });
+                  return updatedCache;
+                };
+                
+                // Clear from state
+                setDirectoryCache(prev => clearCacheRecursively(prev));
+                
+                // Clear from ref immediately
+                directoryCacheRef.current = clearCacheRecursively(directoryCacheRef.current);
+              }
+            });
+            
+            // Merge cached children for subfolders to preserve their contents
+            const childrenWithCachedData = children.map(child => {
+              if (child.type === 'folder') {
+                // Check if we have cached data for this child folder
+                const childPathParts = [...pathParts, child.name];
+                const childFullPath = childPathParts.join('/').replace(/^\//, '');
+                const childCacheKey = `${activeKB.id}:${childFullPath}`;
+                
+                // If we have cached children for this folder, use them instead of the empty array from API
+                if (directoryCacheRef.current[childCacheKey]) {
+                  return {
+                    ...child,
+                    children: directoryCacheRef.current[childCacheKey],
+                    isLoading: false
+                  };
+                }
+              }
+              return child;
+            });
+            
+            // Update this folder's children with merged data
+            tree.children = childrenWithCachedData;
+            
+            // If this is the modified folder, no need to go deeper
+            if (currentPath === fileBrowserLastModifiedPath) {
+              return tree;
+            }
+          } catch (err) {
+            console.error('Error updating folder:', currentPath, err);
+            tree.error = err.message;
+            tree.children = [];
+            return tree;
+          }
+        }
+        
+        // If this is the modified folder, we've already updated it above
+        if (currentPath === fileBrowserLastModifiedPath) {
+          return tree;
+        }
+        
+        // Recursively update children
+        for (let i = 0; i < tree.children.length; i++) {
+          const child = tree.children[i];
+          if (child.type === 'folder') {
+            // For subfolders, check if their path matches the modified path
+            const childPathParts = [...pathParts, child.name];
+            const childFullPath = childPathParts.join('/').replace(/^\//, '');
+            
+            // Only update if this folder is part of the modified path's hierarchy
+            if (fileBrowserLastModifiedPath.startsWith(childFullPath)) {
+              tree.children[i] = await updateFileTreeRecursively(
+                { ...child, isLoading: true }, 
+                childPathParts
+              );
+            }
+          }
+        }
+        
+        return tree;
+      };
+      
+      // Start updating based on the modified path
       (async () => {
         try {
-          const children = await fetchDirectoryContents(['']);
-          setFileTree(prev => ({
-            ...prev,
-            isLoading: false,
-            children: children,
-            error: ''
-          }));
-          
-          // Auto-fetch contents for expanded subfolders after refresh
-          children.forEach(child => {
-            if (child.type === 'folder' && child.isExpanded) {
-              fetchFolderContents(child.path);
+          if (fileBrowserLastModifiedPath === '') {
+            // Modified path is root, update from root
+            const updatedTree = await updateFileTreeRecursively(
+              { ...fileTree, isLoading: true }, 
+              [''],
+              true
+            );
+            setFileTree(prev => ({
+              ...updatedTree,
+              isLoading: false
+            }));
+          } else {
+            // Modified path is a subfolder, only update that specific path
+            const pathParts = fileBrowserLastModifiedPath.split('/');
+            const parentPathParts = pathParts.slice(0, -1); // All parts except last
+            const targetPathParts = pathParts.slice(-1); // Only the last part (the modified folder)
+            
+            if (parentPathParts.length === 0) {
+              // Modified folder is directly under root
+              const updatedTree = await updateSpecificPath(
+                { ...fileTree, isLoading: true },
+                pathParts
+              );
+              setFileTree(prev => ({
+                ...updatedTree,
+                isLoading: false
+              }));
+            } else {
+              // Modified folder is nested, update its parent first
+              const updatedTree = await updateSpecificPath(
+                fileTree, // Don't set isLoading on root, only on the specific path
+                pathParts
+              );
+              setFileTree(prev => updatedTree);
             }
-          });
+          }
         } catch (err) {
+          console.error('Error refreshing file tree:', err);
           setFileTree(prev => ({
             ...prev,
             isLoading: false,
@@ -397,7 +656,7 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
         }
       })();
     }
-  }, [fileBrowserRefreshTrigger, activeKB, fetchDirectoryContents, fetchFolderContents]);
+  }, [fileBrowserRefreshTrigger, activeKB, fetchDirectoryContents, fileBrowserLastModifiedPath]);
   
   // Use a ref to track the current fileTree state without causing re-renders
   const fileTreeRef = React.useRef(fileTree);

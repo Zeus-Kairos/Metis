@@ -37,6 +37,17 @@ const KnowledgebaseBrowser = () => {
     cancelText: 'Cancel'
   });
   
+  // Cache for directory contents - key is path, value is the fetched data
+  const [directoryCache, setDirectoryCache] = useState({});
+  
+  // Ref to access the latest directoryCache without triggering re-renders
+  const directoryCacheRef = React.useRef(directoryCache);
+  
+  // Update the ref whenever directoryCache changes
+  useEffect(() => {
+    directoryCacheRef.current = directoryCache;
+  }, [directoryCache]);
+  
   // Update currentKnowledgebase when knowledgebases change
   useEffect(() => {
     const activeKB = knowledgebases.find(kb => kb.is_active);
@@ -46,15 +57,29 @@ const KnowledgebaseBrowser = () => {
   }, [knowledgebases]);
 
   // Fetch directory contents - memoized with useCallback to prevent infinite loops
-  const fetchDirectoryContents = useCallback(async (path) => {
+  const fetchDirectoryContents = useCallback(async (path, forceRefresh = false) => {
     setIsLoading(true);
     setError('');
     try {
       // Get the active knowledgebase to get its ID
       const activeKB = knowledgebases.find(kb => kb.is_active);
-      if (!activeKB) {
-        throw new Error('No active knowledgebase found');
+      if (!activeKB || !activeKB.id || !activeKB.name) {
+        throw new Error('No active knowledgebase found or invalid knowledgebase data');
       }
+      
+      // Create cache key based on knowledgebase and path
+      const cacheKey = `${activeKB.id}:${path}`;
+      
+      // Check if we have cached data for this path using the ref, unless forceRefresh is true
+      if (!forceRefresh && directoryCacheRef.current[cacheKey]) {
+        // Use cached data
+        setFileItems(directoryCacheRef.current[cacheKey]);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Get old items from cache BEFORE fetching fresh data
+      const oldItems = directoryCacheRef.current[cacheKey] || [];
       
       // Call API with kb_id instead of knowledge_base name
       const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(path)}&kb_id=${activeKB.id}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
@@ -62,6 +87,32 @@ const KnowledgebaseBrowser = () => {
         throw new Error('Failed to fetch directory contents');
       }
       const data = await response.json();
+      
+      // Get current child folder names from the new data
+      const newFolderNames = new Set(
+        data.folders.map(folder => folder.name)
+      );
+      
+      // Clear cache for any folders that were in the old cache but not in the new data (deleted folders)
+      oldItems.forEach(item => {
+        if (item.type === 'folder' && !newFolderNames.has(item.name)) {
+          // This folder was deleted, clear its cache
+          const deletedFolderPath = path ? `${path}/${item.name}` : item.name;
+          const deletedCacheKey = `${activeKB.id}:${deletedFolderPath}`;
+          
+          // Clear from state
+          setDirectoryCache(prev => {
+            const updatedCache = { ...prev };
+            delete updatedCache[deletedCacheKey];
+            return updatedCache;
+          });
+          
+          // Clear from ref immediately
+          const updatedRefCache = { ...directoryCacheRef.current };
+          delete updatedRefCache[deletedCacheKey];
+          directoryCacheRef.current = updatedRefCache;
+        }
+      });
       
       // Store the full file items with their metadata for display
       const allItems = [];
@@ -93,7 +144,20 @@ const KnowledgebaseBrowser = () => {
         });
       }
       
+      // Update file items state
       setFileItems(allItems);
+      
+      // Cache the result
+      setDirectoryCache(prev => ({
+        ...prev,
+        [cacheKey]: allItems
+      }));
+      
+      // Also update the ref immediately
+      directoryCacheRef.current = {
+        ...directoryCacheRef.current,
+        [cacheKey]: allItems
+      };
     } catch (err) {
       setError(err.message);
       // Clear fileItems on error
@@ -134,9 +198,9 @@ const KnowledgebaseBrowser = () => {
         throw new Error(errorData.detail || 'Failed to create folder');
       }
 
-      // Refresh directory contents
-      fetchDirectoryContents(fullPath);
-      refreshFileBrowser(); // Trigger sidebar refresh
+      // Force refresh after folder creation to get fresh data from API
+      fetchDirectoryContents(fullPath, true);
+      refreshFileBrowser(fullPath); // Trigger sidebar refresh with the modified path
       setShowNewFolderInput(false);
       setNewFolderName('');
     } catch (err) {
@@ -169,9 +233,35 @@ const KnowledgebaseBrowser = () => {
           throw new Error(errorData.detail || 'Failed to delete folder');
         }
 
-        // Refresh directory contents
-        fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
-        refreshFileBrowser(); // Trigger sidebar refresh
+        // Clear cache for the deleted folder and all its subfolders recursively
+        const activeKB = knowledgebases.find(kb => kb.is_active);
+        if (activeKB) {
+          // Create cache key prefix for the deleted folder and its subfolders
+          const deletedCachePrefix = `${activeKB.id}:${fullPath}`;
+          
+          // Function to recursively clear cache for this folder and all subfolders
+          const clearCacheRecursively = (cache) => {
+            const updatedCache = { ...cache };
+            Object.keys(updatedCache).forEach(key => {
+              // Delete if the key matches the exact folder or starts with the folder path followed by /
+              if (key === deletedCachePrefix || key.startsWith(`${deletedCachePrefix}/`)) {
+                delete updatedCache[key];
+              }
+            });
+            return updatedCache;
+          };
+          
+          // Clear from state
+          setDirectoryCache(prev => clearCacheRecursively(prev));
+          
+          // Clear from ref immediately
+          directoryCacheRef.current = clearCacheRecursively(directoryCacheRef.current);
+        }
+
+        // Force refresh after folder deletion to get fresh data from API
+      const currentCachePath = currentPath.join('/').replace(/^\//, '');
+      fetchDirectoryContents(currentCachePath, true);
+      refreshFileBrowser(currentCachePath); // Trigger sidebar refresh with the modified path
       } catch (err) {
         setError(err.message);
       } finally {
@@ -213,9 +303,11 @@ const KnowledgebaseBrowser = () => {
           throw new Error(errorData.detail || 'Failed to delete file');
         }
 
-        // Refresh directory contents
-        fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
-        refreshFileBrowser(); // Trigger sidebar refresh
+        // Clear cache for the current directory and refresh contents
+      // Force refresh after folder deletion to get fresh data from API
+      const currentCachePath = currentPath.join('/').replace(/^\//, '');
+      fetchDirectoryContents(currentCachePath, true);
+      refreshFileBrowser(currentCachePath); // Trigger sidebar refresh with the modified path
       } catch (err) {
         setError(err.message);
       } finally {
@@ -278,9 +370,9 @@ const KnowledgebaseBrowser = () => {
         throw new Error(`Upload failed for ${failedFiles.length} file(s):\n${errorMessages.join('\n')}`);
       }
 
-      // Refresh directory contents
-      fetchDirectoryContents(fullPath);
-      refreshFileBrowser(); // Trigger sidebar refresh
+      // Force refresh after file upload to get fresh data from API
+      fetchDirectoryContents(fullPath, true);
+      refreshFileBrowser(fullPath); // Trigger sidebar refresh with the modified path
       setShowUploadDialog(false);
       setSelectedFiles([]);
     } catch (err) {
@@ -968,13 +1060,14 @@ const KnowledgebaseBrowser = () => {
                       throw new Error(errorData.detail || 'Failed to update descriptions');
                     }
 
-                    // Refresh the directory contents to show updated descriptions
-                    fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
-                    refreshFileBrowser(); // Trigger sidebar refresh
-                    
-                    // Close the modal
-                    setShowEditDescriptionsModal(false);
-                    setEditingFiles([]);
+                    // Force refresh after description update to get fresh data from API
+      const currentCachePath = currentPath.join('/').replace(/^\//, '');
+      fetchDirectoryContents(currentCachePath, true);
+      refreshFileBrowser(currentCachePath); // Trigger sidebar refresh with the modified path
+      
+      // Close the modal
+      setShowEditDescriptionsModal(false);
+      setEditingFiles([]);
                   } catch (err) {
                     setError(err.message);
                   } finally {

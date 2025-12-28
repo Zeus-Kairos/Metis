@@ -80,6 +80,7 @@ const useChatStore = create((set, get) => {
     error: null,
     showErrorModal: false,
     fileBrowserRefreshTrigger: 0,
+    fileBrowserLastModifiedPath: '',
 
     // Initialize app by getting active user and threads
     initializeApp: async () => {
@@ -811,9 +812,10 @@ const useChatStore = create((set, get) => {
     },
     
     // Trigger file browser refresh
-    refreshFileBrowser: () => {
+    refreshFileBrowser: (path = '') => {
       set((state) => ({
-        fileBrowserRefreshTrigger: state.fileBrowserRefreshTrigger + 1
+        fileBrowserRefreshTrigger: state.fileBrowserRefreshTrigger + 1,
+        fileBrowserLastModifiedPath: path
       }));
     },
     
