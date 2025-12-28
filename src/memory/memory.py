@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Authentication settings
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 10
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 def _get_secret_key() -> str:
     """Get and validate the secret key, raising an error if not set."""

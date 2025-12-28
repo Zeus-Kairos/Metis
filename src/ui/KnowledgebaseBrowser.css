@@ -209,9 +209,9 @@
 }
 
 .kb-items {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .kb-item {
@@ -245,9 +245,55 @@
 .item-name {
   font-size: 14px;
   color: #333;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.item-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.item-title-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.item-uploaded-time {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.item-size {
+  font-size: 12px;
+  color: #666;
+  margin-left: 8px;
+}
+
+.item-description {
+  font-size: 12px;
+  color: #5f6368;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  line-height: 1.4;
+  white-space: normal;
 }
 
 .item-action {
@@ -676,6 +722,42 @@
 .form-group textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+/* Edit Descriptions Modal Styles */
+.edit-descriptions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.edit-description-item {
+  background-color: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e0e0e0;
+}
+
+.edit-description-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.edit-description-item-header .item-icon {
+  font-size: 20px;
+}
+
+.edit-description-item-header .item-name {
+  font-weight: 600;
+  color: #333;
+}
+
+.edit-description-item-header .item-size {
+  font-size: 12px;
+  color: #666;
+  margin-left: 8px;
 }
 
 /* Responsive adjustments */

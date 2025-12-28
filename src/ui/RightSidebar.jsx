@@ -24,7 +24,8 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
     if (!activeKB) return;
     
     const fullPath = folderPath.join('/').replace(/^\//, '');
-    const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(fullPath)}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
+    // Use kb_id instead of knowledge_base name for better performance
+    const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(fullPath)}&kb_id=${activeKB.id}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
     
     if (!response.ok) {
       throw new Error('Failed to fetch directory contents');
@@ -34,22 +35,21 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
     
     // Create children array with folders first, then files
     const children = [
-      // Convert folders to tree items
-      ...(data.folders || []).map(folderName => ({
+      // Convert folders to tree items (now objects with metadata)
+      ...(data.folders || []).map(folder => ({
         type: 'folder',
-        name: folderName,
-        path: [...folderPath, folderName],
+        name: folder.name,
+        path: [...folderPath, folder.name],
         isExpanded: true,
         isLoading: false,
         children: [],
         error: ''
       })),
-      // Convert files to tree items
-      ...(data.files || []).map(fileName => ({
+      // Convert files to tree items (now objects with metadata)
+      ...(data.files || []).map(file => ({
         type: 'file',
-        name: fileName,
-        size: '',
-        path: [...folderPath, fileName]
+        name: file.name,
+        path: [...folderPath, file.name]
       }))
     ];
     

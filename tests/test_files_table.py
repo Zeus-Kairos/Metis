@@ -38,7 +38,7 @@ def test_files_table_operations():
         
         # Create a knowledgebase
         kb_name = f"Test KB {generate_random_string()}"
-        kb_id = memory_manager.create_knowledgebase(user_id, kb_name, "Test knowledgebase")
+        kb_id = memory_manager.knowledgebase_manager.create_knowledgebase(user_id, kb_name, "Test knowledgebase")
         assert kb_id is not None
         
         # Create a test file
@@ -47,7 +47,7 @@ def test_files_table_operations():
         test_parsed_path = "parsed/test_document.json"
         
         # Test adding a file - use the correct method signature
-        file_id = memory_manager.add_file(
+        file_id = memory_manager.knowledgebase_manager.add_file(
             filename=test_filename,
             filepath=test_filepath,
             parsed_path=test_parsed_path,
@@ -58,7 +58,7 @@ def test_files_table_operations():
         assert isinstance(file_id, int)
         
         # Test getting file by ID
-        file = memory_manager.get_file_by_id(file_id)
+        file = memory_manager.knowledgebase_manager.get_file_by_id(file_id)
         assert file is not None
         assert file[0] == file_id  # file_id
         assert file[1] == test_filename  # filename
@@ -68,20 +68,20 @@ def test_files_table_operations():
         assert isinstance(file[4], datetime)  # uploaded_time
         
         # Test getting files by knowledgebase ID (replace user_id with knowledgebase_id)
-        kb_files = memory_manager.get_files_by_knowledgebase_id(kb_id)
+        kb_files = memory_manager.knowledgebase_manager.get_files_by_knowledgebase_id(kb_id)
         assert len(kb_files) > 0
         assert any(f[0] == file_id for f in kb_files)
         
         # Test deleting a file
-        delete_result = memory_manager.delete_file(file_id)
+        delete_result = memory_manager.knowledgebase_manager.delete_file(file_id)
         assert delete_result is True
         
         # Verify file was deleted
-        deleted_file = memory_manager.get_file_by_id(file_id)
+        deleted_file = memory_manager.knowledgebase_manager.get_file_by_id(file_id)
         assert deleted_file is None
         
         # Verify file count decreased
-        updated_kb_files = memory_manager.get_files_by_knowledgebase_id(kb_id)
+        updated_kb_files = memory_manager.knowledgebase_manager.get_files_by_knowledgebase_id(kb_id)
         assert len(updated_kb_files) == len(kb_files) - 1
         
         print("All file table operations tests passed!")

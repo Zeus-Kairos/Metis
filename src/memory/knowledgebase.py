@@ -6,7 +6,6 @@ from psycopg_pool import ConnectionPool
 
 import logging
 
-from src.file_process.utils import get_upload_dir
 logger = logging.getLogger(__name__)
 
 class KnowledgebaseManager:
@@ -115,13 +114,14 @@ class KnowledgebaseManager:
             logger.error(f"Error initializing knowledgebase tables: {e}")
             raise
     
-    def create_knowledgebase(self, user_id: int, name: str, description: str = None, navigation: dict = None) -> int:
+    def create_knowledgebase(self, user_id: int, name: str, root_path:str, description: str = None, navigation: dict = None) -> int:
         """
         Create a new knowledge base for the user.
         
         Args:
             user_id: User identifier
             name: Knowledge base name
+            root_path: Root folder path for the knowledge base
             description: Optional knowledge base description
             navigation: Optional knowledge base navigation structure
             
@@ -150,8 +150,7 @@ class KnowledgebaseManager:
                     )
                     knowledgebase_id = cur.fetchone()[0]
 
-                    # Create root folder
-                    root_path = get_upload_dir(user_id, name, "")
+                    # Create root folder                    
                     cur.execute(
                         """
                         INSERT INTO files (filename, filepath, parsed_path, knowledgebase_id, file_size, description, type, parent)
@@ -398,6 +397,35 @@ class KnowledgebaseManager:
         except Exception as e:
             logger.error(f"Error getting files by knowledgebase ID: {e}")
             raise
+
+    def get_files_by_parent(self, knowledgebase_id: int, parentFolder: str):
+        """
+        Get all files for a specific parent folder.
+        
+        Args:
+            knowledgebase_id: ID of the knowledgebase
+            parentFolder: Path to the parent folder
+            
+        Returns:
+            List of file records with file_id, filename, uploaded_time, file_size, description, and type
+        """
+        parent_id = self.get_parent_id(knowledgebase_id, parentFolder)
+        if not parent_id:
+            return []
+        
+        with self.connection_pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT file_id, filename, uploaded_time, file_size, description, type
+                    FROM files
+                    WHERE knowledgebase_id = %s AND parent = %s
+                    ORDER BY uploaded_time DESC
+                    """,
+                    (knowledgebase_id, parent_id)
+                )
+                files = cur.fetchall()
+                return files
     
     def get_file_by_id(self, file_id: int) -> tuple:
         """
@@ -695,4 +723,58 @@ class KnowledgebaseManager:
                     return cur.rowcount > 0
         except Exception as e:
             logger.error(f"Error deleting knowledgebase: {e}", exc_info=True)
+            raise
+    
+    def update_multiple_descriptions(self, knowledgebase_id: int, updates: List[Dict[str, Any]]) -> bool:
+        """
+        Update descriptions for multiple files and folders in a knowledgebase.
+        
+        Args:
+            knowledgebase_id: ID of the knowledgebase
+            updates: List of dictionaries containing file_id and description
+                     Example: [{"file_id": 1, "description": "Updated description"}, ...]
+            
+        Returns:
+            True if updates were successful
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Check if knowledgebase exists
+                    cur.execute(
+                        "SELECT id FROM knowledgebase WHERE id = %s",
+                        (knowledgebase_id,)
+                    )
+                    if not cur.fetchone():
+                        raise ValueError(f"Knowledgebase ID {knowledgebase_id} does not exist")
+                    
+                    # Prepare the SQL statement for batch update
+                    update_sql = """
+                        UPDATE files
+                        SET description = %s
+                        WHERE file_id = %s AND knowledgebase_id = %s
+                    """
+                    
+                    # Prepare the data for batch execution
+                    update_data = []
+                    for update in updates:
+                        file_id = update.get("file_id")
+                        description = update.get("description")
+                        if file_id is not None:
+                            update_data.append((description, file_id, knowledgebase_id))
+                    
+                    # Execute the batch update
+                    cur.executemany(update_sql, update_data)
+                    
+                    # Update the knowledgebase's updated_at timestamp
+                    cur.execute(
+                        "UPDATE knowledgebase SET updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                        (knowledgebase_id,)
+                    )
+                    
+                    conn.commit()
+                    logger.info(f"Successfully updated {cur.rowcount} descriptions")
+                    return True
+        except Exception as e:
+            logger.error(f"Error updating multiple descriptions: {e}")
             raise

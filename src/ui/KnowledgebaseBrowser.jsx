@@ -9,6 +9,7 @@ const KnowledgebaseBrowser = () => {
   const [currentPath, setCurrentPath] = useState(['']);
   const [folders, setFolders] = useState([]);
   const [files, setFiles] = useState([]);
+  const [fileItems, setFileItems] = useState([]); // Contains files and folders with their descriptions
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
@@ -28,6 +29,10 @@ const KnowledgebaseBrowser = () => {
   const [kbToEditDescription, setKBToEditDescription] = useState(null);
   const [editKBDescription, setEditKBDescription] = useState('');
   
+  // State variables for bulk editing file/folder descriptions
+  const [showEditDescriptionsModal, setShowEditDescriptionsModal] = useState(false);
+  const [editingFiles, setEditingFiles] = useState([]);
+  
   // Update currentKnowledgebase when knowledgebases change
   useEffect(() => {
     const activeKB = knowledgebases.find(kb => kb.is_active);
@@ -41,19 +46,65 @@ const KnowledgebaseBrowser = () => {
     setIsLoading(true);
     setError('');
     try {
-      const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(path)}&knowledge_base=${encodeURIComponent(currentKnowledgebase)}`);
+      // Get the active knowledgebase to get its ID
+      const activeKB = knowledgebases.find(kb => kb.is_active);
+      if (!activeKB) {
+        throw new Error('No active knowledgebase found');
+      }
+      
+      // Call API with kb_id instead of knowledge_base name
+      const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(path)}&kb_id=${activeKB.id}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
       if (!response.ok) {
         throw new Error('Failed to fetch directory contents');
       }
       const data = await response.json();
-      setFolders(data.folders || []);
-      setFiles(data.files || []);
+      
+      // Extract just the names for backward compatibility with existing UI
+      const folderNames = data.folders?.map(folder => folder.name) || [];
+      const fileNames = data.files?.map(file => file.name) || [];
+      
+      setFolders(folderNames);
+      setFiles(fileNames);
+      
+      // Store the full file items with their metadata for display
+      const allItems = [];
+      
+      // Add folders with metadata
+      if (Array.isArray(data.folders)) {
+        data.folders.forEach(folder => {
+          allItems.push({
+            id: folder.id,
+            name: folder.name,
+            type: 'folder',
+            uploaded_time: folder.uploaded_time,
+            description: folder.description
+          });
+        });
+      }
+      
+      // Add files with metadata
+      if (Array.isArray(data.files)) {
+        data.files.forEach(file => {
+          allItems.push({
+            id: file.id,
+            name: file.name,
+            type: 'file',
+            uploaded_time: file.uploaded_time,
+            file_size: file.file_size,
+            description: file.description
+          });
+        });
+      }
+      
+      setFileItems(allItems);
     } catch (err) {
       setError(err.message);
+      // Clear fileItems on error
+      setFileItems([]);
     } finally {
       setIsLoading(false);
     }
-  }, [currentKnowledgebase]);
+  }, [currentKnowledgebase, knowledgebases]);
 
   // Navigate to a folder
   const navigateToFolder = (folderName) => {
@@ -359,6 +410,14 @@ const KnowledgebaseBrowser = () => {
     }
   };
 
+  // Use current directory's items when edit descriptions modal is opened
+  useEffect(() => {
+    if (showEditDescriptionsModal) {
+      // Use the existing fileItems from the current directory
+      setEditingFiles(fileItems);
+    }
+  }, [showEditDescriptionsModal, fileItems]);
+
   // Fetch directory contents when currentPath changes
   useEffect(() => {
     fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
@@ -382,6 +441,13 @@ const KnowledgebaseBrowser = () => {
             disabled={isLoading}
           >
             Upload Files
+          </button>
+          <button 
+            onClick={() => setShowEditDescriptionsModal(true)} 
+            className="kb-btn kb-btn-secondary"
+            disabled={isLoading}
+          >
+            Edit Descriptions
           </button>
         </div>
       </div>
@@ -593,43 +659,65 @@ const KnowledgebaseBrowser = () => {
           <div className="kb-loading">Loading...</div>
         ) : (
           <div className="kb-section">
-            {folders.length + files.length === 0 ? (
+            {fileItems.length === 0 ? (
               <div className="kb-empty">No items found</div>
             ) : (
               <div className="kb-items">
-                {/* Combine folders and files into a single list, sorted with folders first */}
-                {[
-                  ...folders.map(name => ({ name, type: 'folder' })),
-                  ...files.map(name => ({ name, type: 'file' }))
-                ].map((item) => (
-                  <div 
-                    key={`${item.type}-${item.name}`} 
-                    className={`kb-item ${item.type}-item`}
-                  >
+                {/* Sort items: folders first, then files, both by name */}
+                {fileItems
+                  .sort((a, b) => {
+                    // Sort folders before files
+                    if (a.type === 'folder' && b.type !== 'folder') return -1;
+                    if (a.type !== 'folder' && b.type === 'folder') return 1;
+                    // Sort by name
+                    return a.name.localeCompare(b.name);
+                  })
+                  .map((item) => (
                     <div 
-                      className="item-content"
-                      onClick={item.type === 'folder' ? () => navigateToFolder(item.name) : undefined}
+                      key={`${item.type}-${item.name}`} 
+                      className={`kb-item ${item.type}-item`}
                     >
-                      <span className={`item-icon ${item.type}-icon`}>
-                        {item.type === 'folder' ? '📁' : '📄'}
-                      </span>
-                      <span className="item-name">{item.name}</span>
+                      <div 
+                        className="item-content"
+                        onClick={item.type === 'folder' ? () => navigateToFolder(item.name) : undefined}
+                      >
+                        <span className={`item-icon ${item.type}-icon`}>
+                          {item.type === 'folder' ? '📁' : '📄'}
+                        </span>
+                        <div className="item-details">
+                          <div className="item-header">
+                            <div className="item-title-container">
+                              <span className="item-name">{item.name}</span>
+                              {item.type === 'file' && item.file_size && (
+                                <span className="item-size">({(item.file_size / 1024).toFixed(2)} KB)</span>
+                              )}
+                            </div>
+                            {item.uploaded_time && (
+                              <span className="item-uploaded-time">
+                                {new Date(item.uploaded_time).toLocaleString()}
+                              </span>
+                            )}
+                          </div>
+                          {item.description && (
+                            <div className="item-description">{item.description}</div>
+                          )}
+                        </div>
+                      </div>
+                      <button 
+                        className="item-action delete-action"
+                        onClick={() => {
+                          if (item.type === 'folder') {
+                            deleteFolder(item.name);
+                          } else {
+                            deleteFile(item.name);
+                          }
+                        }}
+                        title={`Delete ${item.type}`}
+                      >
+                        🗑️
+                      </button>
                     </div>
-                    <button 
-                      className="item-action delete-action"
-                      onClick={() => {
-                        if (item.type === 'folder') {
-                          deleteFolder(item.name);
-                        } else {
-                          deleteFile(item.name);
-                        }
-                      }}
-                      title={`Delete ${item.type}`}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                ))}
+                  ))}
               </div>
             )}
           </div>
@@ -810,6 +898,123 @@ const KnowledgebaseBrowser = () => {
           </div>
         </div>
       )} */}
+
+      {/* Edit File/Folder Descriptions Modal */}
+      {showEditDescriptionsModal && (
+        <div className="kb-dialog-overlay">
+          <div className="kb-dialog" style={{ maxWidth: '800px', maxHeight: '90vh' }}>
+            <div className="dialog-header">
+              <h3>Edit File & Folder Descriptions</h3>
+              <button 
+                className="dialog-close"
+                onClick={() => {
+                  setShowEditDescriptionsModal(false);
+                  setEditingFiles([]);
+                }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dialog-body" style={{ overflowY: 'auto', maxHeight: '60vh' }}>
+              {isLoading ? (
+                <div className="kb-loading">Loading files...</div>
+              ) : editingFiles.length === 0 ? (
+                <div className="kb-empty">No files found to edit</div>
+              ) : (
+                <div className="edit-descriptions-list">
+                  {editingFiles.map((file) => (
+                    <div key={`${file.type}-${file.id}-${file.name}`} className="edit-description-item">
+                      <div className="edit-description-item-header">
+                        <span className={`item-icon ${file.type}-icon`}>
+                          {file.type === 'folder' ? '📁' : '📄'}
+                        </span>
+                        <span className="item-name">{file.name}</span>
+                        {file.type === 'file' && file.file_size && (
+                          <span className="item-size">({(file.file_size / 1024).toFixed(2)} KB)</span>
+                        )}
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor={`description-${file.id}`}>Description</label>
+                        <textarea
+                          id={`description-${file.id}`}
+                          value={file.description || ''}
+                          onChange={(e) => {
+                            setEditingFiles(prev => prev.map(f => 
+                              f.id === file.id ? { ...f, description: e.target.value } : f
+                            ));
+                          }}
+                          placeholder="Enter description for this file/folder"
+                          rows="3"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="dialog-footer">
+              <button 
+                onClick={() => {
+                  setShowEditDescriptionsModal(false);
+                  setEditingFiles([]);
+                }}
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={async () => {
+                  // Save all updated descriptions
+                  setIsLoading(true);
+                  setError('');
+                  try {
+                    const activeKB = knowledgebases.find(kb => kb.is_active);
+                    if (!activeKB) {
+                      throw new Error('No active knowledgebase found');
+                    }
+
+                    // Prepare the updates array
+                    const updates = editingFiles.map(file => ({
+                      file_id: file.id,
+                      description: file.description || ''
+                    }));
+
+                    // Call the API to update multiple descriptions
+                    const response = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/descriptions`, {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify(updates),
+                    });
+
+                    if (!response.ok) {
+                      const errorData = await response.json().catch(() => ({}));
+                      throw new Error(errorData.detail || 'Failed to update descriptions');
+                    }
+
+                    // Refresh the directory contents to show updated descriptions
+                    fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
+                    refreshFileBrowser(); // Trigger sidebar refresh
+                    
+                    // Close the modal
+                    setShowEditDescriptionsModal(false);
+                    setEditingFiles([]);
+                  } catch (err) {
+                    setError(err.message);
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                className="dialog-primary"
+                disabled={isLoading}
+              >
+                Save All Descriptions
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

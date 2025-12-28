@@ -264,8 +264,9 @@ async def create_knowledgebase(
 ):
     """Create a new knowledge base for the user."""
     try:
+        root_path = get_upload_dir(current_user.id, name, "")
         # Call the create_knowledgebase method
-        knowledgebase_id = memory_manager.knowledgebase_manager.create_knowledgebase(current_user.id, name, description, navigation)
+        knowledgebase_id = memory_manager.knowledgebase_manager.create_knowledgebase(current_user.id, name, root_path, description, navigation)
         return {
             "success": True,
             "knowledgebase_id": knowledgebase_id,
@@ -386,33 +387,44 @@ async def set_active_knowledgebase(
 async def list_directory(
     current_user: Annotated[User, Depends(get_current_active_user)],
     path: str = "",
+    kb_id: int = None,
     knowledge_base: str = "default"
 ):
     """List directory contents for a knowledgebase"""
-    try:       
-        # Get the upload directory path
-        upload_dir = get_upload_dir(current_user.id, knowledge_base, path)
+    try:                
+        # Get the upload directory path using the knowledgebase name
+        parent_folder = get_upload_dir(current_user.id, knowledge_base, path)
         
-        # Check if directory exists
-        if not os.path.exists(upload_dir):
-            return {
-                "success": True,
-                "folders": [],
-                "files": []
-            }
-        
-        # Get directory contents
-        items = os.listdir(upload_dir)
+        # Use get_files_by_parent to get the items from database
+        items = memory_manager.knowledgebase_manager.get_files_by_parent(kb_id, parent_folder)
         
         folders = []
         files = []
         
+        # Process the files and folders
         for item in items:
-            item_path = os.path.join(upload_dir, item)
-            if os.path.isdir(item_path):
-                folders.append(item)
+            file_id = item[0]  # file_id is at index 0
+            filename = item[1]  # filename is at index 1
+            uploaded_time = item[2]  # uploaded_time is at index 2
+            file_size = item[3]  # file_size is at index 3
+            description = item[4]  # description is at index 4
+            type = item[5]  # type is at index 5
+            
+            if type == 'folder':
+                folders.append({
+                    "id": file_id,
+                    "name": filename,
+                    "uploaded_time": uploaded_time.isoformat() if uploaded_time else None,
+                    "description": description
+                })
             else:
-                files.append(item)
+                files.append({
+                    "id": file_id,
+                    "name": filename,
+                    "uploaded_time": uploaded_time.isoformat() if uploaded_time else None,
+                    "file_size": file_size,
+                    "description": description
+                })
         
         return {
             "success": True,
@@ -594,6 +606,30 @@ async def upload_files(
 
 
 
+
+# API endpoint to update multiple file/folder descriptions
+@app.put("/api/knowledgebase/{kb_id}/descriptions")
+async def update_multiple_descriptions(
+    kb_id: int,  
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    updates: List[Dict[str, Any]] = Body(...),
+):
+    """Update descriptions for multiple files and folders in a knowledgebase."""
+    try:
+        # Use the KnowledgebaseManager method to update multiple descriptions
+        success = memory_manager.knowledgebase_manager.update_multiple_descriptions(kb_id, updates)
+        if success:
+            return {
+                "success": True,
+                "message": "Descriptions updated successfully"
+            }
+        return {
+            "success": False,
+            "message": "Failed to update descriptions"
+        }
+    except Exception as e:
+        logger.error(f"Error updating multiple descriptions: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Health check endpoint
 @app.get("/health")
