@@ -49,7 +49,7 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
     
     try {
       // Use kb_id instead of knowledge_base name for better performance
-      const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(fullPath)}&kb_id=${activeKB.id}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
+      const response = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/list?path=${encodeURIComponent(fullPath)}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
       
       if (!response.ok) {
         throw new Error(`Failed to fetch directory contents: ${response.status}`);

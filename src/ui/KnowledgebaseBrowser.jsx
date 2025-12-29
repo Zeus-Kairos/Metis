@@ -82,7 +82,7 @@ const KnowledgebaseBrowser = () => {
       const oldItems = directoryCacheRef.current[cacheKey] || [];
       
       // Call API with kb_id instead of knowledge_base name
-      const response = await fetchWithAuth(`/api/knowledgebase/list?path=${encodeURIComponent(path)}&kb_id=${activeKB.id}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
+      const response = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/list?path=${encodeURIComponent(path)}&knowledge_base=${encodeURIComponent(activeKB.name)}`);
       if (!response.ok) {
         throw new Error('Failed to fetch directory contents');
       }
@@ -180,8 +180,9 @@ const KnowledgebaseBrowser = () => {
     setIsLoading(true);
     setError('');
     try {
+      const activeKB = knowledgebases.find(kb => kb.name === currentKnowledgebase);
       const fullPath = currentPath.join('/').replace(/^\//, '');
-      const response = await fetchWithAuth('/api/knowledgebase/folder', {
+      const response = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/folder`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -216,8 +217,9 @@ const KnowledgebaseBrowser = () => {
       setIsLoading(true);
       setError('');
       try {
+        const activeKB = knowledgebases.find(kb => kb.name === currentKnowledgebase);
         const fullPath = [...currentPath, folderName].join('/').replace(/^\//, '');
-        const response = await fetchWithAuth('/api/knowledgebase/folder', {
+        const response = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/folder`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
@@ -234,7 +236,6 @@ const KnowledgebaseBrowser = () => {
         }
 
         // Clear cache for the deleted folder and all its subfolders recursively
-        const activeKB = knowledgebases.find(kb => kb.is_active);
         if (activeKB) {
           // Create cache key prefix for the deleted folder and its subfolders
           const deletedCachePrefix = `${activeKB.id}:${fullPath}`;
@@ -259,9 +260,9 @@ const KnowledgebaseBrowser = () => {
         }
 
         // Force refresh after folder deletion to get fresh data from API
-      const currentCachePath = currentPath.join('/').replace(/^\//, '');
-      fetchDirectoryContents(currentCachePath, true);
-      refreshFileBrowser(currentCachePath); // Trigger sidebar refresh with the modified path
+        const currentCachePath = currentPath.join('/').replace(/^\//, '');
+        fetchDirectoryContents(currentCachePath, true);
+        refreshFileBrowser(currentCachePath); // Trigger sidebar refresh with the modified path
       } catch (err) {
         setError(err.message);
       } finally {
@@ -286,8 +287,9 @@ const KnowledgebaseBrowser = () => {
       setIsLoading(true);
       setError('');
       try {
+        const activeKB = knowledgebases.find(kb => kb.name === currentKnowledgebase);
         const fullPath = [...currentPath, fileName].join('/').replace(/^\//, '');
-        const response = await fetchWithAuth('/api/knowledgebase/file', {
+        const response = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/file`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
@@ -304,10 +306,10 @@ const KnowledgebaseBrowser = () => {
         }
 
         // Clear cache for the current directory and refresh contents
-      // Force refresh after folder deletion to get fresh data from API
-      const currentCachePath = currentPath.join('/').replace(/^\//, '');
-      fetchDirectoryContents(currentCachePath, true);
-      refreshFileBrowser(currentCachePath); // Trigger sidebar refresh with the modified path
+        // Force refresh after file deletion to get fresh data from API
+        const currentCachePath = currentPath.join('/').replace(/^\//, '');
+        fetchDirectoryContents(currentCachePath, true);
+        refreshFileBrowser(currentCachePath); // Trigger sidebar refresh with the modified path
       } catch (err) {
         setError(err.message);
       } finally {

@@ -383,11 +383,11 @@ async def set_active_knowledgebase(
         raise HTTPException(status_code=400, detail=str(e))
 
 # Knowledgebase endpoints
-@app.get("/api/knowledgebase/list")
+@app.get("/api/knowledgebase/{kb_id}/list")
 async def list_directory(
     current_user: Annotated[User, Depends(get_current_active_user)],
+    kb_id: int,
     path: str = "",
-    kb_id: int = None,
     knowledge_base: str = "default"
 ):
     """List directory contents for a knowledgebase"""
@@ -435,9 +435,10 @@ async def list_directory(
         logger.error(f"Error listing directory: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.post("/api/knowledgebase/folder")
+@app.post("/api/knowledgebase/{kb_id}/folder")
 async def create_folder(
     current_user: Annotated[User, Depends(get_current_active_user)],
+    kb_id: int,
     name: str = Body(..., description="Folder name"),
     parentPath: str = Body("", description="Parent path"),
     knowledge_base: str = Body("default", description="Knowledge base name")
@@ -476,9 +477,10 @@ async def create_folder(
         logger.error(f"Error creating folder: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.delete("/api/knowledgebase/folder")
+@app.delete("/api/knowledgebase/{kb_id}/folder")
 async def delete_folder(
     current_user: Annotated[User, Depends(get_current_active_user)],
+    kb_id: int,
     path: str = Body(..., description="Folder path"),
     knowledge_base: str = Body("default", description="Knowledge base name")
 ):
@@ -514,9 +516,10 @@ async def delete_folder(
         logger.error(f"Error deleting folder: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.delete("/api/knowledgebase/file")
+@app.delete("/api/knowledgebase/{kb_id}/file")
 async def delete_file(
     current_user: Annotated[User, Depends(get_current_active_user)],
+    kb_id: int,
     path: str = Body(..., description="File path"),
     knowledge_base: str = Body("default", description="Knowledge base name")
 ):
