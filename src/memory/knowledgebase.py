@@ -487,7 +487,7 @@ class KnowledgebaseManager:
             logger.error(f"Error deleting files by path prefix: {e}")
             raise
     
-    def delete_file_by_path(self, filepath: str) -> bool:
+    def delete_file_by_path(self, filepath: str) -> int:
         """
         Delete a file by filepath.
         
@@ -495,29 +495,20 @@ class KnowledgebaseManager:
             filepath: Path of the file
             
         Returns:
-            True if deletion was successful, False otherwise
+            file_id if deletion was successful, None otherwise
         """
         try:
             with self.connection_pool.connection() as conn:
                 with conn.cursor() as cur:
-                    # Get the knowledgebase_id for the file before deleting it
+                    # Delete the file and return file_id and knowledgebase_id
                     cur.execute(
-                        "SELECT knowledgebase_id FROM files WHERE filepath = %s",
+                        "DELETE FROM files WHERE filepath = %s RETURNING file_id, knowledgebase_id",
                         (filepath,)
                     )
-                    file = cur.fetchone()
-                    if not file:
-                        return False
+                    deleted_file = cur.fetchone()
                     
-                    knowledgebase_id = file[0]
-                    
-                    # Delete the file
-                    cur.execute(
-                        "DELETE FROM files WHERE filepath = %s",
-                        (filepath,)
-                    )
-                    
-                    if cur.rowcount > 0:
+                    if deleted_file:
+                        file_id, knowledgebase_id = deleted_file
                         # Update the knowledgebase's updated_at timestamp
                         cur.execute(
                             "UPDATE knowledgebase SET updated_at = CURRENT_TIMESTAMP WHERE id = %s",
@@ -525,7 +516,7 @@ class KnowledgebaseManager:
                         )
                     
                     conn.commit()
-                    return cur.rowcount > 0
+                    return file_id
         except Exception as e:
             logger.error(f"Error deleting file by path: {e}")
             raise

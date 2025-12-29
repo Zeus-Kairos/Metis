@@ -550,7 +550,8 @@ async def delete_file(
                 else:
                     os.remove(item)
         
-        memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
+        file_id = memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
+
         
         return {
             "success": True,
@@ -585,28 +586,6 @@ async def delete_knowledgebase(
         logger.error(f"Error deleting knowledgebase: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# API endpoint for file uploads
-@app.post("/api/upload")
-async def upload_files(
-    current_user: Annotated[User, Depends(get_current_active_user)],
-    knowledge_base: str = Form(...),
-    directory: str = Form(""),
-    files: List[UploadFile] = File(...)
-):
-    """Upload one or more files to a knowledge base."""
-    try:
-        # Call the upload handler
-        pipeline = FileProcessingPipeline()
-        result = await pipeline.process_files(current_user.id, knowledge_base, files, directory)
-        return result
-    except Exception as e:
-        logger.error(f"Error processing upload: {e}")
-        # Return an error response with status code 400
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-
-
 # API endpoint to update multiple file/folder descriptions
 @app.put("/api/knowledgebase/{kb_id}/descriptions")
 async def update_multiple_descriptions(
@@ -630,6 +609,26 @@ async def update_multiple_descriptions(
     except Exception as e:
         logger.error(f"Error updating multiple descriptions: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+
+# API endpoint for file uploads
+@app.post("/api/upload")
+async def upload_files(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    knowledge_base: str = Form(...),
+    directory: str = Form(""),
+    files: List[UploadFile] = File(...)
+):
+    """Upload one or more files to a knowledge base."""
+    try:
+        # Call the upload handler
+        pipeline = FileProcessingPipeline()
+        result = await pipeline.process_files(current_user.id, knowledge_base, files, directory)
+        return result
+    except Exception as e:
+        logger.error(f"Error processing upload: {e}")
+        # Return an error response with status code 400
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 # Health check endpoint
 @app.get("/health")
