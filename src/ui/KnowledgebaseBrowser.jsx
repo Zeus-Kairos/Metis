@@ -499,29 +499,6 @@ const KnowledgebaseBrowser = () => {
     <div className="knowledgebase-browser">
       <div className="kb-header">
         <h2>Knowledge Base</h2>
-        <div className="kb-actions">
-          <button 
-            onClick={() => setShowNewFolderInput(true)} 
-            className="kb-btn kb-btn-primary"
-            disabled={isLoading}
-          >
-            New Folder
-          </button>
-          <button 
-            onClick={() => setShowUploadDialog(true)} 
-            className="kb-btn kb-btn-secondary"
-            disabled={isLoading}
-          >
-            Upload Files
-          </button>
-          <button 
-            onClick={() => setShowEditDescriptionsModal(true)} 
-            className="kb-btn kb-btn-secondary"
-            disabled={isLoading}
-          >
-            Edit Descriptions
-          </button>
-        </div>
       </div>
 
       {error && <div className="kb-error">{error}</div>}
@@ -677,23 +654,49 @@ const KnowledgebaseBrowser = () => {
 
       {/* Breadcrumb Navigation */}
       <div className="kb-breadcrumb">
-        <span 
-          className="breadcrumb-item"
-          onClick={() => setCurrentPath([''])}
-        >
-          Root
-        </span>
-        {currentPath.slice(1).map((folder, index) => (
-          <React.Fragment key={index}>
-            <span className="breadcrumb-separator">/</span>
-            <span 
-              className="breadcrumb-item"
-              onClick={() => setCurrentPath(currentPath.slice(0, index + 2))}
-            >
-              {folder}
-            </span>
-          </React.Fragment>
-        ))}
+        <div className="kb-breadcrumb-content">
+          <span 
+            className="breadcrumb-item"
+            onClick={() => setCurrentPath([''])}
+          >
+            Root
+          </span>
+          {currentPath.slice(1).map((folder, index) => (
+            <React.Fragment key={index}>
+              <span className="breadcrumb-separator">/</span>
+              <span 
+                className="breadcrumb-item"
+                onClick={() => setCurrentPath(currentPath.slice(0, index + 2))}
+              >
+                {folder}
+              </span>
+            </React.Fragment>
+          ))}
+        </div>
+        
+        <div className="kb-breadcrumb-actions">
+          <button 
+            onClick={() => setShowNewFolderInput(true)} 
+            className="kb-btn kb-btn-primary kb-breadcrumb-btn"
+            disabled={isLoading}
+          >
+            New Folder
+          </button>
+          <button 
+            onClick={() => setShowUploadDialog(true)} 
+            className="kb-btn kb-btn-secondary kb-breadcrumb-btn"
+            disabled={isLoading}
+          >
+            Upload Files
+          </button>
+          <button 
+            onClick={() => setShowEditDescriptionsModal(true)} 
+            className="kb-btn kb-btn-secondary kb-breadcrumb-btn"
+            disabled={isLoading}
+          >
+            Edit Descriptions
+          </button>
+        </div>
       </div>
 
       {/* New Folder Input */}
