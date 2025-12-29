@@ -40,12 +40,18 @@ class Indexer:
         self.delete_file_chunks(file_ids)
 
         all_chunks = [chunk for chunk_list in chunks.values() for chunk in chunk_list]
-        chunk_ids = [chunk.metadata['chunk_id'] for chunk in all_chunks]
-        self.vectorstore.add_documents(documents=all_chunks, ids=chunk_ids)
-        self.all_docs.extend(all_chunks)
+        
+        # Only add documents if there are chunks to index
+        if all_chunks:
+            chunk_ids = [chunk.metadata['chunk_id'] for chunk in all_chunks]
+            self.vectorstore.add_documents(documents=all_chunks, ids=chunk_ids)
+            self.all_docs.extend(all_chunks)
+            logger.info(f"Index {len(all_chunks)} chunks for {len(file_ids)} files")
+            logger.info(f"Total {len(self.all_docs)} chunks in vectorstore")
+        else:
+            logger.info("No chunks to index")
+        
         self.vectorstore.save_local(self.index_path)
-        logger.info(f"Index {len(all_chunks)} chunks for {len(file_ids)} files")
-        logger.info(f"Total {len(self.all_docs)} chunks in vectorstore")
         return self.vectorstore
 
     def delete_file_chunks(self, file_ids: List[int]) -> None:
