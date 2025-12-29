@@ -40,22 +40,10 @@ class KnowledgebaseManager:
                             navigation JSON,
                             is_active BOOLEAN DEFAULT FALSE,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT knowledgebase_user_id_name_key UNIQUE (user_id, name)
                         )
                     """)
-                    
-                    # Add unique constraint to knowledgebase (user_id, name) if it doesn't exist
-                    cur.execute("""
-                        SELECT constraint_name 
-                        FROM information_schema.table_constraints 
-                        WHERE table_name = 'knowledgebase' 
-                        AND constraint_name = 'knowledgebase_user_id_name_key';
-                    """)
-                    if not cur.fetchone():
-                        cur.execute("""
-                            ALTER TABLE knowledgebase 
-                            ADD CONSTRAINT knowledgebase_user_id_name_key UNIQUE (user_id, name);
-                        """)
                     
                     # Create kb_thread table for knowledgebase-thread mapping (one-to-many)
                     cur.execute("""
@@ -79,7 +67,7 @@ class KnowledgebaseManager:
                         CREATE TABLE IF NOT EXISTS files (
                             file_id SERIAL PRIMARY KEY,
                             filename VARCHAR(255) NOT NULL,
-                            filepath TEXT NOT NULL,
+                            filepath TEXT NOT NULL UNIQUE,
                             parsed_path TEXT NOT NULL,
                             uploaded_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             knowledgebase_id INTEGER NOT NULL,
@@ -93,22 +81,14 @@ class KnowledgebaseManager:
                         )
                     """)
                     
-                    # Create unique constraint on filepath if it doesn't exist
-                    cur.execute("""
-                        SELECT constraint_name 
-                        FROM information_schema.table_constraints 
-                        WHERE table_name = 'files' 
-                        AND constraint_name = 'files_filepath_key';
-                    """)
-                    if not cur.fetchone():
-                        cur.execute("""
-                            ALTER TABLE files 
-                            ADD CONSTRAINT files_filepath_key UNIQUE (filepath);
-                        """)
-                    
                     # Create index on files.knowledgebase_id for efficient queries
                     cur.execute("""
                         CREATE INDEX IF NOT EXISTS idx_files_knowledgebase_id ON files(knowledgebase_id)
+                    """)
+                    
+                    # Create index on files.filepath for efficient queries
+                    cur.execute("""
+                        CREATE INDEX IF NOT EXISTS idx_files_filepath ON files(filepath)
                     """)
         except Exception as e:
             logger.error(f"Error initializing knowledgebase tables: {e}")
@@ -298,24 +278,14 @@ class KnowledgebaseManager:
         """
         try:
             with self.connection_pool.connection() as conn:
-                with conn.cursor() as cur:
-                    
-                    # Check if knowledgebase exists
-                    cur.execute(
-                        "SELECT id FROM knowledgebase WHERE id = %s",
-                        (knowledgebase_id,)
-                    )
-                    if not cur.fetchone():
-                        raise ValueError(f"Knowledgebase ID {knowledgebase_id} does not exist")
-                    
-                    # Resolve parent folder ID from parentFolder path
-                    parent_id = self.get_parent_id(knowledgebase_id, parentFolder)
-
-                    # Insert the file record with UPSERT (update if filepath exists)
+                with conn.cursor() as cur:                    
+                    # Insert the file record with UPSERT (update if filepath exists), using subquery to get parent ID
                     cur.execute(
                         """
                         INSERT INTO files (filename, filepath, parsed_path, knowledgebase_id, file_size, description, type, parent)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, 
+                            (SELECT file_id FROM files WHERE filepath = %s AND knowledgebase_id = %s AND type = 'folder')
+                        )
                         ON CONFLICT (filepath) DO UPDATE
                         SET filename = EXCLUDED.filename,
                             parsed_path = EXCLUDED.parsed_path,
@@ -326,7 +296,7 @@ class KnowledgebaseManager:
                             uploaded_time = CURRENT_TIMESTAMP
                         RETURNING file_id
                         """,
-                        (filename, filepath, parsed_path, knowledgebase_id, file_size, description, type, parent_id)
+                        (filename, filepath, parsed_path, knowledgebase_id, file_size, description, type, parentFolder, knowledgebase_id)
                     )
                     file_id = cur.fetchone()[0]
                     
@@ -340,34 +310,6 @@ class KnowledgebaseManager:
                     return file_id
         except Exception as e:
             logger.error(f"Error adding file: {e}")
-            raise
-
-    def get_parent_id(self, knowledgebase_id: int, parentFolder: str) -> int:
-        """
-        Get the parent folder ID for a given path.
-        
-        Args:
-            knowledgebase_id: ID of the knowledgebase
-            parentFolder: Path to the parent folder
-                       
-        Returns:
-            Parent folder ID if found, None otherwise
-        """
-        try:
-            with self.connection_pool.connection() as conn:
-                with conn.cursor() as cur:
-                    # Find the parent folder by its filepath
-                    cur.execute(
-                        "SELECT file_id FROM files WHERE filepath = %s AND knowledgebase_id = %s AND type = 'folder'",
-                        (parentFolder, knowledgebase_id)
-                    )
-                    parent = cur.fetchone()
-                    if parent:
-                        return parent[0]
-                    else:
-                        return None
-        except Exception as e:
-            logger.error(f"Error getting parent folder ID: {e}")
             raise
     
     def get_files_by_knowledgebase_id(self, knowledgebase_id: int) -> list:
@@ -409,20 +351,20 @@ class KnowledgebaseManager:
         Returns:
             List of file records with file_id, filename, uploaded_time, file_size, description, and type
         """
-        parent_id = self.get_parent_id(knowledgebase_id, parentFolder)
-        if not parent_id:
-            return []
-        
         with self.connection_pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT file_id, filename, uploaded_time, file_size, description, type
-                    FROM files
-                    WHERE knowledgebase_id = %s AND parent = %s
-                    ORDER BY uploaded_time DESC
+                    SELECT f.file_id, f.filename, f.uploaded_time, f.file_size, f.description, f.type
+                    FROM files f
+                    JOIN files parent_f ON parent_f.file_id = f.parent
+                    WHERE f.knowledgebase_id = %s 
+                    AND parent_f.knowledgebase_id = %s 
+                    AND parent_f.filepath = %s
+                    AND parent_f.type = 'folder'
+                    ORDER BY f.uploaded_time DESC
                     """,
-                    (knowledgebase_id, parent_id)
+                    (knowledgebase_id, knowledgebase_id, parentFolder)
                 )
                 files = cur.fetchall()
                 return files
