@@ -90,6 +90,8 @@ class KnowledgebaseManager:
                     cur.execute("""
                         CREATE INDEX IF NOT EXISTS idx_files_filepath ON files(filepath)
                     """)
+
+                    conn.commit()
         except Exception as e:
             logger.error(f"Error initializing knowledgebase tables: {e}")
             raise
@@ -437,6 +439,38 @@ class KnowledgebaseManager:
                     return cur.rowcount > 0
         except Exception as e:
             logger.error(f"Error deleting file: {e}")
+            raise
+
+    def get_files_by_path_prefix(self, path_prefix: str) -> List[int]:
+        """
+        Get all file IDs with filepath starting with the given prefix.
+        
+        Args:
+            path_prefix: The path prefix to match
+            
+        Returns:
+            List of file IDs that match the path prefix
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    logger.debug(f"Path prefix: {path_prefix}")
+                    
+                    # Properly escape backslashes for SQL LIKE pattern
+                    # Also handle both Windows and Unix path formats
+                    path_prefix_windows = path_prefix.replace('\\', '\\\\')
+                    path_prefix_unix = path_prefix.replace('\\', '/')
+                    
+                    # Get file IDs for both Windows and Unix path formats
+                    cur.execute(
+                        "SELECT file_id FROM files WHERE type = 'file' AND (filepath ILIKE %s OR filepath ILIKE %s)",
+                        (f"{path_prefix_windows}%", f"{path_prefix_unix}%")
+                    )
+                    file_ids = [row[0] for row in cur.fetchall()]
+                    logger.debug(f"File IDs: {file_ids}")
+                    return file_ids
+        except Exception as e:
+            logger.error(f"Error getting files by path prefix: {e}")
             raise
     
     def delete_files_by_path_prefix(self, path_prefix: str) -> int:

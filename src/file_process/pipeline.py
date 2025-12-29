@@ -14,11 +14,12 @@ logger = get_logger(__name__)
 class FileProcessingPipeline:
     """Pipeline that orchestrates file upload and parsing using separate components."""
     
-    def __init__(self):
+    def __init__(self, indexer: Indexer, memory_manager: MemoryManager = None):
         self.file_uploader = FileUploader()
         self.file_parser = FileParser()
         self.file_splitter = FileSplitter()
-        self.memory_manager = MemoryManager()
+        self.memory_manager = memory_manager or MemoryManager()
+        self.indexer = indexer
     
     async def process_files(self, user_id: int, knowledge_base: str, files: List[UploadFile], directory: str = "") -> Dict[str, Any]:
         """Process files through the complete pipeline: upload -> parse."""
@@ -99,7 +100,6 @@ class FileProcessingPipeline:
                 file_result["parsing_error"] = "File type not parsable"
 
         # Step 5: Index chunks
-        self.indexer = Indexer(get_index_path(user_id, knowledge_base))
         vectorstore = self.indexer.index_chunks(all_documents)
         
         # Add non-parsable files to the results with appropriate status

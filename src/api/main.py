@@ -12,7 +12,8 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
-from src.file_process.utils import get_upload_dir, get_parsed_path
+from src.file_process.indexer import Indexer
+from src.file_process.utils import get_index_path, get_upload_dir, get_parsed_path
 from src.file_process.pipeline import FileProcessingPipeline
 from src.memory.memory import MemoryManager
 from src.memory.thread import ThreadManager
@@ -79,6 +80,15 @@ app.include_router(thread_router)
 
 # Initialize MemoryManager
 memory_manager = MemoryManager()
+
+indexers = {}
+
+def get_indexer(user_id: int, knowledge_base: str) -> Indexer:
+    """Get or create an Indexer for the given user and knowledge base."""
+    indexer_key = f"{user_id}_{knowledge_base}"
+    if indexer_key not in indexers:
+        indexers[indexer_key] = Indexer(get_index_path(user_id, knowledge_base))
+    return indexers[indexer_key]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -503,6 +513,10 @@ async def delete_folder(
         if os.path.exists(parsed_folder_path):
             shutil.rmtree(parsed_folder_path)
         
+        # Get all file IDs under this folder path before files are deleted from database
+        file_ids = memory_manager.knowledgebase_manager.get_files_by_path_prefix(folder_path)
+        indexer = get_indexer(current_user.id, knowledge_base)
+        indexer.delete_file_chunks(file_ids)
         # Delete all database records for files under this folder
         memory_manager.knowledgebase_manager.delete_file_by_path(folder_path)
         
@@ -554,7 +568,8 @@ async def delete_file(
                     os.remove(item)
         
         file_id = memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
-
+        indexer = get_indexer(current_user.id, knowledge_base)
+        indexer.delete_file_chunks([file_id])
         
         return {
             "success": True,
@@ -624,7 +639,8 @@ async def upload_files(
     """Upload one or more files to a knowledge base."""
     try:
         # Call the upload handler
-        pipeline = FileProcessingPipeline()
+        indexer = get_indexer(current_user.id, knowledge_base)
+        pipeline = FileProcessingPipeline(indexer, memory_manager)
         result = await pipeline.process_files(current_user.id, knowledge_base, files, directory)
         return result
     except Exception as e:

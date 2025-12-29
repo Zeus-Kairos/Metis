@@ -3,14 +3,11 @@ import asyncio
 import pytest
 from fastapi import UploadFile
 from io import BytesIO
+from src.file_process.indexer import Indexer
 from src.file_process.pipeline import FileProcessingPipeline
 from src.file_process.utils import SUPPORTED_FORMATS
+from src.file_process.utils import get_index_path
 from src.memory.memory import MemoryManager
-
-@pytest.fixture
-def pipeline():
-    """Create a FileProcessingPipeline instance for testing."""
-    return FileProcessingPipeline()
 
 @pytest.fixture
 def memory_manager():
@@ -46,7 +43,7 @@ def mock_upload_files(test_files_dir):
     return upload_files
 
 @pytest.mark.asyncio
-async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir, memory_manager):
+async def test_pipeline_with_supported_files(mock_upload_files, tmpdir, memory_manager):
     """Test the pipeline with supported test files."""
     # Create test user if not exists
     username = "test_user"
@@ -76,15 +73,14 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
     # Create knowledgebase if not exists
     kb_name = "test_pipeline_kb"
     try:
-        memory_manager.create_knowledgebase(user_id, kb_name, "Test pipeline knowledgebase")
+        memory_manager.knowledgebase_manager.create_knowledgebase(user_id, kb_name, "Test pipeline knowledgebase")
         print(f"Successfully created knowledgebase")
     except Exception as e:
         print(f"Knowledgebase might already exist: {e}")
-        kb_id = memory_manager.get_knowledgebase_id(user_id, kb_name)
-        print(f"Using existing knowledgebase with ID: {kb_id}")
     
     try:
         # Process files through pipeline
+        pipeline = FileProcessingPipeline(Indexer(get_index_path(user_id, kb_name)), MemoryManager())
         result = await pipeline.process_files(
             user_id=user_id,
             knowledge_base=kb_name,
@@ -129,7 +125,7 @@ async def test_pipeline_with_supported_files(pipeline, mock_upload_files, tmpdir
                 print(f"Cleanup error: {e}")
 
 @pytest.mark.asyncio
-async def test_pipeline_with_mixed_files(pipeline, test_files_dir, memory_manager):
+async def test_pipeline_with_mixed_files(test_files_dir, memory_manager):
     """Test the pipeline with both supported and unsupported files."""
     # Create test user if not exists
     username = "test_user_2"
@@ -159,12 +155,10 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir, memory_manage
     # Create knowledgebase if not exists
     kb_name = "test_mixed_files_kb"
     try:
-        memory_manager.create_knowledgebase(user_id, kb_name, "Test mixed files knowledgebase")
+        memory_manager.knowledgebase_manager.create_knowledgebase(user_id, kb_name, "Test mixed files knowledgebase")
         print(f"Successfully created knowledgebase")
     except Exception as e:
         print(f"Knowledgebase might already exist: {e}")
-        kb_id = memory_manager.get_knowledgebase_id(user_id, kb_name)
-        print(f"Using existing knowledgebase with ID: {kb_id}")
     
     try:
         upload_files = []
@@ -194,6 +188,7 @@ async def test_pipeline_with_mixed_files(pipeline, test_files_dir, memory_manage
         print(f"Using {len(mock_upload_files)} supported files for processing")
         
         # Process files through pipeline
+        pipeline = FileProcessingPipeline(Indexer(get_index_path(user_id, kb_name)), MemoryManager())
         result = await pipeline.process_files(
             user_id=user_id,
             knowledge_base=kb_name,
