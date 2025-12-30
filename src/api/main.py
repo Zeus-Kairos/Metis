@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager
 from src.file_process.indexer import Indexer
 from src.file_process.utils import get_index_path, get_upload_dir, get_parsed_path
 from src.file_process.pipeline import FileProcessingPipeline
+from src.file_process.parallel_pipeline import ParallelFileProcessingPipeline
 from src.memory.memory import MemoryManager
 from src.memory.thread import ThreadManager
 from src.utils.logging_config import get_logger
@@ -648,6 +649,34 @@ async def upload_files(
         # Return an error response with status code 400
         raise HTTPException(status_code=400, detail=str(e))
 
+
+# API endpoint for streaming file uploads
+@app.post("/api/stream-upload")
+async def stream_upload_files(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    knowledge_base: str = Form(...),
+    directory: str = Form(""),
+    files: List[UploadFile] = File(...)
+):
+    """Upload one or more files to a knowledge base and stream results as they complete."""
+    try:
+        from fastapi.responses import StreamingResponse
+        import json
+        
+        # Call the parallel processing pipeline
+        indexer = get_indexer(current_user.id, knowledge_base)
+        pipeline = ParallelFileProcessingPipeline(indexer, memory_manager)
+        
+        # Helper function to generate JSON lines
+        async def generate():
+            async for result in pipeline.process_files(current_user.id, knowledge_base, files, directory):
+                yield json.dumps(result) + "\n"
+        
+        return StreamingResponse(generate(), media_type="application/x-ndjson")
+    except Exception as e:
+        logger.error(f"Error in stream upload: {e}")
+        # Return an error response with status code 400
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Health check endpoint
 @app.get("/health")

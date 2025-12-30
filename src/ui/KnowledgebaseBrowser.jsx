@@ -14,6 +14,8 @@ const KnowledgebaseBrowser = () => {
   const [newFolderName, setNewFolderName] = useState('');
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
+  const [uploadResults, setUploadResults] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
   // New state variables for knowledgebase management
   const [showCreateKBModal, setShowCreateKBModal] = useState(false);
   const [newKBName, setNewKBName] = useState('');
@@ -333,7 +335,7 @@ const KnowledgebaseBrowser = () => {
     setSelectedFiles(Array.from(e.target.files));
   };
 
-  // Upload files to the current directory
+  // Upload files to the current directory (traditional approach)
   const uploadFiles = async () => {
     if (selectedFiles.length === 0) return;
 
@@ -381,6 +383,83 @@ const KnowledgebaseBrowser = () => {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Upload files with streaming response (real-time results)
+  const uploadFilesWithStream = async () => {
+    if (selectedFiles.length === 0) return;
+
+    setIsUploading(true);
+    setUploadResults([]);
+    setError('');
+    
+    try {
+      const formData = new FormData();
+      const fullPath = currentPath.join('/').replace(/^\//, '');
+      
+      formData.append('knowledge_base', currentKnowledgebase);
+      formData.append('directory', fullPath);
+      
+      selectedFiles.forEach((file) => {
+        formData.append('files', file);
+      });
+
+      // Use fetchWithAuth which already handles streaming and FormData correctly
+      const response = await fetchWithAuth('/api/stream-upload', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Upload failed');
+      }
+
+      // Read the response as a stream
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      // Process the stream line by line
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Split buffer by newlines
+        const lines = buffer.split('\n');
+        // Keep the last incomplete line in buffer
+        buffer = lines.pop();
+
+        // Process each complete line
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const result = JSON.parse(line);
+              setUploadResults(prev => [...prev, result]);
+            } catch (parseError) {
+              console.error('Error parsing upload result:', parseError);
+            }
+          }
+        }
+      }
+
+      // Force refresh after all files are processed
+      fetchDirectoryContents(fullPath, true);
+      refreshFileBrowser(fullPath); // Trigger sidebar refresh with the modified path
+      
+      // Close dialog automatically after all files are processed
+      setTimeout(() => {
+        setShowUploadDialog(false);
+        setSelectedFiles([]);
+        setUploadResults([]);
+      }, 1000); // Short delay to allow users to see the final results
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -798,7 +877,7 @@ const KnowledgebaseBrowser = () => {
       {/* Upload Dialog */}
       {showUploadDialog && (
         <div className="kb-dialog-overlay">
-          <div className="kb-dialog">
+          <div className="kb-dialog" style={{ maxWidth: '700px' }}>
             <div className="dialog-header">
               <h3>Upload Files</h3>
               <button 
@@ -806,6 +885,7 @@ const KnowledgebaseBrowser = () => {
                 onClick={() => {
                   setShowUploadDialog(false);
                   setSelectedFiles([]);
+                  setUploadResults([]);
                 }}
               >
                 ×
@@ -817,6 +897,7 @@ const KnowledgebaseBrowser = () => {
                 multiple
                 onChange={handleFileSelect}
                 className="file-input"
+                disabled={isUploading}
               />
               {selectedFiles.length > 0 && (
                 <div className="selected-files">
@@ -828,23 +909,86 @@ const KnowledgebaseBrowser = () => {
                   </ul>
                 </div>
               )}
+              
+              {/* Real-time Upload Results */}
+              {uploadResults.length > 0 && (
+                <div className="upload-results">
+                  <p>Upload Results:</p>
+                  <div className="upload-results-list">
+                    {uploadResults.map((result, index) => {
+                      // Get status icon and message based on result
+                      let statusIcon, statusClass;
+                      switch (result.status) {
+                        case 'success':
+                          statusIcon = '✅';
+                          statusClass = 'upload-success';
+                          break;
+                        case 'failed':
+                          statusIcon = '❌';
+                          statusClass = 'upload-failed';
+                          break;
+                        case 'updated':
+                          statusIcon = '🔄';
+                          statusClass = 'upload-updated';
+                          break;
+                        default:
+                          statusIcon = '⏳';
+                          statusClass = 'upload-processing';
+                      }
+                      
+                      return (
+                        <div key={index} className={`upload-result-item ${statusClass}`}>
+                          <div className="upload-result-header">
+                            <span className="upload-result-icon">{statusIcon}</span>
+                            <span className="upload-result-filename">{result.filename}</span>
+                            <span className="upload-result-status">
+                              {result.status.charAt(0).toUpperCase() + result.status.slice(1)}
+                            </span>
+                          </div>
+                          {result.status === 'success' && (
+                            <div className="upload-result-details">
+                              {result.file_size !== undefined && (
+                                <span>Size: {(result.file_size / 1024).toFixed(2)} KB</span>
+                              )}
+                              {result.parsed && <span>• Parsed</span>}
+                            </div>
+                          )}
+                          {result.status === 'failed' && result.error && (
+                            <div className="upload-result-error">
+                              {result.error}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {isUploading && (
+                <div className="uploading-indicator">
+                  <div className="loading-spinner"></div>
+                  <span>Uploading and processing files...</span>
+                </div>
+              )}
             </div>
             <div className="dialog-footer">
               <button 
                 onClick={() => {
                   setShowUploadDialog(false);
                   setSelectedFiles([]);
+                  setUploadResults([]);
                 }}
-                disabled={isLoading}
+                disabled={isUploading}
               >
                 Cancel
               </button>
               <button 
-                onClick={uploadFiles}
+                onClick={uploadFilesWithStream}
                 className="dialog-primary"
-                disabled={isLoading || selectedFiles.length === 0}
+                disabled={isUploading || selectedFiles.length === 0}
               >
-                Upload
+                {isUploading ? 'Uploading...' : 'Upload'}
               </button>
             </div>
           </div>
