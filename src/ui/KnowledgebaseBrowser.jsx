@@ -16,6 +16,9 @@ const KnowledgebaseBrowser = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [uploadResults, setUploadResults] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  // Refs for auto-scrolling
+  const uploadResultsListRef = React.useRef(null);
+  const uploadDialogBodyRef = React.useRef(null);
   // New state variables for knowledgebase management
   const [showCreateKBModal, setShowCreateKBModal] = useState(false);
   const [newKBName, setNewKBName] = useState('');
@@ -394,6 +397,13 @@ const KnowledgebaseBrowser = () => {
     setUploadResults([]);
     setError('');
     
+    // Scroll dialog body to bottom after a short delay to ensure UI updates
+    setTimeout(() => {
+      if (uploadDialogBodyRef.current) {
+        uploadDialogBodyRef.current.scrollTop = uploadDialogBodyRef.current.scrollHeight;
+      }
+    }, 100);
+    
     try {
       const formData = new FormData();
       const fullPath = currentPath.join('/').replace(/^\//, '');
@@ -573,6 +583,19 @@ const KnowledgebaseBrowser = () => {
   useEffect(() => {
     fetchDirectoryContents(currentPath.join('/').replace(/^\//, ''));
   }, [currentPath, fetchDirectoryContents]);
+  
+  // Auto-scroll to bottom when upload results change
+  useEffect(() => {
+    // Scroll results list to bottom
+    if (uploadResultsListRef.current) {
+      uploadResultsListRef.current.scrollTop = uploadResultsListRef.current.scrollHeight;
+    }
+    
+    // Scroll dialog body to bottom as well
+    if (uploadDialogBodyRef.current) {
+      uploadDialogBodyRef.current.scrollTop = uploadDialogBodyRef.current.scrollHeight;
+    }
+  }, [uploadResults]);
 
   return (
     <div className="knowledgebase-browser">
@@ -891,7 +914,7 @@ const KnowledgebaseBrowser = () => {
                 ×
               </button>
             </div>
-            <div className="dialog-body">
+            <div className="dialog-body" ref={uploadDialogBodyRef}>
               <input
                 type="file"
                 multiple
@@ -914,7 +937,7 @@ const KnowledgebaseBrowser = () => {
               {uploadResults.length > 0 && (
                 <div className="upload-results">
                   <p>Upload Results:</p>
-                  <div className="upload-results-list">
+                  <div className="upload-results-list" ref={uploadResultsListRef}>
                     {uploadResults.map((result, index) => {
                       // Get status icon and message based on result
                       let statusIcon, statusClass;
@@ -968,7 +991,9 @@ const KnowledgebaseBrowser = () => {
               {isUploading && (
                 <div className="uploading-indicator">
                   <div className="loading-spinner"></div>
-                  <span>Uploading and processing files...</span>
+                  <span>
+                    Uploading and processing files... ({uploadResults.length}/{selectedFiles.length})
+                  </span>
                 </div>
               )}
             </div>
