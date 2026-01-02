@@ -100,7 +100,7 @@ class FileProcessingPipeline:
                 file_result["parsing_error"] = "File type not parsable"
 
         # Step 5: Index chunks
-        vectorstore = self.indexer.index_chunks(all_documents)
+        vectorstore = self.indexer.index_chunks(all_documents, save=True)
         
         # Add non-parsable files to the results with appropriate status
         for file in non_parsable_files:

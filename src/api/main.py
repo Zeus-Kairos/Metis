@@ -517,7 +517,7 @@ async def delete_folder(
         # Get all file IDs under this folder path before files are deleted from database
         file_ids = memory_manager.knowledgebase_manager.get_files_by_path_prefix(folder_path)
         indexer = get_indexer(current_user.id, knowledge_base)
-        indexer.delete_file_chunks(file_ids)
+        indexer.delete_file_chunks(file_ids, save=True)
         # Delete all database records for files under this folder
         memory_manager.knowledgebase_manager.delete_file_by_path(folder_path)
         
@@ -570,7 +570,7 @@ async def delete_file(
         
         file_id = memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
         indexer = get_indexer(current_user.id, knowledge_base)
-        indexer.delete_file_chunks([file_id])
+        indexer.delete_file_chunks([file_id], save=True)
         
         return {
             "success": True,

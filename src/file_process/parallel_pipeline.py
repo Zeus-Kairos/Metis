@@ -58,6 +58,8 @@ class ParallelFileProcessingPipeline:
             except Exception as e:
                 logger.error(f"Unexpected error in parallel processing: {e}")
                 # This shouldn't happen as _process_single_file handles exceptions internally
+
+        self.indexer.save_index()
     
     async def _process_single_file(self, user_id: int, knowledge_base: str, file: UploadFile, upload_dir: str) -> Dict[str, Any]:
         """Process a single file through upload, parsing, database insertion, splitting, and indexing.
