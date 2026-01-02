@@ -771,9 +771,23 @@ const KnowledgebaseBrowser = () => {
                 onClick={() => setCurrentPath(currentPath.slice(0, index + 2))}
               >
                 {folder}
+                {/* Show count only for the last folder in the breadcrumb (current folder) */}
+                {index === currentPath.slice(1).length - 1 && fileItems.length > 0 && (
+                  <span className="breadcrumb-folder-count">
+                    ({fileItems.filter(item => item.type === 'folder').length} folders, 
+                    {fileItems.filter(item => item.type === 'file').length} files)
+                  </span>
+                )}
               </span>
             </React.Fragment>
           ))}
+          {/* Show count for root folder if currentPath is just [''] */}
+          {currentPath.length === 1 && fileItems.length > 0 && (
+            <span className="breadcrumb-folder-count">
+              ({fileItems.filter(item => item.type === 'folder').length} folders, 
+              {fileItems.filter(item => item.type === 'file').length} files)
+            </span>
+          )}
         </div>
         
         <div className="kb-breadcrumb-actions">
