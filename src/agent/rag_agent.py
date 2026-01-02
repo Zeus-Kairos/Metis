@@ -404,10 +404,7 @@ class RAGAgent:
                                 "response": last_assistant_message,
                             }
         else:
-            if self.on_langgraph_server:
-                graph = self.builder.compile()
-            else:
-                graph = self.builder.compile(checkpointer=InMemorySaver())
+            graph = self.builder.compile(checkpointer=InMemorySaver())
             
             # Streaming mode: yield chunks as they become available                
             for mode, chunk in graph.stream(initial_state, 

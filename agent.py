@@ -9,4 +9,4 @@ agent = RAGAgent(on_langgraph_server=True)
 
 # Export the graph for LangGraph
 # This allows LangGraph to visualize and interact with our agent's workflow
-graph = agent.graph
+graph = agent.builder.compile()
