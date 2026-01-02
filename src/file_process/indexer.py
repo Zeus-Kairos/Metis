@@ -1,5 +1,6 @@
 import os
 import faiss
+import threading
 from langchain_core.documents import Document
 import numpy as np
 from typing import Any, Dict, List
@@ -20,15 +21,19 @@ class Indexer:
                 base_url=self.base_url,
             )
         self.index_path = index_path
+        # Add thread lock to prevent concurrent modifications
+        self._lock = threading.Lock()
         if os.path.exists(index_path):
-            self.vectorstore = FAISS.load_local(index_path, self._embeddings, allow_dangerous_deserialization=True)
-            self.all_docs = self.get_all_docs()
+            with self._lock:
+                self.vectorstore = FAISS.load_local(index_path, self._embeddings, allow_dangerous_deserialization=True)
+                self.all_docs = self.get_all_docs()
         else:
-            index = faiss.IndexFlatL2(len(self._embeddings.embed_query("test")))
-            self.vectorstore = FAISS(self._embeddings, index, 
-                docstore= InMemoryDocstore(),
-                index_to_docstore_id={})   
-            self.all_docs = []
+            with self._lock:
+                index = faiss.IndexFlatL2(len(self._embeddings.embed_query("test")))
+                self.vectorstore = FAISS(self._embeddings, index, 
+                    docstore= InMemoryDocstore(),
+                    index_to_docstore_id={})   
+                self.all_docs = []
     
     def index_chunks(self, chunks: Dict[int, List[Document]]) -> FAISS:
         """Index file chunks into faiss index.
@@ -36,23 +41,24 @@ class Indexer:
         Args:
             chunks: Dict of file chunks to index, keyed by file_id
         """
-        file_ids = list(chunks.keys())
-        self.delete_file_chunks(file_ids)
+        with self._lock:
+            file_ids = list(chunks.keys())
+            self.delete_file_chunks(file_ids)
 
-        all_chunks = [chunk for chunk_list in chunks.values() for chunk in chunk_list]
-        
-        # Only add documents if there are chunks to index
-        if all_chunks:
-            chunk_ids = [chunk.metadata['chunk_id'] for chunk in all_chunks]
-            self.vectorstore.add_documents(documents=all_chunks, ids=chunk_ids)
-            self.all_docs.extend(all_chunks)
-            logger.info(f"Index {len(all_chunks)} chunks for {len(file_ids)} files")
-            logger.info(f"Total {len(self.all_docs)} chunks in vectorstore")
-        else:
-            logger.info("No chunks to index")
-        
-        self.vectorstore.save_local(self.index_path)
-        return self.vectorstore
+            all_chunks = [chunk for chunk_list in chunks.values() for chunk in chunk_list]
+            
+            # Only add documents if there are chunks to index
+            if all_chunks:
+                chunk_ids = [chunk.metadata['chunk_id'] for chunk in all_chunks]
+                self.vectorstore.add_documents(documents=all_chunks, ids=chunk_ids)
+                self.all_docs.extend(all_chunks)
+                logger.info(f"Index {len(all_chunks)} chunks for {len(file_ids)} files")
+                logger.info(f"Total {len(self.all_docs)} chunks in vectorstore")
+            else:
+                logger.info("No chunks to index")
+            
+            self.vectorstore.save_local(self.index_path)
+            return self.vectorstore
 
     def delete_file_chunks(self, file_ids: List[int]) -> None:
         """Delete all chunks for a file from the index.
@@ -75,6 +81,7 @@ class Indexer:
         Returns:
             List of all documents in the index
         """
+        # This method is called from __init__ which already holds the lock
         if self.vectorstore.index.ntotal == 0:
             return []
         all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
