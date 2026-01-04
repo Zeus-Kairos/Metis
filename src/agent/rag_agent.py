@@ -54,21 +54,20 @@ class AgentState(TypedDict):
     State of the agent.
     """
     query: str
-    intent: str = None
-    refined_query: str = None
     messages: Annotated[List[Dict[str, str]], add_messages]
+    intent: str = None
+    refined_query: str = None   
     documents: list[Document] | List[Tuple[Document, float]] = None
-    answer: str
+    answer: str = None
     error_context: str = None
     knowledge_base_item: KnowledgeBaseItem = None   
 
 class DeepRAGState(AgentState):
     """
     State of the deep RAG sub-agent.
-    """   
-    additional_documents: Dict[str, list[Document]]
-    answer_review: str
+    """      
     searched_path: Dict[str, set[str]] = {}
+    new_aspects_to_explore: str = None
     retrieve_tries: int = 0
 
 class RAGAgent:
@@ -170,6 +169,7 @@ class RAGAgent:
             refined_query = response.content.strip()
         return {
             "refined_query": refined_query,
+            "new_aspects_to_explore": refined_query,
         }
 
     def _handle_rag(self, state: AgentState) -> AgentState:
@@ -220,6 +220,10 @@ class RAGAgent:
         """
         Handle the deep RAG.
         """
+        new_aspects_to_explore = state["new_aspects_to_explore"]
+        if new_aspects_to_explore == "none":
+            return { "messages": AIMessage(content="end")}
+
         prompt = deep_rag_prompt(state)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)], [list_children_tool, rag_search_tool])
         if response.content.strip():
@@ -242,7 +246,10 @@ class RAGAgent:
         """
         Build the base graph for the agent.
         """
-        graph = StateGraph(AgentState)
+        if self.rag_type == RAGType.AGENTIC:
+            graph = StateGraph(DeepRAGState)
+        else:
+            graph = StateGraph(AgentState)  
 
         graph.add_node("classify_intent", self._classify_intent)
         graph.add_node("refine_query", self._refine_query)
@@ -273,7 +280,7 @@ class RAGAgent:
             tools_condition,
             {
                 "tools": "deep_retrieve",
-                "end": "reference_check",
+                "__end__": "reference_check",
             },
             )  
             graph.add_edge("deep_retrieve", "deep_rag")

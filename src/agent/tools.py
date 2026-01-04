@@ -73,7 +73,7 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
     knowledgebase_manager = MemoryManager().knowledgebase_manager
     children_items = knowledgebase_manager.get_files_by_parent(kb_id, parent_folder)
     
-    logger.info(f"[list_children_tool] Children Items: {children_items}")
+    logger.info(f"[list_children_tool] {children_items} Children Items Listed")
 
     children = []
     for item in children_items:
@@ -113,7 +113,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
     # parse search_path to filters
     filters = {}
     if search_path:
-        logger.info(f"[rag_search_tool] Query: {query}")
+        logger.info(f"[rag_search_tool] Query: {query} on path: {search_path}")
         searched_path = runtime.state["searched_path"] if "searched_path" in runtime.state else {}
         if query not in searched_path:
             searched_path[query] = set()
@@ -125,14 +125,14 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             # e.g. "folder1/folder2" -> {"category_level_1": "folder1", "category_level_2": "folder2"}               
             knowledgebase_manager = MemoryManager().knowledgebase_manager
             file_ids = knowledgebase_manager.get_files_by_path_prefix(search_path) 
-            logger.info(f"[rag_search_tool] Search Files: {file_ids}")   
+            logger.info(f"[rag_search_tool] Search len {len(file_ids)} Files")   
             docs = rag_flow.files_fusion_retrieve(query, file_ids, k=k)  
         else:
             filters["file_path"] = search_path
             logger.info(f"[rag_search_tool] Search Filters: {filters}")     
             docs = rag_flow.filtered_fusion_retrieve(query, filters, k=k)
         
-        logger.info(f"Retrieved {len(docs)} documents for query: {query} on path: {search_path}")
+        logger.info(f"[rag_search_tool] Retrieved {len(docs)} documents for query: {query} on path: {search_path}")
         if not docs:
             return Command(
                 update={
@@ -168,6 +168,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 "searched_path": searched_path,
                 "documents": merged_documents,
                 "answer": answer,
+                "new_aspects_to_explore": answer_review,
                 "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)]
             }
         )

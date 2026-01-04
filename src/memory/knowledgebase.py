@@ -494,8 +494,9 @@ class KnowledgebaseManager:
                     
                     # Properly escape backslashes for SQL LIKE pattern
                     # Also handle both Windows and Unix path formats
-                    path_prefix_windows = path_prefix.replace('\\', '\\\\')
-                    path_prefix_unix = path_prefix.replace('\\', '/')
+                    normalized_path_prefix = path_prefix.replace('/', os.sep)
+                    path_prefix_windows = normalized_path_prefix.replace('\\', '\\\\')
+                    path_prefix_unix = normalized_path_prefix.replace('\\', '/')
                     
                     # Get file IDs for both Windows and Unix path formats
                     cur.execute(

@@ -187,6 +187,8 @@ def review_answer_prompt(query: str, answer: str, searched_path: Dict[str, set[s
         - “Insufficient”: The answer fails to address key parts of the question, is largely incorrect, or is too vague to be useful.​
     4. If the answer is “Sufficient”, return "None".
        If the answer is “Insufficient”, return a new list of aspects that the assistant should query in the knowledge base to provide a sufficient answer.
+       - The list should contain 1~3 new aspects.
+       - Each new aspect should be brief and within 10 words.
 
     User Query: {query}
     User Current Answer: {answer}
@@ -198,6 +200,8 @@ def deep_rag_prompt(state: TypedDict) -> str:
     Deep RAG prompt.
     """
     query = state["refined_query"]
+    new_aspects_to_explore = state["new_aspects_to_explore"]
+
     rag_messages = []
     for i in range(len(state["messages"]) - 1, -1, -1):
         if not isinstance(state["messages"][i], HumanMessage):
@@ -217,9 +221,15 @@ def deep_rag_prompt(state: TypedDict) -> str:
     You can use the list_children tool to decide where to search. Use relative path to specify the search_path.
 
     If no additional information is needed, return "end".
+    generate new queries for the tools based on the new aspects to explore.
+
+    Constraints:
+    - The search_path must include the knowledge base root folder.
+    - Base on the RAG history, don't repeat the aspects and search paths that have been explored.
 
     Knowledge Base Description: {knowledgebase_description}
     Knowledge Base Root Folder: {knowledgebase_root_path}
+    New Aspects to Explore: {new_aspects_to_explore}
 
     User Query: {query}
     RAG History: {rag_messages}

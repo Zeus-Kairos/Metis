@@ -2,7 +2,7 @@ from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter, MarkdownHeaderTextSplitter
 
 class FileSplitter:
-    def __init__(self, chunk_size=300, chunk_overlap=50):
+    def __init__(self, chunk_size=500, chunk_overlap=50):
         headers_to_split_on = [
             ("#", "Header 1"),
             ("##", "Header 2"),
