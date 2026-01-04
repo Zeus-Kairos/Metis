@@ -167,8 +167,7 @@ const useChatStore = create((set, get) => {
             method: 'POST',
             body: JSON.stringify({
               name: 'default',
-              description: 'Default knowledgebase',
-              navigation: {}
+              description: 'Default knowledgebase'
             })
           });
           

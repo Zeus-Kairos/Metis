@@ -37,7 +37,7 @@ class KnowledgebaseManager:
                             user_id INTEGER NOT NULL,
                             name VARCHAR(255) NOT NULL,
                             description TEXT,
-                            navigation JSON,
+                            root_path VARCHAR(255) NOT NULL,
                             is_active BOOLEAN DEFAULT FALSE,
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -96,7 +96,7 @@ class KnowledgebaseManager:
             logger.error(f"Error initializing knowledgebase tables: {e}")
             raise
     
-    def create_knowledgebase(self, user_id: int, name: str, root_path:str, description: str = None, navigation: dict = None) -> int:
+    def create_knowledgebase(self, user_id: int, name: str, root_path:str, description: str = None) -> int:
         """
         Create a new knowledge base for the user.
         
@@ -105,7 +105,6 @@ class KnowledgebaseManager:
             name: Knowledge base name
             root_path: Root folder path for the knowledge base
             description: Optional knowledge base description
-            navigation: Optional knowledge base navigation structure
             
         Returns:
             The created knowledge base ID
@@ -122,13 +121,10 @@ class KnowledgebaseManager:
                     if not cur.fetchone():
                         raise ValueError(f"User ID {user_id} does not exist")
                     
-                    # Serialize navigation to JSON string if provided
-                    navigation_json = json.dumps(navigation) if navigation else None
-                    
                     # Insert the new knowledgebase as active
                     cur.execute(
-                        "INSERT INTO knowledgebase (user_id, name, description, navigation, is_active) VALUES (%s, %s, %s, %s, %s) RETURNING id",
-                        (user_id, name, description, navigation_json, True)
+                        "INSERT INTO knowledgebase (user_id, name, description, root_path, is_active) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                        (user_id, name, description, root_path, True)
                     )
                     knowledgebase_id = cur.fetchone()[0]
 
@@ -173,7 +169,7 @@ class KnowledgebaseManager:
                 with conn.cursor() as cur:
                     cur.execute(
                         """
-                        SELECT id, name, description, navigation, is_active, created_at, updated_at
+                        SELECT id, name, description, root_path, is_active, created_at, updated_at
                         FROM knowledgebase
                         WHERE user_id = %s
                         ORDER BY is_active DESC, updated_at DESC

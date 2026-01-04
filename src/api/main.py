@@ -276,13 +276,12 @@ async def create_knowledgebase(
     current_user: Annotated[User, Depends(get_current_active_user)],
     name: str = Body(..., description="Knowledge base name"),
     description: Optional[str] = Body(None, description="Knowledge base description"),
-    navigation: Optional[Dict[str, Any]] = Body(None, description="Knowledge base navigation structure")
 ):
     """Create a new knowledge base for the user."""
     try:
         root_path = get_upload_dir(current_user.id, name, "")
         # Call the create_knowledgebase method
-        knowledgebase_id = memory_manager.knowledgebase_manager.create_knowledgebase(current_user.id, name, root_path, description, navigation)
+        knowledgebase_id = memory_manager.knowledgebase_manager.create_knowledgebase(current_user.id, name, root_path, description)
         return {
             "success": True,
             "knowledgebase_id": knowledgebase_id,
