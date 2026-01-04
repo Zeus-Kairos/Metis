@@ -511,6 +511,11 @@ const useChatStore = create((set, get) => {
         // Add the user message to the conversation
         updateActiveThread({ messages: [...get().conversations[activeThreadId].messages, newMessage] });
 
+        // Get active knowledgebase ID
+        const { knowledgebases } = get();
+        const activeKB = knowledgebases.find(kb => kb.is_active);
+        const knowledgebase_id = activeKB.id; // Default to 1 if no active KB found
+        
         // Send the message to the backend
         const response = await fetchWithAuth(`/api/chat`, {
           method: 'POST',
@@ -520,7 +525,8 @@ const useChatStore = create((set, get) => {
           body: JSON.stringify({
             message: content,
             user_id,
-            thread_id: activeThreadId
+            thread_id: activeThreadId,
+            knowledgebase_id
           }),
         });
 

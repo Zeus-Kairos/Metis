@@ -13,14 +13,14 @@ class KnowledgebaseManager:
     Manages knowledgebase creation, updates, and file operations.
     """
     
-    def __init__(self, connection_pool: ConnectionPool):
+    def __init__(self, connection_pool: ConnectionPool = None):
         """
         Initialize the KnowledgebaseManager with a database connection pool.
         
         Args:
-            connection_pool: Database connection pool for database operations
+            connection_pool: Database connection pool for database operations.
         """
-        self.connection_pool = connection_pool
+        self.connection_pool = connection_pool if connection_pool else ConnectionPool(os.getenv("DB_URI"))
         self._init_knowledgebase_tables()
         
     def _init_knowledgebase_tables(self):
@@ -223,6 +223,39 @@ class KnowledgebaseManager:
             logger.error(f"Error setting active knowledgebase for user {user_id}: {e}")
             raise
     
+    def get_knowledgebase(self, knowledgebase_id: int) -> dict:
+        """
+        Get a specific knowledgebase by ID.
+        
+        Args:
+            knowledgebase_id: ID of the knowledgebase
+            
+        Returns:
+            Knowledgebase record if found, None otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT id, name, description
+                        FROM knowledgebase
+                        WHERE id = %s
+                        """,
+                        (knowledgebase_id,)
+                    )
+                    # Get column names
+                    columns = [desc[0] for desc in cur.description]
+                    # Convert results to dictionaries
+                    results = []
+                    for row in cur.fetchall():
+                        results.append(dict(zip(columns, row)))
+                    return results[0] if results else None
+        except Exception as e:
+            logger.error(f"Error getting knowledgebase {knowledgebase_id}: {e}")
+            raise
+
+
     def add_file_by_knowledgebase_name(self, filename: str, filepath: str, parsed_path: str, user_id: int, knowledgebase_name: str, file_size: int = None, description: str = None, type: str = 'file', parentFolder: str = "") -> int:
         """
         Add a new file record to the database using knowledgebase name and user ID.
@@ -353,6 +386,9 @@ class KnowledgebaseManager:
         Returns:
             List of file records with file_id, filename, uploaded_time, file_size, description, and type
         """
+        # Normalize path separators to match the database storage format
+        normalized_path = parentFolder.replace('/', os.sep)
+        
         with self.connection_pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -366,7 +402,7 @@ class KnowledgebaseManager:
                     AND parent_f.type = 'folder'
                     ORDER BY f.uploaded_time DESC
                     """,
-                    (knowledgebase_id, knowledgebase_id, parentFolder)
+                    (knowledgebase_id, knowledgebase_id, normalized_path)
                 )
                 files = cur.fetchall()
                 return files

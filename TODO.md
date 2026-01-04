@@ -1,3 +1,4 @@
+- Add general embedding model support.
 - Add doc search tool to list all headers in a file.
 - Add evaluation metrics for the RAG agent.
 - Add image support for the RAG agent.

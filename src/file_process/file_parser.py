@@ -7,9 +7,8 @@ from markitdown import MarkItDown
 import html2text
 import pymupdf.layout
 import pymupdf4llm
-import logging
 
-from src.file_process.utils import get_parsed_path
+from src.utils.paths import get_parsed_path
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)

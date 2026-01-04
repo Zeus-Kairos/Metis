@@ -1,7 +1,7 @@
 import logging
 import os
 import inspect
-from typing import List, Sequence, Optional
+from typing import List, Sequence, Optional, Union
 from langchain.tools import BaseTool
 import requests
 from langchain.chat_models import init_chat_model
@@ -9,7 +9,6 @@ from src.memory.memory import MemoryManager
 from src.agent.llm import LLMRunner
 
 logger = logging.getLogger(__name__)
-
 
 class ApiLLMRunner(LLMRunner):
     """
@@ -81,3 +80,36 @@ class ApiLLMRunner(LLMRunner):
         except Exception as e:
             logger.error(f"Error initializing {self.model_provider} Chat Model: {e}")
             self._chat_model = None
+
+# Create a dictionary to store ApiLLMRunner instances per user
+api_llm_runners = {}
+active_LLMRunner = LLMRunner()
+
+def get_api_llm_runner(user_id: int) -> ApiLLMRunner:
+    """
+    Get or create an ApiLLMRunner instance for the specified user.
+    
+    Args:
+        user_id: User's ID
+        
+    Returns:
+        ApiLLMRunner instance for the user
+    """
+    global active_LLMRunner
+    if user_id not in api_llm_runners:
+        # Create a new ApiLLMRunner instance for this user with their ID
+        api_llm_runners[user_id] = ApiLLMRunner(user_id=user_id)
+    active_LLMRunner = api_llm_runners[user_id]
+    return api_llm_runners[user_id]
+
+def get_active_llm_runner() -> Union[LLMRunner, ApiLLMRunner]:
+    """
+    Get the currently active LLM runner instance.
+    This function provides a reliable way to access the most recent active runner
+    from outside this module, without needing a user ID.
+    
+    Returns:
+        The currently active LLM runner instance (either LLMRunner or ApiLLMRunner)
+    """
+    global active_LLMRunner
+    return active_LLMRunner

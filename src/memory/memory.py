@@ -28,11 +28,24 @@ def _get_secret_key() -> str:
 
 class MemoryManager:
     """Manages user memory and conversation history using LangGraph MemorySaver and MemoryStore"""
+    
+    # Singleton instance
+    _instance = None
+    
+    def __new__(cls):
+        """Create or return the singleton instance"""
+        if cls._instance is None:
+            cls._instance = super(MemoryManager, cls).__new__(cls)
+        return cls._instance
 
     def __init__(self):
         """
         Initialize the memory manager with LangGraph persistence components.
         """
+        # Only initialize once
+        if hasattr(self, '_initialized') and self._initialized:
+            return
+        
         # Get connection string from environment
         self.conn_str = os.getenv("DB_URI")
 
@@ -51,6 +64,9 @@ class MemoryManager:
         
         # Initialize knowledgebase manager
         self.knowledgebase_manager = KnowledgebaseManager(self.connection_pool)
+        
+        # Mark as initialized
+        self._initialized = True
 
     # Method to return a ConnectionPool lifespan context manager
     def get_connection_pool(self) -> Optional[ConnectionPool]:
@@ -62,11 +78,16 @@ class MemoryManager:
         """
         Clean up resources when the MemoryManager instance is destroyed.
         """
-        if hasattr(self, 'connection_pool'):
+        if hasattr(self, 'connection_pool') and self.connection_pool is not None:
             try:
-                self.connection_pool.close()
+                # Check if we're in the main thread to avoid "cannot join current thread" error
+                import threading
+                if threading.current_thread() is threading.main_thread():
+                    self.connection_pool.close()
             except Exception as e:
-                logger.error(f"Error closing connection pool: {e}")
+                # Ignore join errors which can occur during program shutdown
+                if "cannot join current thread" not in str(e):
+                    logger.error(f"Error closing connection pool: {e}")
 
     def _init_db_tables(self):
         """

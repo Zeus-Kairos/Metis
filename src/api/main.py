@@ -13,14 +13,14 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
 from src.file_process.indexer import Indexer
-from src.file_process.utils import get_index_path, get_upload_dir, get_parsed_path
+from src.utils.paths import get_index_path, get_upload_dir, get_parsed_path
 from src.file_process.pipeline import FileProcessingPipeline
 from src.file_process.parallel_pipeline import ParallelFileProcessingPipeline
 from src.memory.memory import MemoryManager
-from src.memory.thread import ThreadManager
 from src.utils.logging_config import get_logger
 from src.api.thread import router as thread_router
 from src.api.thread import rag_agents
+from src.agent.api_llm import api_llm_runners
 
 logger = get_logger(__name__)
 
@@ -216,6 +216,11 @@ async def update_user_configuration(
         if current_user.id in rag_agents:
             del rag_agents[current_user.id]
             logger.info(f"Removed existing RAGAgent for user {current_user.id} to apply updated configuration")
+        
+        # Remove the existing ApiLLMRunner instance for this user
+        if current_user.id in api_llm_runners:
+            del api_llm_runners[current_user.id]
+            logger.info(f"Removed existing ApiLLMRunner for user {current_user.id} to apply updated configuration")
         
         return {
             "success": True,

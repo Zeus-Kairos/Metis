@@ -1,9 +1,11 @@
-from ast import Str
+from dataclasses import dataclass
+import json
 import logging
 import os
 from re import search
 from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 
+from langchain.tools import InjectedToolCallId, ToolRuntime, tool
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langchain.agents import create_agent
@@ -12,9 +14,11 @@ from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.prebuilt import ToolNode, tools_condition
+from langgraph.types import Command
+from psycopg_pool import base
 
+from src.memory.memory import MemoryManager 
 from src.memory.thread import ThreadManager
-from src.agent.tools import retrieve_tool
 from src.agent.prompts import (
     classify_intent_prompt,
     complement_answer_prompt,
@@ -28,11 +32,22 @@ from src.agent.prompts import (
 )
 from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
-from src.agent.api_llm import ApiLLMRunner
-from src.utils.knowledge_base_reader import KnowledgeBaseItem, KnowledgeBaseReader
-from src.utils.merger import merge_documents
+from src.agent.api_llm import get_api_llm_runner
+from src.agent.tools import list_children_tool, rag_search_tool
+from src.utils.paths import get_index_path, get_upload_dir
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class KnowledgeBaseItem:
+    """
+    Represents an item in the knowledge base index.
+    """
+    id: int
+    name: str
+    root_path: str
+    index_path: str
+    description: str
 
 class AgentState(TypedDict):
     """
@@ -50,10 +65,10 @@ class AgentState(TypedDict):
 class DeepRAGState(AgentState):
     """
     State of the deep RAG sub-agent.
-    """
-    searched_path: set[str]
+    """   
     additional_documents: Dict[str, list[Document]]
     answer_review: str
+    searched_path: Dict[str, set[str]] = {}
     retrieve_tries: int = 0
 
 class RAGAgent:
@@ -76,12 +91,14 @@ class RAGAgent:
         
         # Initialize LLM runner based on user ID (uses ApiLLMRunner if user_id is provided)
         if user_id:
-            self.llm_runner = ApiLLMRunner(user_id)
+            self.llm_runner = get_api_llm_runner(user_id)
         else:
             self.llm_runner = LLMRunner()
             
         self.user_id = user_id
         self.thread_manager = thread_manager
+        self.knowledgebase_id = 0
+        self.knowledgebase_item = None
         self.on_langgraph_server = on_langgraph_server
         self.conn_str = os.getenv("DB_URI")
         if self.conn_str:
@@ -122,7 +139,7 @@ class RAGAgent:
             return {
                 "intent": intent,
                 "messages": [{"role": "user", "content": state["query"]}],
-                "knowledge_base_item": KnowledgeBaseReader().get_knowledge_base_item(1),
+                "knowledge_base_item": self.get_knowledgebase_item(27, 27),
             }
             
         return {
@@ -199,97 +216,16 @@ class RAGAgent:
             "messages": [response],
         }
 
-    def _review_answer(self, state: DeepRAGState) -> DeepRAGState:
-        """
-        Review the answer.
-        """
-        MAX_RETRIEVE_TRIES = 3
-        retrieve_tries = state["retrieve_tries"] if "retrieve_tries" in state else 0
-        if retrieve_tries >= MAX_RETRIEVE_TRIES:
-            logging.info("retrieve finished.")
-            return {
-                "answer_review": "end",
-                "retrieve_tries": 0,
-            }
-
-        prompt = review_answer_prompt(state)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
-        answer_review = response.content.strip().lower()
-        return {
-            "answer_review": answer_review,
-            "retrieve_tries": retrieve_tries + 1,
-        }
-
-    def _if_continue_rag(self, state: DeepRAGState) -> bool:
-        """
-        Check whether to continue the RAG.
-        """
-        return state["answer_review"] != "end"
-
     def _deep_rag(self, state: DeepRAGState) -> DeepRAGState:
         """
         Handle the deep RAG.
         """
         prompt = deep_rag_prompt(state)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)], [retrieve_tool])
+        response = self.llm_runner.invoke([SystemMessage(content=prompt)], [list_children_tool, rag_search_tool])
         if response.content.strip():
             logger.info(f"[deep_rag] Response: {response.content.strip()}")
         return {
             "messages": [response],
-        }
-
-    def _filter_additional_documents(self, state: DeepRAGState) -> DeepRAGState:
-        """
-        Filter the documents.
-        """
-        # Find the last continuous ToolMessage
-        tool_messages = []
-        for i in range(len(state["messages"]) - 1, -1, -1):
-            if isinstance(state["messages"][i], ToolMessage):
-                tool_messages.append(state["messages"][i])
-            else:
-                break
-        
-        additional_documents = state["additional_documents"] if "additional_documents" in state else {}
-        searched_path = state["searched_path"] if "searched_path" in state else set()
-        for tool_message in tool_messages:
-            context = tool_message.artifact
-            query = context["query"]
-            retrieved_documents = context["retrieved_documents"]
-            search_path = context["search_path"]
-            searched_path.add(search_path)
-            logger.info(f"Retrieved {len(retrieved_documents)} documents for query: {query} on path: {search_path}")    
-            if len(retrieved_documents) == 0:
-                continue      
-            prompt = filter_documents_prompt(query, retrieved_documents)
-            response = self.llm_runner.invoke([SystemMessage(content=prompt)])
-            try:
-                filtered_document_indices = list(map(int, response.content.strip().split(",")))
-            except ValueError:
-                filtered_document_indices = list(range(len(retrieved_documents)))
-            if len(filtered_document_indices) > 0:
-                additional_documents[query] = [retrieved_documents[i] for i in filtered_document_indices]
-            
-        return {
-            "searched_path": searched_path,
-            "additional_documents": additional_documents,
-        }
-
-    def _complement_answer(self, state: DeepRAGState) -> DeepRAGState:
-        """
-        Complement the answer with the documents.
-        """       
-        prompt = complement_answer_prompt(state)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
-        documents = state["documents"] if "documents" in state else []
-        new_documents = [doc for sublist in state["additional_documents"].values() for doc in sublist]
-        if documents and isinstance(documents[0], tuple):
-            documents = [doc for doc, _ in documents]
-        merged_documents = merge_documents(documents + new_documents)
-        return {
-            "answer": response.content.strip(),
-            "documents": merged_documents,
-            "additional_documents": {}
         }
 
     def _reference_check(self, state: DeepRAGState) -> DeepRAGState:
@@ -312,11 +248,8 @@ class RAGAgent:
         graph.add_node("refine_query", self._refine_query)
         graph.add_node("handle_chat", self._handle_chat)
         if self.rag_type == RAGType.AGENTIC:
-            graph.add_node("review_answer", self._review_answer)
             graph.add_node("deep_rag", self._deep_rag)      
-            graph.add_node("deep_retrieve", ToolNode([retrieve_tool]))
-            graph.add_node("filter_additional_documents", self._filter_additional_documents)
-            graph.add_node("complement_answer", self._complement_answer)   
+            graph.add_node("deep_retrieve", ToolNode([list_children_tool, rag_search_tool])) 
             graph.add_node("reference_check", self._reference_check)
         else:
             graph.add_node("handle_rag", self._handle_rag)
@@ -334,20 +267,16 @@ class RAGAgent:
         )
         graph.add_edge("handle_chat", END)
         if self.rag_type == RAGType.AGENTIC:
-            graph.add_edge("refine_query", "review_answer")
+            graph.add_edge("refine_query", "deep_rag")
             graph.add_conditional_edges(
-            "review_answer",
-            self._if_continue_rag,
+            "deep_rag",
+            tools_condition,
             {
-                # Translate the condition outputs to nodes in our graph
-                True: "deep_rag",
-                False: "reference_check",
+                "tools": "deep_retrieve",
+                "end": "reference_check",
             },
-            )
-            graph.add_edge("deep_rag", "deep_retrieve")
-            graph.add_edge("deep_retrieve", "filter_additional_documents")     
-            graph.add_edge("filter_additional_documents", "complement_answer")     
-            graph.add_edge("complement_answer", "review_answer")    
+            )  
+            graph.add_edge("deep_retrieve", "deep_rag")
             graph.add_edge("reference_check", END)
         else:
             graph.add_edge("refine_query", "handle_rag")
@@ -369,18 +298,19 @@ class RAGAgent:
             graph = self.builder.compile(checkpointer=InMemorySaver())
             return self.thread_manager.get_conversation_history(user_id, thread_id, graph)
     
-    def chat(self, query: str, knowledge_base_id: int = 1, config: Dict[str, Any] = None) -> Generator[Dict[str, Any], None, None]:
+    def chat(self, query: str, user_id: int, knowledge_base_id: int, config: Dict[str, Any] = None) -> Generator[Dict[str, Any], None, None]:
         """
         Chat with the agent.
         """
 
-        knowledge_base_item = KnowledgeBaseReader().get_knowledge_base_item(knowledge_base_id)
-        logger.info(f"Knowledge base: {knowledge_base_item.path}")
+        knowledgebase_item = self.get_knowledgebase_item(user_id, knowledge_base_id)
+
+        logger.info(f"Chat with Knowledgebase: {knowledgebase_item.name}")
 
         initial_state = {
             "query": query,
             "messages": [{"role": "user", "content": query}],
-            "knowledge_base_item": knowledge_base_item,
+            "knowledge_base_item": knowledgebase_item,
         }
 
         if self.conn_str:
@@ -423,5 +353,30 @@ class RAGAgent:
                         yield {
                             "response": last_assistant_message,
                         }
+    
+    def get_knowledgebase_item(self, user_id: int, knowledgebase_id: int) -> KnowledgeBaseItem:
+        """
+        Get the knowledge base item.
+        """
+        if knowledgebase_id == self.knowledgebase_id:
+            return self.knowledgebase_item
 
+        knowledgebase_manager = MemoryManager().knowledgebase_manager
+        knowledgebase = knowledgebase_manager.get_knowledgebase(knowledgebase_id)
+        knowledgebase_name = knowledgebase["name"]
+        root_path = get_upload_dir(user_id, knowledgebase_name, "")
+        index_path = get_index_path(user_id, knowledgebase_name)
+
+        knowledgebase_item = KnowledgeBaseItem(
+            id=knowledgebase_id,
+            name=knowledgebase_name,
+            root_path=root_path,
+            index_path=index_path,
+            description=knowledgebase["description"],
+        )        
+
+        self.knowledgebase_id = knowledgebase_id
+        self.knowledgebase_item = knowledgebase_item
+
+        return knowledgebase_item
         

@@ -3,7 +3,8 @@ import hashlib
 from datetime import datetime
 from typing import List, Dict, Any
 from fastapi import UploadFile
-from src.file_process.utils import MAX_FILE_SIZE, SUPPORTED_FORMATS, get_upload_dir
+from src.file_process.utils import MAX_FILE_SIZE, SUPPORTED_FORMATS
+from src.utils.paths import get_upload_dir
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)

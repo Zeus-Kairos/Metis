@@ -1,6 +1,7 @@
 import logging
-from typing import List, Tuple, TypedDict
+from typing import Dict, List, Tuple, TypedDict
 from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage
 from langchain_core.messages.utils import (  
     trim_messages,  
     count_tokens_approximately  
@@ -136,19 +137,15 @@ def format_answer_prompt(state: TypedDict) -> str:
     Assistant:
     """
 
-def complement_answer_prompt(state: TypedDict) -> str:
+def complement_answer_prompt(base_query: str, answer: str, documents: Dict[str, List[Document]]) -> str:
     """
     Complement the answer.
     """
-    answer = state["answer"] if "answer" in state else ""
-    documents = state["additional_documents"]
-
     additional_info = "\n"
     for query, docs in documents.items():
         # Handle both list[tuple] and list[Document] formats
         doc_contents = format_documents(docs, with_index=False)  
         additional_info += f"Documents about {query}:\n{doc_contents}\n"
-    base_query = state["refined_query"]
 
     return f"""
     You are a helpful assistant to generate an answer based on the original answer and additional documents. 
@@ -168,16 +165,16 @@ def complement_answer_prompt(state: TypedDict) -> str:
     Assistant:
     """
 
-def review_answer_prompt(state: TypedDict) -> str:
+def review_answer_prompt(query: str, answer: str, searched_path: Dict[str, set[str]]) -> str:
     """
     Review the answer.
     """
-    query = state["refined_query"]
-    answer = state["answer"] if "answer" in state else ""
-    answer_review = state["answer_review"] if "answer_review" in state else ""
+
+    explored_aspects = "\n".join([f"- {aspect}" for aspect in searched_path.keys()])
 
     return f"""
     You are an evaluator that reviews whether an assistant’s answer fully satisfies the user’s query.
+    The current answer is based on the query results in the knowledge base to some aspects.
     Task:
     1. Carefully read the user’s query and identify the explicit and implicit requirements (sub-questions, constraints, context, and expected level of detail).​
     2. Read the assistant’s answer and assess it along these dimensions, focusing only on content, not style:​
@@ -188,19 +185,12 @@ def review_answer_prompt(state: TypedDict) -> str:
     3. Based on this assessment, decide if the answer is sufficient:
         - “Sufficient”: The answer is relevant, correct, and complete enough that a typical user would not need more information.
         - “Insufficient”: The answer fails to address key parts of the question, is largely incorrect, or is too vague to be useful.​
-    4. If the answer is “Sufficient”, return "end".
-    4. If the answer is “Insufficient”, list:
-        - Which specific aspects of the user’s query are not adequately addressed.
-        - What additional information, clarification, or steps should be added to make the answer sufficient.
-    5. Do not rewrite the answer. Focus on evaluation and concrete improvement suggestions only.
-    6. Refer to the previous Answer Review to make the assessment
-
-    Use concise, precise language and base your decision strictly on the given query and answer.
-    Only give concept-level feedback. Do not give detailed information about the answer.
+    4. If the answer is “Sufficient”, return "None".
+       If the answer is “Insufficient”, return a new list of aspects that the assistant should query in the knowledge base to provide a sufficient answer.
 
     User Query: {query}
     User Current Answer: {answer}
-    Previous Answer Review: {answer_review}
+    Explored Aspects: {explored_aspects}
     """
 
 def deep_rag_prompt(state: TypedDict) -> str:
@@ -208,32 +198,31 @@ def deep_rag_prompt(state: TypedDict) -> str:
     Deep RAG prompt.
     """
     query = state["refined_query"]
-    answer = state["answer"] if "answer" in state else ""
-    answer_review = state["answer_review"] if "answer_review" in state else ""
-    knowledge_base_index_path = state["knowledge_base_item"].index_path
-    # read the markdown index file
-    with open(knowledge_base_index_path, 'r') as f:
-        index = f.read()
+    rag_messages = []
+    for i in range(len(state["messages"]) - 1, -1, -1):
+        if not isinstance(state["messages"][i], HumanMessage):
+            rag_messages.append(state["messages"][i])
+        else:
+            break
 
-    searched_paths = "\n".join(state["searched_path"]) if "searched_path" in state else "None"
+    knowledgebase_description = state["knowledge_base_item"].description
+    knowledgebase_root_path = state["knowledge_base_item"].root_path
 
     return f"""
     You are a helpful assistant to help retrieve the most relevant information from the knowledge base.   
-    Based on the user query, the current answer, and answer review, you decide how additional information should be retrieved from the knowledge base.
-    You have access to the knowledge base index. The index contains the knowledge base structure and description of each folder.
+    Based on the user query and the RAG history, you decide how additional information should be retrieved from the knowledge base.
+    You have a list_children tool to list all children with description of a folder in the knowledge base.
     You also have a retrieval tool to find relevant documents in a specific folder in the knowledge base.
     You need to decide what additional information to retrieve and use the retrieval tool to search certain information from a specific folder.
-    Use relative path to specify the search_path.
+    You can use the list_children tool to decide where to search. Use relative path to specify the search_path.
 
-    Constraints:
-    - Do not search the paths that are already in the Searched Paths.
+    If no additional information is needed, return "end".
 
-    Knowledge Base Index: {index}
+    Knowledge Base Description: {knowledgebase_description}
+    Knowledge Base Root Folder: {knowledgebase_root_path}
 
-    User: {query}
-    User Current Answer: {answer}
-    User Current Answer Review: {answer_review}
-    Searched Paths: {searched_paths}
+    User Query: {query}
+    RAG History: {rag_messages}
     """
 
 def reference_check_prompt(state: TypedDict) -> str:

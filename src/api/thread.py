@@ -45,6 +45,7 @@ class ChatRequest(BaseModel):
     message: str
     user_id: int
     thread_id: str
+    knowledgebase_id: int
 
 # Thread-related endpoints
 @router.delete("/thread/{user_id}/{thread_id}")
@@ -131,6 +132,7 @@ def chat_endpoint(request: ChatRequest):
     message = request.message
     user_id = request.user_id
     thread_id = request.thread_id
+    knowledgebase_id = request.knowledgebase_id
     
     logger.info(f"Received chat request from user {user_id}, thread {thread_id}: {message}")
     
@@ -144,7 +146,7 @@ def chat_endpoint(request: ChatRequest):
         # Process the message
         def generate_stream():
             try:
-                for chunk in user_rag_agent.chat(message, knowledge_base_id=1, config=config):
+                for chunk in user_rag_agent.chat(message, user_id=user_id, knowledge_base_id=knowledgebase_id, config=config):
                     for key, value in chunk.items():
                         if key == "stage":
                             # Send stage information
