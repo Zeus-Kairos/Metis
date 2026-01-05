@@ -151,6 +151,9 @@ def chat_endpoint(request: ChatRequest):
                         if key == "stage":
                             # Send stage information
                             yield f"data: {json.dumps({key: value})}\n\n"
+                        elif key == "display":
+                            # Send display message
+                            yield f"data: {json.dumps({key: value})}\n\n"
                         elif key == "response":
                             # Send response chunk
                             yield f"data: {json.dumps({key: value})}\n\n"

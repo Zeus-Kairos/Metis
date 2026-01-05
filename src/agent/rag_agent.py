@@ -26,6 +26,7 @@ from src.agent.prompts import (
     filter_documents_prompt,
     format_answer_prompt,
     handle_chat_prompt,
+    plan_rag_prompt,
     refine_query_prompt,
     reference_check_prompt,
     review_answer_prompt,
@@ -61,6 +62,7 @@ class AgentState(TypedDict):
     answer: str = None
     error_context: str = None
     knowledge_base_item: KnowledgeBaseItem = None   
+    display: str = None # Displayed intermediate messages to the user
 
 class DeepRAGState(AgentState):
     """
@@ -138,7 +140,7 @@ class RAGAgent:
             return {
                 "intent": intent,
                 "messages": [{"role": "user", "content": state["query"]}],
-                "knowledge_base_item": self.get_knowledgebase_item(27, 27),
+                "knowledge_base_item": self.get_knowledgebase_item(self.user_id, 1),
             }
             
         return {
@@ -169,7 +171,6 @@ class RAGAgent:
             refined_query = response.content.strip()
         return {
             "refined_query": refined_query,
-            "new_aspects_to_explore": refined_query,
         }
 
     def _handle_rag(self, state: AgentState) -> AgentState:
@@ -216,6 +217,18 @@ class RAGAgent:
             "messages": [response],
         }
 
+    def _plan_rag(self, state: DeepRAGState) -> AgentState:
+        """
+        Plan the RAG.
+        """
+        prompt = plan_rag_prompt(state)
+        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        new_aspects_to_explore = response.content.strip()
+        return {
+            "new_aspects_to_explore": new_aspects_to_explore,
+            "display": f"Explore aspects:\n{new_aspects_to_explore}",
+        }
+
     def _deep_rag(self, state: DeepRAGState) -> DeepRAGState:
         """
         Handle the deep RAG.
@@ -255,6 +268,7 @@ class RAGAgent:
         graph.add_node("refine_query", self._refine_query)
         graph.add_node("handle_chat", self._handle_chat)
         if self.rag_type == RAGType.AGENTIC:
+            graph.add_node("plan_rag", self._plan_rag)
             graph.add_node("deep_rag", self._deep_rag)      
             graph.add_node("deep_retrieve", ToolNode([list_children_tool, rag_search_tool])) 
             graph.add_node("reference_check", self._reference_check)
@@ -274,7 +288,8 @@ class RAGAgent:
         )
         graph.add_edge("handle_chat", END)
         if self.rag_type == RAGType.AGENTIC:
-            graph.add_edge("refine_query", "deep_rag")
+            graph.add_edge("refine_query", "plan_rag")
+            graph.add_edge("plan_rag", "deep_rag")
             graph.add_conditional_edges(
             "deep_rag",
             tools_condition,
@@ -332,10 +347,11 @@ class RAGAgent:
                             if node in self.update_dict:
                                 yield {
                                     "stage": self.update_dict[node],
+                                    "display": state["display"],
                                 }
                     elif mode == "messages":
                         message, meta = chunk
-                        if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "complement_answer"]:
+                        if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "reference_check"]:
                             last_assistant_message = message.content   
                             yield {
                                 "response": last_assistant_message,

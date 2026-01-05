@@ -5,7 +5,7 @@ from src.agent.rag_agent import RAGAgent
 load_dotenv()
 
 # Create the agent instance that will be exported for LangGraph
-agent = RAGAgent(on_langgraph_server=True)
+agent = RAGAgent(user_id=1, on_langgraph_server=True)
 
 # Export the graph for LangGraph
 # This allows LangGraph to visualize and interact with our agent's workflow

@@ -95,7 +95,8 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
     return Command(
         update={
             # update the message history
-            "messages": [ToolMessage(json.dumps(children), tool_call_id=tool_call_id)]
+            "messages": [ToolMessage(json.dumps(children), tool_call_id=tool_call_id)],
+            "display": f"Children listed in {parent_folder}:\n{"\n".join([child["filename"] for child in children])}"
         }
     )
 
@@ -169,7 +170,8 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 "documents": merged_documents,
                 "answer": answer,
                 "new_aspects_to_explore": answer_review,
-                "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)]
+                "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
+                "display": f"Found {len(new_documents)} documents for query: {query} on path: {search_path}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}"
             }
         )
 

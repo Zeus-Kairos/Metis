@@ -3,6 +3,7 @@ import sys
 import json
 import glob
 import shutil
+from datetime import datetime, timedelta, timezone
 
 from typing import Annotated, List, Optional, Dict, Any
 
@@ -75,6 +76,54 @@ async def add_security_headers(request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
     return response
+
+# Middleware to refresh tokens on user activity
+@app.middleware("http")
+async def refresh_token_middleware(request, call_next):
+    # Skip token refresh for login endpoints
+    if request.url.path == "/api/token" or request.url.path == "/api/users":
+        return await call_next(request)
+    
+    # Get token from cookie
+    token = request.cookies.get("access_token")
+    if token:
+        # Decode and validate token
+        payload = memory_manager.decode_token(token)
+        if payload:
+            username = payload.get("sub")
+            user_id = payload.get("user_id")
+            exp = payload.get("exp")
+            
+            if username and user_id and exp:
+                # Check if token needs refresh
+                current_time = datetime.now(timezone.utc)
+                expiration_time = datetime.fromtimestamp(exp, timezone.utc)
+                time_remaining = expiration_time - current_time
+                
+                # If token is expiring in less than 15 minutes, refresh it
+                if time_remaining < timedelta(minutes=15):
+                    # Generate new token
+                    new_token = memory_manager.create_access_token(
+                        data={"sub": username, "user_id": user_id}
+                    )
+                    
+                    # Create a response early to set the new cookie
+                    response = await call_next(request)
+                    
+                    # Update cookie with new token
+                    response.set_cookie(
+                        key="access_token",
+                        value=new_token,
+                        httponly=True,
+                        secure=False,  # Set to True in production with HTTPS
+                        samesite="strict",
+                        max_age=3600,  # 1 hour
+                        path="/"
+                    )
+                    return response
+    
+    # Proceed with normal request handling
+    return await call_next(request)
 
 # Include thread-related endpoints
 app.include_router(thread_router)

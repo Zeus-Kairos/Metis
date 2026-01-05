@@ -195,6 +195,24 @@ def review_answer_prompt(query: str, answer: str, searched_path: Dict[str, set[s
     Explored Aspects: {explored_aspects}
     """
 
+def plan_rag_prompt(state: TypedDict) -> str:
+    """
+    Plan the RAG.
+    """
+    query = state["refined_query"]
+    knowledgebase_description = state["knowledge_base_item"].description
+
+    return f"""
+    You are a helpful assistant to break down the user query into multiple RAG aspects.
+    Based on the user query and the knowledge base description, return a list of aspects to explore.
+    Each aspect should be brief and within 10 words.
+
+    User Query: {query}
+    Knowledge Base Description: {knowledgebase_description}
+
+    Aspects:
+    """
+
 def deep_rag_prompt(state: TypedDict) -> str:
     """
     Deep RAG prompt.
