@@ -44,7 +44,45 @@ const MarkdownRenderer = ({ content }) => {
         width: '100%',
         display: 'block',
       }}
-    />
+    >
+      {/* Inline style to override highlight.js backgrounds and table styles */}
+      <style>{`
+        .markdown-renderer pre {
+          background-color: transparent !important;
+          padding: 0 !important;
+          margin: 0 !important;
+        }
+        .markdown-renderer code {
+          background-color: rgba(0, 0, 0, 0.05) !important;
+          padding: 0.2em 0.4em !important;
+          border-radius: 3px !important;
+        }
+        .markdown-renderer pre code {
+          background-color: transparent !important;
+          padding: 0 !important;
+        }
+        /* Override table header background */
+        .markdown-renderer table {
+          border-collapse: collapse;
+          width: 100%;
+        }
+        .markdown-renderer th {
+          background-color: #F5F0E8 !important; /* Slightly darker background for table headers */
+          color: #202124 !important;
+          border: 1px solid #e0e0e0 !important;
+          padding: 8px !important;
+          text-align: left !important;
+          font-weight: 600 !important;
+        }
+        .markdown-renderer td {
+          border: 1px solid #e0e0e0 !important;
+          padding: 8px !important;
+        }
+        .markdown-renderer tr:nth-child(even) {
+          background-color: rgba(0, 0, 0, 0.02) !important;
+        }
+      `}</style>
+    </div>
   );
 };
 

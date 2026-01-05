@@ -148,15 +148,15 @@ def chat_endpoint(request: ChatRequest):
             try:
                 for chunk in user_rag_agent.chat(message, user_id=user_id, knowledge_base_id=knowledgebase_id, config=config):
                     for key, value in chunk.items():
-                        if key == "stage":
-                            # Send stage information
-                            yield f"data: {json.dumps({key: value})}\n\n"
-                        elif key == "display":
-                            # Send display message
-                            yield f"data: {json.dumps({key: value})}\n\n"
-                        elif key == "response":
-                            # Send response chunk
-                            yield f"data: {json.dumps({key: value})}\n\n"
+                            if key == "stage":
+                                # Send stage information
+                                yield f"data: {json.dumps({key: value})}\n\n"
+                            elif key == "display" and value:
+                                # Send display message only if it has a value
+                                yield f"data: {json.dumps({key: value})}\n\n"
+                            elif key == "response":
+                                # Send response chunk
+                                yield f"data: {json.dumps({key: value})}\n\n"
                 
                 # Send done signal
                 yield f"data: {json.dumps({"done": True})}\n\n"

@@ -6,24 +6,47 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
   const messagesArray = useMemo(() => messages || [], [messages]);
   const endOfMessagesRef = useRef(null);
   const messageRefs = useRef({});
+  // Refs for display content divs to enable auto-scrolling
+  const displayRefs = useRef({});
+  // State to track which display messages are expanded
+  const [expandedDisplays, setExpandedDisplays] = React.useState({});
+  
+  // Toggle display expansion for a specific message
+  const toggleDisplay = (messageIndex) => {
+    setExpandedDisplays(prev => ({
+      ...prev,
+      [messageIndex]: !prev[messageIndex]
+    }));
+  };
+  
+  // Auto-scroll display content to bottom when updated, especially during streaming
+  React.useEffect(() => {
+    if (messagesArray.length > 0) {
+      const lastMessage = messagesArray[messagesArray.length - 1];
+      const lastIndex = messagesArray.length - 1;
+      
+      // Only auto-scroll if it's an assistant message with display content
+      if (lastMessage.role === 'assistant' && lastMessage.display && typeof lastMessage.display === 'string') {
+        const displayVisible = expandedDisplays[lastIndex] || !lastMessage.content.trim();
+        
+        if (displayVisible) {
+          const displayEl = displayRefs.current[lastIndex];
+          if (displayEl) {
+            // Scroll to the bottom of the display content
+            displayEl.scrollTop = displayEl.scrollHeight;
+          }
+        }
+      }
+    }
+  }, [messagesArray, expandedDisplays]);
 
-  // Scroll to the bottom whenever messages change
+  // Simplified scrolling logic: always scroll to bottom when messages change
   useEffect(() => {
     if (endOfMessagesRef.current) {
-      endOfMessagesRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    }
-  }, [messagesArray]);
-
-  // Ensure the latest assistant message is always visible during streaming
-  useEffect(() => {
-    const lastMessage = messagesArray[messagesArray.length - 1];
-    if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.complete) {
-      if (messageRefs.current[messagesArray.length - 1]) {
-        messageRefs.current[messagesArray.length - 1].scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'nearest' 
-        });
-      }
+      endOfMessagesRef.current.scrollIntoView({ 
+        behavior: 'auto', // Use immediate scrolling instead of smooth to prevent conflicts
+        block: 'end' 
+      });
     }
   }, [messagesArray]);
 
@@ -83,11 +106,63 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
                 boxSizing: 'border-box',
               }}
           >
+            {/* Display 'display' data with expand/collapse functionality */}
+            {message.role === 'assistant' && message.display && typeof message.display === 'string' && message.display.trim() && (
+              <>
+                {/* Expand/Collapse button - only show when there's both display data and response content */}
+                {message.content.trim() && (
+                  <button
+                    onClick={() => toggleDisplay(index)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#606266',
+                      fontSize: '0.75em',
+                      cursor: 'pointer',
+                      padding: '4px 8px',
+                      marginBottom: '4px',
+                      borderRadius: '4px',
+                      hover: {
+                        backgroundColor: '#f0f0f0'
+                      }
+                    }}
+                  >
+                    {expandedDisplays[index] ? '▼ Hide details' : '▶ Show details'}
+                  </button>
+                )}
+                
+                {/* Show display data if there's no response or it's expanded */}
+                {(expandedDisplays[index] || !message.content.trim()) && (
+                  <div 
+                    className="display-content"
+                    ref={el => displayRefs.current[index] = el}
+                    style={{ 
+                      fontSize: '0.8em',
+                      color: '#606266',
+                      marginBottom: '8px',
+                      padding: '8px',
+                      border: '1px solid #e0e0e0',
+                      lineHeight: '1.4',
+                      fontFamily: '"Roboto", sans-serif',
+                      whiteSpace: 'pre-wrap',
+                      maxHeight: '150px',
+                      overflowY: 'auto',
+                      borderRadius: '4px',
+                      backgroundColor: '#F8F8F8', // Distinct background color for sliding window
+                    }}
+                  >
+                    {message.display}
+                  </div>
+                )}
+              </>
+            )}
+            
             {message.role === 'assistant' ? (
               <MarkdownRenderer content={message.content || ''} />
             ) : (
               message.content
             )}
+            
             {message.role === 'assistant' && !message.complete && (
               <div className="typing-indicator" style={{ 
                 display: 'flex',

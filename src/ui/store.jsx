@@ -325,11 +325,13 @@ const useChatStore = create((set, get) => {
         // Fix: Backend returns 'history' not 'messages'
         const messages = historyData.history || [];
         
-        // Ensure all messages have the 'complete' flag
+        // Ensure all messages have the 'complete' flag and 'display' field
         const messagesWithComplete = messages.map(msg => ({
           ...msg,
           // All existing messages from history should be complete
-          complete: true
+          complete: true,
+          // Initialize display field if it doesn't exist and ensure it's a string
+          display: typeof msg.display === 'string' ? msg.display : String(msg.display || '')
         }));
         
         // Update the conversation with the fetched messages
@@ -559,6 +561,7 @@ const useChatStore = create((set, get) => {
               id: `msg_${Date.now()}_response`,
               role: 'assistant',
               content: result.response || 'Sorry, I couldn\'t process your request.',
+              display: typeof result.display === 'string' ? result.display : String(result.display || ''),
               metadata: {},
               timestamp: new Date().toISOString(),
               complete: true // Add complete flag set to true for non-streaming responses
@@ -582,6 +585,7 @@ const useChatStore = create((set, get) => {
           const decoder = new TextDecoder();
           
           let partialContent = '';
+          let partialDisplay = '';
           let assistantMessageId = `msg_${Date.now()}_stream`;
           
           // Add an empty assistant message to the conversation
@@ -590,6 +594,7 @@ const useChatStore = create((set, get) => {
               id: assistantMessageId,
               role: 'assistant',
               content: '',
+              display: '',
               metadata: {},
               timestamp: new Date().toISOString(),
               complete: false // Add complete flag set to false initially
@@ -610,8 +615,11 @@ const useChatStore = create((set, get) => {
                 try {
                   const jsonData = JSON.parse(line.substring(6));
                   if (jsonData.response) {
-                    // Only append the response content, not the entire JSON
+                    // Only append the response content, not the entire JSON - restore original streaming behavior
                     partialContent += jsonData.response;
+                  } else if (jsonData.display) {
+                    // Append the display content, keeping all intermediate information
+                    partialDisplay += typeof jsonData.display === 'string' ? jsonData.display : String(jsonData.display);
                   } else if (jsonData.error) {
                     // Handle error from SSE
                     const errorMsg = jsonData.error;
@@ -663,7 +671,8 @@ const useChatStore = create((set, get) => {
               if (assistantMessageIndex !== -1) {
                 updatedMessages[assistantMessageIndex] = { 
                   ...updatedMessages[assistantMessageIndex], 
-                  content: partialContent
+                  content: partialContent,
+                  display: partialDisplay
                 };
               }
               

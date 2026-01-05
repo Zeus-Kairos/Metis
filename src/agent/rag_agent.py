@@ -345,10 +345,13 @@ class RAGAgent:
                     if mode == "updates":
                         for node, state in chunk.items():
                             if node in self.update_dict:
-                                yield {
+                                update = {
                                     "stage": self.update_dict[node],
-                                    "display": state["display"],
                                 }
+                                # Only add display if it exists in the state
+                                if "display" in state and state["display"]:
+                                    update["display"] = state["display"]
+                                yield update
                     elif mode == "messages":
                         message, meta = chunk
                         if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "reference_check"]:
