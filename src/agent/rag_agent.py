@@ -3,6 +3,7 @@ import json
 import logging
 import os
 from re import search
+import re
 from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 
 from langchain.tools import InjectedToolCallId, ToolRuntime, tool
@@ -69,7 +70,7 @@ class DeepRAGState(AgentState):
     State of the deep RAG sub-agent.
     """      
     searched_path: Dict[str, set[str]] = {}
-    new_aspects_to_explore: str = None
+    new_aspects_to_explore: List[Dict[str, str]] = None
     retrieve_tries: int = 0
 
 class RAGAgent:
@@ -223,7 +224,23 @@ class RAGAgent:
         """
         prompt = plan_rag_prompt(state)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
-        new_aspects_to_explore = response.content.strip()
+        try:
+            new_aspects_to_explore = []
+            # use regex to extract the JSON array
+            match = re.search(r"\[.*\]", response.content.strip().lower(), re.DOTALL)
+            if match:
+                parsed_aspects = json.loads(match.group(0))
+                # validate the JSON array
+                for aspect in parsed_aspects:
+                    if not all(key in aspect for key in ["aspect"]):
+                        continue
+                    if "status" not in aspect:
+                        aspect["status"] = "undone"
+                    new_aspects_to_explore.append(aspect)
+            else:
+                new_aspects_to_explore = []
+        except (json.JSONDecodeError, AttributeError):
+            new_aspects_to_explore = []
         return {
             "new_aspects_to_explore": new_aspects_to_explore,
             "display": f"Explore aspects:\n{new_aspects_to_explore}",
@@ -234,7 +251,7 @@ class RAGAgent:
         Handle the deep RAG.
         """
         new_aspects_to_explore = state["new_aspects_to_explore"]
-        if new_aspects_to_explore == "none":
+        if all(aspect["status"] == "done" for aspect in new_aspects_to_explore):
             return { "messages": AIMessage(content="end")}
 
         prompt = deep_rag_prompt(state)
@@ -340,18 +357,12 @@ class RAGAgent:
                 graph = self.builder.compile(checkpointer=checkpointer)
                 # Streaming mode: yield chunks as they become available                
                 for mode, chunk in graph.stream(initial_state, 
-                                                config=config, 
-                                                stream_mode=["updates", "messages"]):
+                                                       config=config, 
+                                                       stream_mode=["updates", "messages"]):
                     if mode == "updates":
                         for node, state in chunk.items():
-                            if node in self.update_dict:
-                                update = {
-                                    "stage": self.update_dict[node],
-                                }
-                                # Only add display if it exists in the state
-                                if "display" in state and state["display"]:
-                                    update["display"] = state["display"]
-                                yield update
+                            if "display" in state and state["display"]:
+                                yield { "display": state["display"] }
                     elif mode == "messages":
                         message, meta = chunk
                         if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "reference_check"]:

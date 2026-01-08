@@ -619,7 +619,8 @@ const useChatStore = create((set, get) => {
                     partialContent += jsonData.response;
                   } else if (jsonData.display) {
                     // Append the display content, keeping all intermediate information
-                    partialDisplay += typeof jsonData.display === 'string' ? jsonData.display : String(jsonData.display);
+                    const displayContent = typeof jsonData.display === 'string' ? jsonData.display : String(jsonData.display);
+                    partialDisplay += partialDisplay ? `\n${displayContent}` : displayContent;
                   } else if (jsonData.error) {
                     // Handle error from SSE
                     const errorMsg = jsonData.error;

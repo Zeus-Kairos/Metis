@@ -165,34 +165,42 @@ def complement_answer_prompt(base_query: str, answer: str, documents: Dict[str, 
     Assistant:
     """
 
-def review_answer_prompt(query: str, answer: str, searched_path: Dict[str, set[str]]) -> str:
+def review_answer_prompt(query: str, answer: str, searched_path: Dict[str, set[str]], new_aspects_to_explore: List[Dict[str, str]]) -> str:
     """
     Review the answer.
     """
-
-    explored_aspects = "\n".join([f"- {aspect}" for aspect in searched_path.keys()])
+    undone_aspects = [aspect for aspect in new_aspects_to_explore if aspect["status"] == "undone"]
 
     return f"""
-    You are an evaluator that reviews whether an assistant’s answer fully satisfies the user’s query.
-    The current answer is based on the query results in the knowledge base to some aspects.
-    Task:
-    1. Carefully read the user’s query and identify the explicit and implicit requirements (sub-questions, constraints, context, and expected level of detail).​
-    2. Read the assistant’s answer and assess it along these dimensions, focusing only on content, not style:​
-        - Relevance: Does the answer directly address all parts of the user’s query without going off-topic?
-        - Completeness: Does the answer cover all essential aspects of the query, including important edge cases, assumptions, or follow-up details a reasonable user would expect?
-        - Accuracy/Correctness: Does the answer contain any clear errors, contradictions, or misleading statements relative to the question context?
-        - Clarity: Is the answer understandable for the intended audience, with concepts explained at an appropriate level?
-    3. Based on this assessment, decide if the answer is sufficient:
-        - “Sufficient”: The answer is relevant, correct, and complete enough that a typical user would not need more information.
-        - “Insufficient”: The answer fails to address key parts of the question, is largely incorrect, or is too vague to be useful.​
-    4. If the answer is “Sufficient”, return "None".
-       If the answer is “Insufficient”, return a new list of aspects that the assistant should query in the knowledge base to provide a sufficient answer.
-       - The list should contain 1~3 new aspects.
-       - Each new aspect should be brief and within 10 words.
+    You are a Precise Content Auditor specializing in Information Gap Analysis. Your task is to evaluate the alignment between a User Query, a set of defined Aspects, and a generated Answer.
+
+    The "Aspects" is a list of dictionaries, each dictionary has 2 keys: "aspect" and "status".
+    "aspect" is the brief description of the aspect.
+    "status" is the status of the aspect, either "undone" or "done".
+
+    Task Instructions:
+        Coverage Audit: 
+           - Check if each item in the "Aspects to Explore" list is addressed in the "Generated Answer." 
+           - If the aspect is fully addressed, set the "status" to "done".
+           - Otherwise, set the "status" to "undone".
+
+        Output:
+           - The updated "Aspects" list.
+
+        Constraints:
+           - Do not add any new aspect to the "Aspects" list.
+           - ONLY output the JSON array, without any additional text.
 
     User Query: {query}
     User Current Answer: {answer}
-    Explored Aspects: {explored_aspects}
+    Aspects: {new_aspects_to_explore}
+
+    Output Format:
+    The output must be a JSON array of aspect dictionaries.
+    Each aspect must be a dictionary with 2 keys: "aspect", "status".
+    "aspect" is the brief description of the aspect, within 10 words.
+
+    Updated Aspects:
     """
 
 def plan_rag_prompt(state: TypedDict) -> str:
@@ -205,7 +213,18 @@ def plan_rag_prompt(state: TypedDict) -> str:
     return f"""
     You are a helpful assistant to break down the user query into multiple RAG aspects.
     Based on the user query and the knowledge base description, return a list of aspects to explore.
-    Each aspect should be brief and within 10 words.
+    Guideline:
+    - 1-3 aspects for simple queries.
+    - 4-6 aspects for complex queries.
+    - 7-9 aspects for very complex queries.
+
+    Output Format:
+    The output must be a JSON array of aspect dictionaries.
+    Each aspect must be a dictionary with 1 key: "aspect".
+    "aspect" is the brief description of the aspect, within 10 words.
+
+    Constraints:
+    ONLY output the JSON array, without any additional text.
 
     User Query: {query}
     Knowledge Base Description: {knowledgebase_description}
@@ -219,6 +238,7 @@ def deep_rag_prompt(state: TypedDict) -> str:
     """
     query = state["refined_query"]
     new_aspects_to_explore = state["new_aspects_to_explore"]
+    aspects_to_explore = [aspect["aspect"] for aspect in new_aspects_to_explore if aspect["status"] == "undone"]
 
     rag_messages = []
     for i in range(len(state["messages"]) - 1, -1, -1):
@@ -239,7 +259,7 @@ def deep_rag_prompt(state: TypedDict) -> str:
     You can use the list_children tool to decide where to search. Use relative path to specify the search_path.
 
     If no additional information is needed, return "end".
-    generate new queries for the tools based on the new aspects to explore.
+    generate new queries for the tools based on the aspects in "Aspects to Explore".
 
     Constraints:
     - The search_path must include the knowledge base root folder.
@@ -247,7 +267,7 @@ def deep_rag_prompt(state: TypedDict) -> str:
 
     Knowledge Base Description: {knowledgebase_description}
     Knowledge Base Root Folder: {knowledgebase_root_path}
-    New Aspects to Explore: {new_aspects_to_explore}
+    Aspects to Explore: {aspects_to_explore}
 
     User Query: {query}
     RAG History: {rag_messages}

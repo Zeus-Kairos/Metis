@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from typing import Annotated, Dict, List, Tuple
 from langchain.tools import InjectedToolCallId, tool, ToolRuntime
 from langchain_core.documents import Document
@@ -126,7 +127,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             # e.g. "folder1/folder2" -> {"category_level_1": "folder1", "category_level_2": "folder2"}               
             knowledgebase_manager = MemoryManager().knowledgebase_manager
             file_ids = knowledgebase_manager.get_files_by_path_prefix(search_path) 
-            logger.info(f"[rag_search_tool] Search len {len(file_ids)} Files")   
+            logger.info(f"[rag_search_tool] Search {len(file_ids)} Files under path: {search_path}")   
             docs = rag_flow.files_fusion_retrieve(query, file_ids, k=k)  
         else:
             filters["file_path"] = search_path
@@ -158,10 +159,12 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
         base_query = runtime.state["refined_query"]
         answer = runtime.state["answer"] if "answer" in runtime.state else ""
         answer = complement_answer(base_query, answer, filtered_docs)
-        answer_review = review_answer(base_query, answer, searched_path)
+
+        new_aspects_to_explore = runtime.state["new_aspects_to_explore"]
+        updated_aspects = review_answer(base_query, answer, searched_path, new_aspects_to_explore)
+        
         message = json.dumps({
-            "answer": answer,
-            "new_aspects_to_explore": answer_review,
+            "new_aspects_to_explore": updated_aspects,
         })
         
         return Command(
@@ -169,7 +172,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 "searched_path": searched_path,
                 "documents": merged_documents,
                 "answer": answer,
-                "new_aspects_to_explore": answer_review,
+                "new_aspects_to_explore": updated_aspects,
                 "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
                 "display": f"Found {len(new_documents)} documents for query: {query} on path: {search_path}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}"
             }
@@ -203,11 +206,35 @@ def complement_answer(base_query: str, answer: str, additional_docs: Dict[str, L
     
     return response.content.strip()
 
-def review_answer(query: str, answer: str, searched_path: Dict[str, set[str]]) -> str:
+def review_answer(query: str, answer: str, searched_path: Dict[str, set[str]], new_aspects_to_explore: List[Dict[str, str]]) -> str:
     """
     Review the answer.
     """
-    prompt = review_answer_prompt(query, answer, searched_path)
+    prompt = review_answer_prompt(query, answer, searched_path, new_aspects_to_explore)
     response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
     answer_review = response.content.strip().lower()
-    return answer_review
+    logger.info(f"[review_answer] Review: {answer_review}")
+    updated_aspects = []
+    try:       
+        # Now extract JSON array from cleaned content
+        match = re.search(r"\[.*\]", answer_review, re.DOTALL)
+        if match:
+            parsed_aspects = json.loads(match.group(0))
+            for aspect in parsed_aspects:
+                if not all(key in aspect for key in ["aspect"]):
+                    continue
+                if "status" not in aspect:
+                    aspect["status"] = "undone"
+                if aspect["status"] not in ["undone", "done"]:
+                    aspect["status"] = "undone"
+                updated_aspects.append(aspect)
+        missing_aspects = [aspect for aspect in new_aspects_to_explore if aspect["aspect"] not in [a["aspect"] for a in updated_aspects]]
+        if missing_aspects:
+            logger.info(f"[review_answer] Missing aspects: {missing_aspects}")
+        # updated_aspects.extend(missing_aspects)
+    except (json.JSONDecodeError, AttributeError):
+        updated_aspects = new_aspects_to_explore
+
+    logger.info(f"[review_answer] Updated aspects: {updated_aspects}")
+
+    return updated_aspects

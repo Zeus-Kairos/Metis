@@ -127,7 +127,7 @@ def get_thread_history(user_id: int, thread_id: str):
         raise HTTPException(status_code=404, detail=f"Message history not found for thread {thread_id} of user {user_id}")
 
 @router.post("/chat")
-def chat_endpoint(request: ChatRequest):
+async def chat_endpoint(request: ChatRequest):
     """Chat endpoint that processes user messages and returns streaming responses."""
     message = request.message
     user_id = request.user_id
