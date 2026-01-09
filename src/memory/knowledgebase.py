@@ -4,9 +4,9 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple, Union
 from psycopg_pool import ConnectionPool
 
-import logging
+from src.utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class KnowledgebaseManager:
     """

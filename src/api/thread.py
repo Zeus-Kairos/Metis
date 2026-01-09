@@ -162,7 +162,7 @@ async def chat_endpoint(request: ChatRequest):
                 yield f"data: {json.dumps({"done": True})}\n\n"
                 
             except Exception as e:
-                logger.error(f"Error processing chat message: {str(e)}")
+                logger.exception(f"Error processing chat message: {str(e)}", stack_info=True)
                 yield f"data: {json.dumps({"error": str(e)})}\n\n"
         
         return StreamingResponse(
@@ -171,5 +171,5 @@ async def chat_endpoint(request: ChatRequest):
         )
         
     except Exception as e:
-        logger.error(f"Chat endpoint error: {str(e)}")
+        logger.exception(f"Chat endpoint error: {str(e)}", stack_info=True)
         raise HTTPException(status_code=500, detail=str(e)) 

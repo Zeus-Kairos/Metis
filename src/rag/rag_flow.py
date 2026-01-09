@@ -10,8 +10,9 @@ from src.rag.bm25_scores import BM25Scorer
 from src.rag.embeddings import EmbeddingRunner
 from src.rag.md_splitter import MarkdownSplitter
 from src.utils.reranker import JinaAPIReranker, JinaReRanker, BgeReRanker
+from src.utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class RAGType(Enum):
     """
@@ -234,7 +235,7 @@ class RAGFlow:
         all_docs_with_scores = self.vectorstore.similarity_search_with_relevance_scores("", k=self.vectorstore.index.ntotal)
         filtered = [(doc, score) for doc, score in all_docs_with_scores if doc.metadata.get("file_id") in file_ids]
         filtered_docs = [doc for doc, _ in filtered]
-        logger.info(f"There are {len(filtered_docs)} docs with file_ids: {file_ids}")
+        logger.info(f"There are {len(filtered_docs)} docs with file_ids")
        
         if len(filtered_docs) > k:
             vector_scores = [score for _, score in filtered]

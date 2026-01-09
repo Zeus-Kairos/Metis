@@ -3,11 +3,10 @@ import os
 from typing import List, Dict, Any, Optional, Tuple, Union
 from langchain_core.messages import HumanMessage
 from psycopg_pool import ConnectionPool
-import logging
 
-from src.memory.memory import MemoryManager
+from src.utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_THREAD_TITLE = "New Chat"
 

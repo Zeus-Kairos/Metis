@@ -165,42 +165,25 @@ def complement_answer_prompt(base_query: str, answer: str, documents: Dict[str, 
     Assistant:
     """
 
-def review_answer_prompt(query: str, answer: str, searched_path: Dict[str, set[str]], new_aspects_to_explore: List[Dict[str, str]]) -> str:
+def review_answer_prompt(query: str, answer: str) -> str:
     """
     Review the answer.
     """
-    undone_aspects = [aspect for aspect in new_aspects_to_explore if aspect["status"] == "undone"]
 
     return f"""
-    You are a Precise Content Auditor specializing in Information Gap Analysis. Your task is to evaluate the alignment between a User Query, a set of defined Aspects, and a generated Answer.
-
-    The "Aspects" is a list of dictionaries, each dictionary has 2 keys: "aspect" and "status".
-    "aspect" is the brief description of the aspect.
-    "status" is the status of the aspect, either "undone" or "done".
+    You are a Precise Content Auditor specializing in Information Gap Analysis. Your task is to evaluate the alignment between User Query and a generated Answer.
 
     Task Instructions:
         Coverage Audit: 
-           - Check if each item in the "Aspects to Explore" list is addressed in the "Generated Answer." 
-           - If the aspect is fully addressed, set the "status" to "done".
-           - Otherwise, set the "status" to "undone".
-
-        Output:
-           - The updated "Aspects" list.
+           - Check if the user query is fully addressed in the "Answer." 
+           - If the query is fully addressed, return "done".
+           - Otherwise, return "undone".
 
         Constraints:
-           - Do not add any new aspect to the "Aspects" list.
-           - ONLY output the JSON array, without any additional text.
+           - ONLY output word "done" or "undone", without any additional text.
 
     User Query: {query}
-    User Current Answer: {answer}
-    Aspects: {new_aspects_to_explore}
-
-    Output Format:
-    The output must be a JSON array of aspect dictionaries.
-    Each aspect must be a dictionary with 2 keys: "aspect", "status".
-    "aspect" is the brief description of the aspect, within 10 words.
-
-    Updated Aspects:
+    Answer: {answer}
     """
 
 def plan_rag_prompt(state: TypedDict) -> str:
@@ -211,25 +194,59 @@ def plan_rag_prompt(state: TypedDict) -> str:
     knowledgebase_description = state["knowledge_base_item"].description
 
     return f"""
-    You are a helpful assistant to break down the user query into multiple RAG aspects.
+    You are a helpful assistant to generate multiple RAG aspects based on the user query.
     Based on the user query and the knowledge base description, return a list of aspects to explore.
+    Each aspect can be used as a query to retrieve relevant information from the knowledge base.
     Guideline:
     - 1-3 aspects for simple queries.
     - 4-6 aspects for complex queries.
     - 7-9 aspects for very complex queries.
 
     Output Format:
-    The output must be a JSON array of aspect dictionaries.
-    Each aspect must be a dictionary with 1 key: "aspect".
-    "aspect" is the brief description of the aspect, within 10 words.
+    The output must be a JSON array of strings.
+    Each aspect must be a string, within 10 words.
 
     Constraints:
-    ONLY output the JSON array, without any additional text.
+    - DON NOT answer the query. The response must be aspects of the query, not solution steps.
+    - ONLY output the JSON array, without any additional text.
 
     User Query: {query}
     Knowledge Base Description: {knowledgebase_description}
 
     Aspects:
+    """
+
+def deep_search_prompt(state: TypedDict) -> str:
+    """
+    Deep Search prompt.
+    """
+    aspect = state["aspect"]
+    messages = state["messages"]
+    
+    knowledgebase_description = state["knowledge_base_item"].description
+    knowledgebase_root_path = state["knowledge_base_item"].root_path
+
+    return f"""
+    You are a helpful assistant to help retrieve the most relevant information from the knowledge base.   
+
+    Task:
+      - Based on the topic, search for relevant information in the knowledge base.
+
+    How to use tools:
+      - You have a list_children tool to list all children with description of a folder in the knowledge base.
+      - You have a retrieval tool to find relevant documents in a specific folder in the knowledge base.
+      - Decide a proper query to retrieve relevant information to the topic.
+      - Use the list_children tool to explore the knowledge base and decide where to search. Use relative path to specify the search_path.
+      - Use the retrieval tool to search for relevant information with the query and the search_path.
+
+    Constraints:
+    - The search_path must include the knowledge base root folder.
+    - Base on the RAG history, try diverse queries and search paths that have not been explored.
+
+    Topic: {aspect}
+    Knowledge Base Description: {knowledgebase_description}
+    Knowledge Base Root Folder: {knowledgebase_root_path}   
+    RAG History: {messages}
     """
 
 def deep_rag_prompt(state: TypedDict) -> str:

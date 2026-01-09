@@ -11,9 +11,9 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt      
 
 from .knowledgebase import KnowledgebaseManager
+from src.utils.logging_config import get_logger
 
-import logging
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Authentication settings
 ALGORITHM = "HS256"

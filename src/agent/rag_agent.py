@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 import json
 import logging
+import operator
 import os
 from re import search
 import re
@@ -9,21 +10,24 @@ from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 from langchain.tools import InjectedToolCallId, ToolRuntime, tool
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
-from langchain.agents import create_agent
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.types import Command
+from langgraph.types import Command, Send
 from psycopg_pool import base
+from pydantic import BaseModel
 
+from src.agent.types import KnowledgeBaseItem
+from src.agent.researcher import Researcher
 from src.memory.memory import MemoryManager 
 from src.memory.thread import ThreadManager
 from src.agent.prompts import (
     classify_intent_prompt,
     complement_answer_prompt,
     deep_rag_prompt,
+    deep_search_prompt,
     filter_documents_prompt,
     format_answer_prompt,
     handle_chat_prompt,
@@ -37,19 +41,18 @@ from src.agent.llm import LLMRunner
 from src.agent.api_llm import get_api_llm_runner
 from src.agent.tools import list_children_tool, rag_search_tool
 from src.utils.paths import get_index_path, get_upload_dir
+from src.utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-@dataclass
-class KnowledgeBaseItem:
+class RAGResult(BaseModel):
     """
-    Represents an item in the knowledge base index.
+    Result of the RAG agent.
     """
-    id: int
-    name: str
-    root_path: str
-    index_path: str
-    description: str
+    aspect: str
+    documents: list[Document] = []
+    answer: str = ""
+    is_done: bool = False
 
 class AgentState(TypedDict):
     """
@@ -69,9 +72,21 @@ class DeepRAGState(AgentState):
     """
     State of the deep RAG sub-agent.
     """      
-    searched_path: Dict[str, set[str]] = {}
-    new_aspects_to_explore: List[Dict[str, str]] = None
-    retrieve_tries: int = 0
+    aspects_to_explore: List[str]
+    searched_aspects: Annotated[
+        List[RAGResult], operator.add
+    ]
+
+class DeepSearchState(AgentState):
+    """
+    State of the deep search sub-agent.
+    """
+    aspect: str
+    knowledge_base_item: KnowledgeBaseItem
+    searched_aspects: Annotated[
+        List[RAGResult], operator.add
+    ]  # All researchers write to this key in parallel
+
 
 class RAGAgent:
     def __init__(self, thread_manager: ThreadManager = None, user_id: int = None, on_langgraph_server: bool = False):
@@ -225,26 +240,52 @@ class RAGAgent:
         prompt = plan_rag_prompt(state)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
         try:
-            new_aspects_to_explore = []
             # use regex to extract the JSON array
             match = re.search(r"\[.*\]", response.content.strip().lower(), re.DOTALL)
             if match:
-                parsed_aspects = json.loads(match.group(0))
-                # validate the JSON array
-                for aspect in parsed_aspects:
-                    if not all(key in aspect for key in ["aspect"]):
-                        continue
-                    if "status" not in aspect:
-                        aspect["status"] = "undone"
-                    new_aspects_to_explore.append(aspect)
+                aspects_to_explore = json.loads(match.group(0))
             else:
-                new_aspects_to_explore = []
+                aspects_to_explore = []
         except (json.JSONDecodeError, AttributeError):
-            new_aspects_to_explore = []
+            aspects_to_explore = []
         return {
-            "new_aspects_to_explore": new_aspects_to_explore,
-            "display": f"Explore aspects:\n{new_aspects_to_explore}",
+            "aspects_to_explore": aspects_to_explore,
+            "display": f"Explore aspects:\n{aspects_to_explore}",
         }
+
+    # Conditional edge function to create llm_call workers that each write a section of the report
+    def _assign_researchers(self, state: DeepRAGState):
+        """Assign a researcher to each aspect in the plan"""
+
+        # Kick off section writing in parallel via Send() API
+        return [Send("deep_search", {
+                        "aspect": aspect, 
+                        "knowledge_base_item": state["knowledge_base_item"],
+                        }) 
+            for aspect in state["aspects_to_explore"]]
+
+    def _deep_search(self, state: DeepSearchState) -> DeepRAGState:
+        """
+        Handle the deep search.
+        """
+        aspect = state["aspect"]
+        knowledgebase_item = state["knowledge_base_item"]
+        researcher = Researcher(self.llm_runner)
+        output = researcher.graph.invoke({
+            "aspect": aspect,
+            "knowledge_base_item": knowledgebase_item,
+        })
+        result = RAGResult(
+            aspect=aspect,
+            documents=output["documents"],
+            answer=output["answer"],
+            is_done=output["is_done"],
+        )
+
+        return {
+            "searched_aspects": [result],
+        }
+
 
     def _deep_rag(self, state: DeepRAGState) -> DeepRAGState:
         """
@@ -286,8 +327,7 @@ class RAGAgent:
         graph.add_node("handle_chat", self._handle_chat)
         if self.rag_type == RAGType.AGENTIC:
             graph.add_node("plan_rag", self._plan_rag)
-            graph.add_node("deep_rag", self._deep_rag)      
-            graph.add_node("deep_retrieve", ToolNode([list_children_tool, rag_search_tool])) 
+            graph.add_node("deep_search", self._deep_search)       
             graph.add_node("reference_check", self._reference_check)
         else:
             graph.add_node("handle_rag", self._handle_rag)
@@ -306,16 +346,10 @@ class RAGAgent:
         graph.add_edge("handle_chat", END)
         if self.rag_type == RAGType.AGENTIC:
             graph.add_edge("refine_query", "plan_rag")
-            graph.add_edge("plan_rag", "deep_rag")
             graph.add_conditional_edges(
-            "deep_rag",
-            tools_condition,
-            {
-                "tools": "deep_retrieve",
-                "__end__": "reference_check",
-            },
-            )  
-            graph.add_edge("deep_retrieve", "deep_rag")
+                "plan_rag", self._assign_researchers, ["deep_search"]
+            )
+            graph.add_edge("deep_search", "reference_check")
             graph.add_edge("reference_check", END)
         else:
             graph.add_edge("refine_query", "handle_rag")
@@ -357,8 +391,9 @@ class RAGAgent:
                 graph = self.builder.compile(checkpointer=checkpointer)
                 # Streaming mode: yield chunks as they become available                
                 for mode, chunk in graph.stream(initial_state, 
-                                                       config=config, 
-                                                       stream_mode=["updates", "messages"]):
+                                                config=config, 
+                                                subgraphs=True,
+                                                stream_mode=["updates", "messages"]):
                     if mode == "updates":
                         for node, state in chunk.items():
                             if "display" in state and state["display"]:
@@ -376,6 +411,7 @@ class RAGAgent:
             # Streaming mode: yield chunks as they become available                
             for mode, chunk in graph.stream(initial_state, 
                                             config=config, 
+                                            subgraphs=True,
                                             stream_mode=["updates", "messages"]):
                 if mode == "updates":
                     for node, state in chunk.items():

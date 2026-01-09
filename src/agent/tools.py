@@ -12,8 +12,9 @@ from src.agent.api_llm import get_active_llm_runner
 from src.memory.memory import MemoryManager
 from src.rag.rag_flow import RAGFlow
 from src.utils.merger import merge_documents
+from src.utils.logging_config import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @tool("retrieve", response_format="content_and_artifact")
 def retrieve_tool(query: str, search_path: str, k: int, runtime: ToolRuntime) -> Tuple[str, dict]:
@@ -115,6 +116,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
     # parse search_path to filters
     filters = {}
     if search_path:
+        retrieve_tries = runtime.state["retrieve_tries"] if "retrieve_tries" in runtime.state else 0
         logger.info(f"[rag_search_tool] Query: {query} on path: {search_path}")
         searched_path = runtime.state["searched_path"] if "searched_path" in runtime.state else {}
         if query not in searched_path:
@@ -139,7 +141,8 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             return Command(
                 update={
                     "searched_path": searched_path,
-                    "messages": [ToolMessage(content="No documents found", tool_call_id=tool_call_id)]
+                    "messages": [ToolMessage(content="No documents found", tool_call_id=tool_call_id)],
+                    "retrieve_tries": retrieve_tries + 1
                 }
             )
         filtered_docs = filter_additional_documents(query, docs)
@@ -147,7 +150,8 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             return Command(
                 update={
                     "searched_path": searched_path,
-                    "messages": [ToolMessage(content="No documents found", tool_call_id=tool_call_id)]
+                    "messages": [ToolMessage(content="No documents found", tool_call_id=tool_call_id)],
+                    "retrieve_tries": retrieve_tries + 1
                 }
             )
         documents = runtime.state["documents"] if "documents" in runtime.state else []
@@ -156,24 +160,23 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             documents = [doc for doc, _ in documents]
         merged_documents = merge_documents(documents + new_documents)
         
-        base_query = runtime.state["refined_query"]
         answer = runtime.state["answer"] if "answer" in runtime.state else ""
-        answer = complement_answer(base_query, answer, filtered_docs)
+        answer = complement_answer(query, answer, filtered_docs)
 
-        new_aspects_to_explore = runtime.state["new_aspects_to_explore"]
-        updated_aspects = review_answer(base_query, answer, searched_path, new_aspects_to_explore)
-        
-        message = json.dumps({
-            "new_aspects_to_explore": updated_aspects,
-        })
+        review = review_answer(query, answer)       
+        is_done = "done" in review
+
+        message = f"{len(new_documents)} documents found. Answer Review: {review}"
         
         return Command(
             update={
                 "searched_path": searched_path,
                 "documents": merged_documents,
                 "answer": answer,
-                "new_aspects_to_explore": updated_aspects,
+                "review": review,
+                "is_done": is_done,
                 "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
+                "retrieve_tries": retrieve_tries + 1,
                 "display": f"Found {len(new_documents)} documents for query: {query} on path: {search_path}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}"
             }
         )
@@ -197,44 +200,22 @@ def filter_additional_documents(query: str, docs: List[Document]) -> Dict[str, L
             query: [],
         }
 
-def complement_answer(base_query: str, answer: str, additional_docs: Dict[str, List[Document]]) -> str:
+def complement_answer(query: str, answer: str, additional_docs: Dict[str, List[Document]]) -> str:
     """
     Complement the answer with the documents.
     """       
-    prompt = complement_answer_prompt(base_query, answer, additional_docs)
+    prompt = complement_answer_prompt(query, answer, additional_docs)
     response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
     
     return response.content.strip()
 
-def review_answer(query: str, answer: str, searched_path: Dict[str, set[str]], new_aspects_to_explore: List[Dict[str, str]]) -> str:
+def review_answer(query: str, answer: str) -> str:
     """
     Review the answer.
     """
-    prompt = review_answer_prompt(query, answer, searched_path, new_aspects_to_explore)
+    prompt = review_answer_prompt(query, answer)     
     response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
     answer_review = response.content.strip().lower()
     logger.info(f"[review_answer] Review: {answer_review}")
-    updated_aspects = []
-    try:       
-        # Now extract JSON array from cleaned content
-        match = re.search(r"\[.*\]", answer_review, re.DOTALL)
-        if match:
-            parsed_aspects = json.loads(match.group(0))
-            for aspect in parsed_aspects:
-                if not all(key in aspect for key in ["aspect"]):
-                    continue
-                if "status" not in aspect:
-                    aspect["status"] = "undone"
-                if aspect["status"] not in ["undone", "done"]:
-                    aspect["status"] = "undone"
-                updated_aspects.append(aspect)
-        missing_aspects = [aspect for aspect in new_aspects_to_explore if aspect["aspect"] not in [a["aspect"] for a in updated_aspects]]
-        if missing_aspects:
-            logger.info(f"[review_answer] Missing aspects: {missing_aspects}")
-        # updated_aspects.extend(missing_aspects)
-    except (json.JSONDecodeError, AttributeError):
-        updated_aspects = new_aspects_to_explore
 
-    logger.info(f"[review_answer] Updated aspects: {updated_aspects}")
-
-    return updated_aspects
+    return answer_review

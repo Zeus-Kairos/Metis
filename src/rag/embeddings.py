@@ -4,10 +4,9 @@ from typing import List
 from langchain_ollama import OllamaEmbeddings
 from dotenv import load_dotenv
 import requests
+from src.utils.logging_config import get_logger
 
-load_dotenv()
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class EmbeddingRunner:
     """
