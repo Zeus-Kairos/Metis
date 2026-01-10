@@ -35,6 +35,7 @@ from src.agent.prompts import (
     refine_query_prompt,
     reference_check_prompt,
     review_answer_prompt,
+    synthesize_answer_prompt,
 )
 from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
@@ -42,6 +43,7 @@ from src.agent.api_llm import get_api_llm_runner
 from src.agent.tools import list_children_tool, rag_search_tool
 from src.utils.paths import get_index_path, get_upload_dir
 from src.utils.logging_config import get_logger
+from src.utils.merger import merge_documents
 
 logger = get_logger(__name__)
 
@@ -286,22 +288,37 @@ class RAGAgent:
             "searched_aspects": [result],
         }
 
-
-    def _deep_rag(self, state: DeepRAGState) -> DeepRAGState:
+    def _synthesize_answer(self, state: DeepRAGState) -> DeepRAGState:
         """
-        Handle the deep RAG.
+        Synthesize the answer.
         """
-        new_aspects_to_explore = state["new_aspects_to_explore"]
-        if all(aspect["status"] == "done" for aspect in new_aspects_to_explore):
-            return { "messages": AIMessage(content="end")}
+        searched_aspects = state["searched_aspects"]
+        all_docs = [doc for aspect in searched_aspects for doc in aspect.documents]
+        documents = merge_documents(all_docs)
 
-        prompt = deep_rag_prompt(state)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)], [list_children_tool, rag_search_tool])
-        if response.content.strip():
-            logger.info(f"[deep_rag] Response: {response.content.strip()}")
+        prompt = synthesize_answer_prompt(state)
+        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
         return {
-            "messages": [response],
+            "documents": documents,
+            "answer": response.content.strip(),
         }
+
+
+    # def _deep_rag(self, state: DeepRAGState) -> DeepRAGState:
+    #     """
+    #     Handle the deep RAG.
+    #     """
+    #     new_aspects_to_explore = state["new_aspects_to_explore"]
+    #     if all(aspect["status"] == "done" for aspect in new_aspects_to_explore):
+    #         return { "messages": AIMessage(content="end")}
+
+    #     prompt = deep_rag_prompt(state)
+    #     response = self.llm_runner.invoke([SystemMessage(content=prompt)], [list_children_tool, rag_search_tool])
+    #     if response.content.strip():
+    #         logger.info(f"[deep_rag] Response: {response.content.strip()}")
+    #     return {
+    #         "messages": [response],
+    #     }
 
     def _reference_check(self, state: DeepRAGState) -> DeepRAGState:
         """
@@ -328,6 +345,7 @@ class RAGAgent:
         if self.rag_type == RAGType.AGENTIC:
             graph.add_node("plan_rag", self._plan_rag)
             graph.add_node("deep_search", self._deep_search)       
+            graph.add_node("synthesize_answer", self._synthesize_answer)
             graph.add_node("reference_check", self._reference_check)
         else:
             graph.add_node("handle_rag", self._handle_rag)
@@ -349,7 +367,8 @@ class RAGAgent:
             graph.add_conditional_edges(
                 "plan_rag", self._assign_researchers, ["deep_search"]
             )
-            graph.add_edge("deep_search", "reference_check")
+            graph.add_edge("deep_search", "synthesize_answer")
+            graph.add_edge("synthesize_answer", "reference_check")
             graph.add_edge("reference_check", END)
         else:
             graph.add_edge("refine_query", "handle_rag")
@@ -389,22 +408,29 @@ class RAGAgent:
         if self.conn_str:
             with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
                 graph = self.builder.compile(checkpointer=checkpointer)
-                # Streaming mode: yield chunks as they become available                
-                for mode, chunk in graph.stream(initial_state, 
+                # Streaming mode: yield chunks as they become available          
+                for subgraph, mode, chunk in graph.stream(initial_state, 
                                                 config=config, 
                                                 subgraphs=True,
-                                                stream_mode=["updates", "messages"]):
+                                                stream_mode=["updates", "messages"]):                   
                     if mode == "updates":
                         for node, state in chunk.items():
                             if "display" in state and state["display"]:
-                                yield { "display": state["display"] }
+                                pass
+                                # yield { "display": state["display"] }
+
                     elif mode == "messages":
                         message, meta = chunk
-                        if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "reference_check"]:
+                        if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "plan_rag", "deep_retrieve", "reference_check"]:
                             last_assistant_message = message.content   
-                            yield {
-                                "response": last_assistant_message,
-                            }
+                            if meta["langgraph_node"] in ["plan_rag", "deep_retrieve"]:
+                                yield {
+                                    "display": last_assistant_message,
+                                }
+                            else:
+                                yield {
+                                    "response": last_assistant_message,
+                                }
         else:
             graph = self.builder.compile(checkpointer=InMemorySaver())
             

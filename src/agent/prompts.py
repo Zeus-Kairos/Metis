@@ -290,6 +290,36 @@ def deep_rag_prompt(state: TypedDict) -> str:
     RAG History: {rag_messages}
     """
 
+def synthesize_answer_prompt(state: TypedDict) -> str:
+    """
+    Synthesize the answer from all RAG results.
+    """
+
+    query = state["refined_query"]
+    searched_aspects = state["searched_aspects"]
+    formatted_aspects = ""
+    for aspect in searched_aspects:
+        formatted_aspects += f"[Aspect {aspect.aspect}\nAnswer {aspect.answer}]\n"
+        
+    return f"""
+    You are a Senior Research Analyst specializing in information synthesis and executive communication.
+
+    Task: I will provide you with several distinct aspects regarding the user query. 
+    Your task is to synthesize these into one comprehensive, seamless answer that addresses the core user query.
+
+    Synthesis Requirements:
+    - Identify Patterns: Highlight common themes across all sources.
+    - Reconcile Differences: If sources conflict, explain the nuance or provide a balanced "if/then" scenario.
+    - Hierarchical Structure: Lead with the most critical "bottom-line" answer, followed by supporting details organized logically (not chronologically).
+    - Eliminate Redundancy: Do not repeat information; merge similar points into a single, stronger statement.
+
+    Output Format: Provide a "Summary" paragraph followed by a detailed "Detailed Answer" using headers.
+    
+    User Query: {query}
+    Source Material:
+    {formatted_aspects}
+    """
+
 def reference_check_prompt(state: TypedDict) -> str:
     """
     Reference check prompt.
