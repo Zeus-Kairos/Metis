@@ -7,7 +7,7 @@ from langchain_core.messages.utils import (
     count_tokens_approximately  
 )
 
-from src.utils.document_handler import format_documents  
+from src.utils.document_handler import format_documents, format_references  
 
 logger = logging.getLogger(__name__)
 
@@ -320,14 +320,14 @@ def synthesize_answer_prompt(state: TypedDict) -> str:
     {formatted_aspects}
     """
 
-def reference_check_prompt(state: TypedDict) -> str:
+def reference_check_prompt(state: TypedDict, root_path: str = "") -> str:
     """
     Reference check prompt.
     """
     query = state["refined_query"]
     answer = state["answer"] if "answer" in state else ""
     documents = state["documents"]
-    doc_contents = format_documents(documents, with_index=True, index_offset=1)  
+    doc_contents = format_references(documents, root_path, with_index=True, index_offset=1)  
 
     return f"""
     You are an assistant that reviews an existing answer against a set of reference documents and adds precise reference markers.
@@ -341,18 +341,21 @@ def reference_check_prompt(state: TypedDict) -> str:
         Insert or adjust reference markers.
     Verify the accuracy of the information in the answer against the documents.
     If the answer contradicts the documents, flag it with a note.
-    At the end, add a short “Sources used” list that maps each marker (e.g. DocA:FilePath) to the corresponding document name/identifier.
+    At the end, add a short “References” list that maps each marker (e.g. [index]:FilePath) to the corresponding document index/identifier.
+
+    Input:
+        The user query
+        The original answer
+        A list of reference documents with their index and any available metadata (file path), e.g.
+            [1]: FilePath 1
+            [2]: FilePath 2
 
     Output:
     The answer with inline reference markers inserted in the text exactly where the supporting information is used.
     Keep the structure, headings, and formatting of the original answer as much as possible.
-    I will provide:
-        The original query
-        The original answer
-        A list of reference documents with their index and any available metadata (file path), e.g.
-            [1]: File Path 1
-            [2]: File Path 2
-    Use only these documents as evidence and do not rely on external knowledge.
+    “References” section must be in format [index]: FilePath.
+    If multiple sources have same FilePath, combine them, e.g. [1][2][5]: FilePath
+    
 
     User Query: {query}
     Original Answer: {answer}

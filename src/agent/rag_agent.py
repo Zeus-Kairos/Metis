@@ -324,7 +324,8 @@ class RAGAgent:
         """
         Check the reference.
         """       
-        prompt = reference_check_prompt(state)
+        root_path = get_upload_dir(self.user_id, state["knowledge_base_item"].name, "")
+        prompt = reference_check_prompt(state, root_path)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
         return {
             "answer": response.content.strip(),

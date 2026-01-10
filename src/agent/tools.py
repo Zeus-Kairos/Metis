@@ -145,7 +145,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                     "retrieve_tries": retrieve_tries + 1
                 }
             )
-        filtered_docs = filter_additional_documents(query, docs)
+        filtered_docs = filter_documents(query, docs)
         if not filtered_docs:
             return Command(
                 update={
@@ -181,10 +181,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             }
         )
 
-def filter_additional_documents(query: str, docs: List[Document]) -> Dict[str, List[Document]]:
-    """
-    Filter the documents.
-    """    
+def filter_documents(query: str, docs: List[Document]) -> List[Document]:
     prompt = filter_documents_prompt(query, docs)
     response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
     try:

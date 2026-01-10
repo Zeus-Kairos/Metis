@@ -7,11 +7,8 @@ def merge_documents(documents: List[Document]) -> List[Document]:
     """
     merged_docs = {}
     for doc in documents:
-        doc_id = doc.metadata.get("file_path")
-        for key in doc.metadata.keys():
-            if isinstance(key, str) and key.startswith("Header"):
-                doc_id += f" {key}-{doc.metadata[key]}"
-        if doc_id not in merged_docs:
-            merged_docs[doc_id] = doc
+        chunk_id = doc.metadata.get("chunk_id")
+        if chunk_id not in merged_docs:
+            merged_docs[chunk_id] = doc
 
     return list(merged_docs.values())
