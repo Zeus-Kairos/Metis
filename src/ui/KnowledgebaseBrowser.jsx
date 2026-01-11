@@ -646,7 +646,35 @@ const KnowledgebaseBrowser = () => {
             disabled={isLoading}
             title="Create new knowledgebase"
           >
-            +
+            <svg width="60" height="60" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+              <path d="M80,360 L256,410 L432,360 L432,180 L420,180 L420,350 L256,395 L92,350 L92,180 L80,180 Z" fill="#3E3159"/>
+              <path d="M216,398 C216,415 296,415 296,398 Z" fill="#3E3159"/>
+              
+              <path d="M256,150 L110,110 L110,335 L256,380 Z" fill="white" stroke="#3E3159" stroke-width="6" stroke-linejoin="round"/>
+              
+              <path d="M256,150 L402,110 L402,335 L256,380 Z" fill="white" stroke="#3E3159" stroke-width="6" stroke-linejoin="round"/>
+              
+              <path d="M280,100 L280,220 C280,245 400,245 400,220 L400,100 Z" fill="#9B66AA"/>
+              <ellipse cx="340" cy="100" rx="60" ry="25" fill="#4B2C69"/>
+              <path d="M280,140 C280,165 400,165 400,140" fill="none" stroke="#3E3159" stroke-width="3"/>
+              <path d="M280,180 C280,205 400,205 400,180" fill="none" stroke="#3E3159" stroke-width="3"/>
+              
+              <circle cx="295" cy="148" r="4" fill="white"/>
+              <circle cx="312" cy="153" r="4" fill="white"/>
+              <circle cx="295" cy="188" r="4" fill="white"/>
+              <circle cx="312" cy="193" r="4" fill="white"/>
+              
+              <path d="M256,200 V320 M196,260 H316" 
+                    fill="none" 
+                    stroke="white" 
+                    stroke-width="36" 
+                    stroke-linecap="round"/>
+              <path d="M256,200 V320 M196,260 H316" 
+                    fill="none" 
+                    stroke="#8CC665" 
+                    stroke-width="36" 
+                    stroke-linecap="round"/>
+            </svg>
           </button>
         </div>
       </div>

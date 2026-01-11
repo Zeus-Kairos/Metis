@@ -70,7 +70,7 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
           className={`message ${message.role}`}
           style={{ 
             // Card-like container for the message
-            backgroundColor: message.role === 'assistant' ? '#FFF8F0' : '#F0FAFC',
+            backgroundColor: message.role === 'assistant' ? 'transparent' : '#64B5F6',
             backdropFilter: message.role === 'user' ? 'blur(8px)' : 'none',
             border: message.role === 'user' ? '1px solid rgba(255, 255, 255, 0.8)' : 'none',
             boxShadow: message.role === 'user' ? '0 2px 8px rgba(0, 0, 0, 0.05)' : 'none',
@@ -90,7 +90,7 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
           <div 
             className={`message-content ${!message.complete ? 'streaming' : ''}`}
             style={{ 
-                color: message.role === 'user' ? '#202124' : '#202124',
+                color: message.role === 'user' ? 'white' : '#000000',
                 wordWrap: 'break-word',
                 overflowWrap: 'break-word',
                 lineHeight: '1.5',
@@ -193,7 +193,7 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
         <div
           className="message assistant"
           style={{ 
-            backgroundColor: '#FFF8F0',
+            backgroundColor: 'transparent',
             borderRadius: '18px',
             padding: '12px', 
             marginBottom: '12px',
@@ -218,7 +218,7 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
               animation: 'spin 1s linear infinite',
             }}
           />
-          <span style={{ fontFamily: '"Roboto", sans-serif' }}>Thinking...</span>
+          <span style={{ fontFamily: '"Roboto", sans-serif', color: '#000000' }}>Thinking...</span>
         </div>
       )}
       <div ref={endOfMessagesRef} />

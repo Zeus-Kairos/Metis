@@ -67,12 +67,13 @@
 }
 
 .kb-btn-tertiary {
-  background-color: #34a853;
+  /* This class is also used by kb-new-kb-btn, which has its own styling */
+  background-color: #FFB74D;
   color: white;
 }
 
 .kb-btn-tertiary:hover:not(:disabled) {
-  background-color: #2d8f46;
+  background-color: #FFA726;
 }
 
 .kb-error {
@@ -529,28 +530,33 @@
   align-items: center;
 }
 
-.kb-new-kb-btn {
+.kb-btn-tertiary.kb-new-kb-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  font-size: 18px;
+  font-size: 24px;
   border-radius: 50%;
-  background-color: #34a853;
-  color: white;
+  background: none !important;
+  border: none !important;
+  color: #FFB74D;
+  transition: color 0.2s, transform 0.2s;
 }
 
-.kb-new-kb-btn:hover:not(:disabled) {
-  background-color: #2d8f46;
+.kb-btn-tertiary.kb-new-kb-btn:hover:not(:disabled) {
+  background: none !important;
+  color: #FFA726;
   transform: scale(1.05);
 }
 
-.kb-new-kb-btn:disabled {
+.kb-btn-tertiary.kb-new-kb-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+  background: none !important;
+  color: #FFB74D;
 }
 
 .kb-knowledgebase-item {
@@ -560,7 +566,7 @@
   padding: 10px 12px;
   background-color: #ffffff;
   border: 1px solid #dfe1e5;
-  border-radius: 16px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
   transition: all 0.2s ease;

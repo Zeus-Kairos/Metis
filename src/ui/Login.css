@@ -49,21 +49,24 @@
 .login-button {
   width: 100%;
   padding: 0.75rem;
-  background-color: #007bff;
+  background-color: rgba(76, 29, 149, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: white;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   font-size: 1rem;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: all 0.2s ease;
 }
 
 .login-button:hover {
-  background-color: #0056b3;
+  background-color: rgba(67, 13, 116, 0.7);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 .login-button:disabled {
-  background-color: #6c757d;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
@@ -86,7 +89,7 @@
 .toggle-button {
   background: none;
   border: none;
-  color: #007bff;
+  color: rgba(76, 29, 149, 0.8);
   cursor: pointer;
   font-size: 0.9rem;
   font-weight: 500;
@@ -97,5 +100,5 @@
 }
 
 .toggle-button:hover {
-  color: #0056b3;
+  color: rgba(67, 13, 116, 0.7);
 }

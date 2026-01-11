@@ -64,7 +64,7 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
           type: 'folder',
           name: folder.name,
           path: [...folderPath, folder.name],
-          isExpanded: true,
+          isExpanded: false,
           isLoading: false,
           children: [],
           error: ''
@@ -154,15 +154,13 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
                 error: ''
               });
               
-              // If the folder is expanded, automatically fetch contents for its subfolders
-              if (currentFolder.isExpanded) {
-                // For each subfolder that's expanded, fetch its contents
-                children.forEach(child => {
-                  if (child.type === 'folder' && child.isExpanded) {
-                    fetchFolderContents(child.path);
-                  }
-                });
+              // Only fetch contents for subfolders that are explicitly expanded
+            // This ensures we don't make unnecessary API calls for collapsed folders
+            children.forEach(child => {
+              if (child.type === 'folder' && child.isExpanded) {
+                fetchFolderContents(child.path);
               }
+            });
               
               return updatedTree;
             });
@@ -231,16 +229,15 @@ const RightSidebar = ({ isOpen, onToggle, onExpand, isKnowledgebaseView }) => {
                 error: ''
               });
               
-              // If the folder is expanded, automatically fetch contents for its subfolders
-              // This ensures that when a folder is expanded, all its subfolders are fetched recursively
-              if (newExpandedState) {
-                // For each subfolder that's expanded, fetch its contents
-                children.forEach(child => {
-                  if (child.type === 'folder' && child.isExpanded) {
-                    fetchFolderContents(child.path);
-                  }
-                });
-              }
+              // Only fetch contents for subfolders that are explicitly expanded
+            // This ensures we don't make unnecessary API calls for collapsed folders
+            if (newExpandedState) {
+              children.forEach(child => {
+                if (child.type === 'folder' && child.isExpanded) {
+                  fetchFolderContents(child.path);
+                }
+              });
+            }
               
               return updatedTree;
             });

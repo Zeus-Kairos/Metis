@@ -132,17 +132,17 @@
 
 .new-chat-btn {
   padding: 8px 16px;
-  background-color: transparent;
-  border: 1px solid #DADCE0;
+  background-color: #FFB74D;
+  border: 1px solid #FFA726;
   border-radius: 4px;
-  color: #5F6368;
+  color: white;
   cursor: pointer;
   font-size: 14px;
   transition: background-color 0.2s;
 }
 
 .new-chat-btn:hover:not(:disabled) {
-  background-color: #F8F9FA;
+  background-color: #FFA726;
 }
 
 .new-chat-btn:disabled {
@@ -206,11 +206,9 @@
 .create-chat-button {
   margin-top: 1.5rem;
   padding: 0.75rem 1.5rem;
-  background-color: rgba(76, 29, 149, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background-color: #FFB74D;
   color: white;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid #FFA726;
   border-radius: 4px;
   font-size: 1rem;
   font-weight: 500;
@@ -219,8 +217,8 @@
 }
 
 .create-chat-button:hover {
-  background-color: rgba(67, 13, 116, 0.7);
-  border-color: rgba(255, 255, 255, 0.2);
+  background-color: #FFA726;
+  border-color: #F57C00;
 }
 
 .no-threads-state {
