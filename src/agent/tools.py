@@ -77,28 +77,21 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
     
     logger.info(f"[list_children_tool] {children_items} Children Items Listed")
 
-    children = []
+    message = f"\nChildren listed in {parent_folder}:\n"
     for item in children_items:
         filename = item[1]  # filename is at index 1
         description = item[4]  # description is at index 4
         type = item[5]  # type is at index 5
         if description:
-            children.append({
-                "filename": filename,
-                "description": description,
-                "type": type
-            })
+            message += f"[{type}] {filename}: {description}\n"
         else:
-            children.append({
-                "filename": filename,
-                "type": type
-            })
+            message += f"[{type}] {filename}\n"
 
     return Command(
         update={
             # update the message history
-            "messages": [ToolMessage(json.dumps(children), tool_call_id=tool_call_id)],
-            "display": f"Children listed in {parent_folder}:\n{"\n".join([child["filename"] for child in children])}"
+            "messages": [ToolMessage(message, tool_call_id=tool_call_id)],
+            "display": message
         }
     )
 

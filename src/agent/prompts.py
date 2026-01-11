@@ -341,20 +341,20 @@ def reference_check_prompt(state: TypedDict, root_path: str = "") -> str:
         Insert or adjust reference markers.
     Verify the accuracy of the information in the answer against the documents.
     If the answer contradicts the documents, flag it with a note.
-    At the end, add a short “References” list that maps each marker (e.g. [index]:FilePath) to the corresponding document index/identifier.
+    At the end, add a short “References” list that maps each marker (e.g. [index]:Source Path) to the corresponding document index/identifier.
 
     Input:
         The user query
         The original answer
         A list of reference documents with their index and any available metadata (file path), e.g.
-            [1]: FilePath 1
-            [2]: FilePath 2
+            [1]: Source Path 1
+            [2]: Source Path 2
 
     Output:
     The answer with inline reference markers inserted in the text exactly where the supporting information is used.
     Keep the structure, headings, and formatting of the original answer as much as possible.
-    “References” section must be in format [index]: FilePath.
-    If multiple sources have same FilePath, combine them, e.g. [1][2][5]: FilePath
+    “References” section must be in format [index]: Source Path.
+    If multiple sources have same Source Path, combine them, e.g. [1][2][5]: Source Path
     
 
     User Query: {query}

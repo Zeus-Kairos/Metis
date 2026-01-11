@@ -5,6 +5,7 @@ import operator
 import os
 from re import search
 import re
+from sys import meta_path
 from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 
 from langchain.tools import InjectedToolCallId, ToolRuntime, tool
@@ -252,7 +253,7 @@ class RAGAgent:
             aspects_to_explore = []
         return {
             "aspects_to_explore": aspects_to_explore,
-            "display": f"Explore aspects:\n{aspects_to_explore}",
+            "display": f"Explore aspects:\n{aspects_to_explore}\n",
         }
 
     # Conditional edge function to create llm_call workers that each write a section of the report
@@ -417,14 +418,15 @@ class RAGAgent:
                     if mode == "updates":
                         for node, state in chunk.items():
                             if "display" in state and state["display"]:
-                                pass
-                                # yield { "display": state["display"] }
+                                yield { "display": state["display"] }
 
                     elif mode == "messages":
                         message, meta = chunk
-                        if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "plan_rag", "deep_retrieve", "reference_check"]:
+                        if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "deep_retrieve", "synthesize_answer", "reference_check"]:
                             last_assistant_message = message.content   
-                            if meta["langgraph_node"] in ["plan_rag", "deep_retrieve"]:
+                            if subgraph:
+                                logger.info(f"{subgraph}: {message}: {meta}")
+                            if meta["langgraph_node"] in ["deep_retrieve", "synthesize_answer"]:
                                 yield {
                                     "display": last_assistant_message,
                                 }
@@ -448,7 +450,7 @@ class RAGAgent:
                                 }
                 elif mode == "messages":
                     message, meta = chunk
-                    if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "complement_answer"]:
+                    if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer"]:
                         last_assistant_message = message.content   
                         yield {
                             "response": last_assistant_message,

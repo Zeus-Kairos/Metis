@@ -1,3 +1,4 @@
+import os
 from typing import List, Tuple
 from langchain_core.documents import Document
 
@@ -57,13 +58,13 @@ def extract_path(doc: Document, root_path: str = "") -> str:
     """
     Extract the path of the document.
     """
-    relative_path = doc.metadata["file_path"].replace(root_path, "").lstrip("/")
+    relative_path = doc.metadata["file_path"].replace(root_path, "").lstrip(os.path.sep)
     header_path = ""
     for meta_key in doc.metadata.keys():
         if meta_key.startswith("Header"):
-            header_path += f"{doc.metadata[meta_key]}/"
+            header_path += f"{doc.metadata[meta_key]}{os.path.sep}"
     if header_path:
-        relative_path = f"{relative_path}#{header_path.rstrip("/")}"
+        relative_path = f"{relative_path}#{header_path.rstrip(os.path.sep)}"
 
     return relative_path
 
