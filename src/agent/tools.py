@@ -138,7 +138,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             return Command(
                 update={
                     "searched_path": searched_path,
-                    "messages": [ToolMessage(content="No documents found", tool_call_id=tool_call_id)],
+                    "messages": [ToolMessage(content=f"No documents found for query: {query} on path: {search_path}", tool_call_id=tool_call_id)],
                     "retrieve_tries": retrieve_tries + 1
                 }
             )
@@ -147,7 +147,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             return Command(
                 update={
                     "searched_path": searched_path,
-                    "messages": [ToolMessage(content="No documents found", tool_call_id=tool_call_id)],
+                    "messages": [ToolMessage(content=f"No documents found for query: {query} on path: {search_path}", tool_call_id=tool_call_id)],
                     "retrieve_tries": retrieve_tries + 1
                 }
             )
@@ -163,7 +163,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
         review = review_answer(query, answer)       
         is_done = "done" in review
 
-        message = f"{len(new_documents)} documents found. Answer Review: {review}"
+        message = f"\n{len(new_documents)} documents found for query: {query} on path: {search_path}\nAnswer Review: {review}\n"
         
         return Command(
             update={
