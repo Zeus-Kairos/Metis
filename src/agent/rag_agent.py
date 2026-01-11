@@ -394,6 +394,17 @@ class RAGAgent:
         else:      
             graph = self.builder.compile(checkpointer=InMemorySaver())
             return self.thread_manager.get_conversation_history(user_id, thread_id, graph)
+
+    def delete_thread(self, thread_id: str) -> None:
+        """
+        Delete the conversation history for a user and thread.
+        """
+        if self.conn_str:
+            with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
+                checkpointer.delete_thread(thread_id)
+        else:      
+            checkpointer=InMemorySaver()
+            checkpointer.delete_thread(thread_id)
     
     def chat(self, query: str, user_id: int, knowledge_base_id: int, config: Dict[str, Any] = None) -> Generator[Dict[str, Any], None, None]:
         """
