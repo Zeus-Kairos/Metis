@@ -427,8 +427,8 @@ class RAGAgent:
                         message, meta = chunk
                         if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "deep_retrieve", "synthesize_answer", "reference_check"]:
                             last_assistant_message = message.content   
-                            if subgraph:
-                                logger.info(f"{subgraph}: {message}: {meta}")
+                            # if subgraph:
+                            #     logger.info(f"{subgraph}: {message}: {meta}")
                             if meta["langgraph_node"] in ["deep_retrieve", "synthesize_answer"]:
                                 yield {
                                     "display": last_assistant_message,

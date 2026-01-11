@@ -592,10 +592,7 @@ async def delete_file(
     knowledge_base: str = Body("default", description="Knowledge base name")
 ):
     """Delete a file from knowledgebase"""
-    try:
-        from src.file_process.utils import get_upload_dir
-        import os
-        
+    try:        
         # Normalize path by removing leading slashes
         normalized_path = path.lstrip('/')
         
