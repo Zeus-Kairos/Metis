@@ -134,11 +134,13 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             docs = rag_flow.filtered_fusion_retrieve(query, filters, k=k)
         
         logger.info(f"[rag_search_tool] Retrieved {len(docs)} documents for query: {query} on path: {search_path}")
+
+        display_folder = get_relative_path_from_origin(search_path)
         if not docs:
             return Command(
                 update={
                     "searched_path": searched_path,
-                    "messages": [ToolMessage(content=f"No documents found for query: {query} on path: {search_path}", tool_call_id=tool_call_id)],
+                    "messages": [ToolMessage(content=f"No documents found for query: {query} on path: {display_folder}", tool_call_id=tool_call_id)],
                     "retrieve_tries": retrieve_tries + 1
                 }
             )
@@ -147,7 +149,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             return Command(
                 update={
                     "searched_path": searched_path,
-                    "messages": [ToolMessage(content=f"No documents found for query: {query} on path: {search_path}", tool_call_id=tool_call_id)],
+                    "messages": [ToolMessage(content=f"No documents found for query: {query} on path: {display_folder}", tool_call_id=tool_call_id)],
                     "retrieve_tries": retrieve_tries + 1
                 }
             )
@@ -163,7 +165,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
         review = review_answer(query, answer)       
         is_done = "done" in review
 
-        message = f"\n{len(new_documents)} documents found for query: {query} on path: {search_path}\nAnswer Review: {review}\n"
+        message = f"\n{len(new_documents)} documents found for query: {query} on path: {display_folder}\nAnswer Review: {review}\n"
         
         return Command(
             update={
@@ -174,7 +176,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 "is_done": is_done,
                 "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
                 "retrieve_tries": retrieve_tries + 1,
-                "display": f"Found {len(new_documents)} documents for query: {query} on path: {search_path}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}"
+                "display": f"Found {len(new_documents)} documents for query: {query} on path: {display_folder}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}"
             }
         )
 
