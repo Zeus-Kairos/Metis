@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 from typing import Annotated, Dict, List, Tuple
 from langchain.tools import InjectedToolCallId, tool, ToolRuntime
@@ -13,6 +14,7 @@ from src.memory.memory import MemoryManager
 from src.rag.rag_flow import RAGFlow
 from src.utils.merger import merge_documents
 from src.utils.logging_config import get_logger
+from src.utils.paths import get_relative_path_from_origin
 
 logger = get_logger(__name__)
 
@@ -75,9 +77,11 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
     knowledgebase_manager = MemoryManager().knowledgebase_manager
     children_items = knowledgebase_manager.get_files_by_parent(kb_id, parent_folder)
     
+    
     logger.info(f"[list_children_tool] {children_items} Children Items Listed")
 
-    message = f"\nChildren listed in {parent_folder}:\n"
+    display_folder = get_relative_path_from_origin(parent_folder)
+    message = f"\nChildren listed in {display_folder}:\n"
     for item in children_items:
         filename = item[1]  # filename is at index 1
         description = item[4]  # description is at index 4

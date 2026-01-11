@@ -190,6 +190,7 @@ class RAGAgent:
             refined_query = response.content.strip()
         return {
             "refined_query": refined_query,
+            "display": f"{refined_query}\n",
         }
 
     def _handle_rag(self, state: AgentState) -> AgentState:
@@ -253,7 +254,7 @@ class RAGAgent:
             aspects_to_explore = []
         return {
             "aspects_to_explore": aspects_to_explore,
-            "display": f"Explore aspects:\n{aspects_to_explore}\n",
+            "display": f"\nExplore aspects:\n{"\n".join(aspects_to_explore)}\n",
         }
 
     # Conditional edge function to create llm_call workers that each write a section of the report
@@ -302,6 +303,7 @@ class RAGAgent:
         return {
             "documents": documents,
             "answer": response.content.strip(),
+            "display": f"\n{response.content.strip()}\n",
         }
 
 
@@ -330,6 +332,7 @@ class RAGAgent:
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
         return {
             "answer": response.content.strip(),
+            "messages": [response],
         }
 
     def _build_base_graph(self) -> StateGraph:

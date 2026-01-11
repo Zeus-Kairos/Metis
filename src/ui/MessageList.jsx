@@ -145,7 +145,7 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
                       lineHeight: '1.4',
                       fontFamily: '"Roboto", sans-serif',
                       whiteSpace: 'pre-wrap',
-                      maxHeight: '150px',
+                      maxHeight: '300px', // Increased vertical space
                       overflowY: 'auto',
                       borderRadius: '4px',
                       backgroundColor: '#F8F8F8', // Distinct background color for sliding window

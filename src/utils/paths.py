@@ -80,3 +80,27 @@ def get_index_path(user_id: int, knowledgebase_name: str) -> str:
         Unique index path as a string
     """
     return f"./index/{user_id}/{knowledgebase_name}"
+
+def get_relative_path_from_origin(folder: str) -> str:
+    """Get the relative path from the origin folder.
+    
+    Args:
+        folder: Folder path
+        
+    Returns:
+        Relative path from origin as a string
+    """
+    if "origin" in folder:
+        parts = folder.split(os.path.sep)
+        try:
+            origin_index = parts.index("origin")
+            if len(parts) == origin_index + 1:
+                rel_path = "root"
+            else:
+                sub_path = os.path.sep.join(parts[origin_index + 1:])
+                rel_path = sub_path if sub_path else "root"
+        except ValueError:
+            rel_path = folder
+    else:
+        rel_path = folder
+    return rel_path

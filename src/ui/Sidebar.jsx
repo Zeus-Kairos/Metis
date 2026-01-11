@@ -7,6 +7,14 @@ const Sidebar = ({ isOpen, onToggle, onMenuItemClick }) => {
   const [editingId, setEditingId] = useState(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [confirmDialogConfig, setConfirmDialogConfig] = useState({
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    confirmText: 'Confirm',
+    cancelText: 'Cancel'
+  });
   const userMenuRef = useRef(null);
   
   // Close menu when clicking outside
@@ -74,10 +82,15 @@ const Sidebar = ({ isOpen, onToggle, onMenuItemClick }) => {
   const handleDeleteConversation = (threadId, e) => {
     e.stopPropagation(); // Prevent switching conversation when clicking delete
     
-    // Removed check that prevented deletion of last conversation
-    if (window.confirm('Are you sure you want to delete this conversation?')) {
-      removeConversation(threadId);
-    }
+    // Show confirm dialog for conversation deletion
+    setConfirmDialogConfig({
+      title: 'Delete Conversation',
+      message: 'Are you sure you want to delete this conversation?',
+      onConfirm: () => removeConversation(threadId),
+      confirmText: 'Delete',
+      cancelText: 'Cancel'
+    });
+    setShowConfirmDialog(true);
   };
 
   const formatDate = (timestamp) => {
@@ -106,7 +119,8 @@ const Sidebar = ({ isOpen, onToggle, onMenuItemClick }) => {
   };
 
   return (
-    <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
+    <>
+      <div className={`sidebar ${isOpen ? 'open' : 'closed'}`}>
       {/* User Info Section */}
       {username && (
         <div className="sidebar-user-info" ref={userMenuRef}>
@@ -274,6 +288,43 @@ const Sidebar = ({ isOpen, onToggle, onMenuItemClick }) => {
         )}
       </div>
     </div>
+    
+    {/* Confirm Dialog */}
+    {showConfirmDialog && (
+      <div className="kb-dialog-overlay">
+        <div className="kb-dialog">
+          <div className="dialog-header">
+            <h3>{confirmDialogConfig.title}</h3>
+            <button 
+              className="dialog-close"
+              onClick={() => setShowConfirmDialog(false)}
+            >
+              ×
+            </button>
+          </div>
+          <div className="dialog-body">
+            <p>{confirmDialogConfig.message}</p>
+          </div>
+          <div className="dialog-footer">
+            <button 
+              onClick={() => setShowConfirmDialog(false)}
+            >
+              {confirmDialogConfig.cancelText}
+            </button>
+            <button 
+              onClick={() => {
+                confirmDialogConfig.onConfirm();
+                setShowConfirmDialog(false);
+              }}
+              className="dialog-primary"
+            >
+              {confirmDialogConfig.confirmText}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 
