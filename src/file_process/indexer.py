@@ -8,18 +8,15 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
 from langchain_ollama import OllamaEmbeddings
 from src.utils.logging_config import get_logger
+from src.utils.embeddings import EmbeddingRunner, get_embedding_runner
 
 logger = get_logger(__name__)
 
 # index file chunks into faiss index
 class Indexer:
-    def __init__(self, index_path: str):
-        self.embedding_model_name = os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
-        self.base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
-        self._embeddings = OllamaEmbeddings(
-                model=self.embedding_model_name,
-                base_url=self.base_url,
-            )
+    def __init__(self, user_id: int, index_path: str):
+        self.user_id = user_id
+        self._embeddings = get_embedding_runner(user_id).embedding_model
         self.index_path = index_path
         # Add thread lock to prevent concurrent modifications
         self._lock = threading.Lock()

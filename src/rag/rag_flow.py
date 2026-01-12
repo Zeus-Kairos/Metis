@@ -7,8 +7,7 @@ import numpy as np
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from src.rag.bm25_scores import BM25Scorer
-from src.rag.embeddings import EmbeddingRunner
-from src.rag.md_splitter import MarkdownSplitter
+from src.utils.embeddings import EmbeddingRunner, get_active_embedding_runner
 from src.utils.reranker import JinaAPIReranker, JinaReRanker, BgeReRanker
 from src.utils.logging_config import get_logger
 
@@ -25,9 +24,9 @@ class RAGType(Enum):
     AGENTIC = "agentic"
 
 class RAGFlow:
-    def __init__(self, index_path: str):
+    def __init__(self, index_path: str, embedding_runner: EmbeddingRunner=None):
         self.index_path = index_path
-        self.embeddings = EmbeddingRunner().embedding_model      
+        self.embeddings = embedding_runner.embedding_model if embedding_runner else get_active_embedding_runner().embedding_model      
         self.vectorstore = None
 
         logger.info(f"RAGFlow initialized with index_path: {self.index_path}")

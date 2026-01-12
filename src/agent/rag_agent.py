@@ -1,24 +1,18 @@
 from dataclasses import dataclass
 import json
 import logging
-import operator
 import os
 from re import search
 import re
-from sys import meta_path
 from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 
 from langchain.tools import InjectedToolCallId, ToolRuntime, tool
 from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
-from langgraph.prebuilt import ToolNode, tools_condition
-from langgraph.types import Command, Send
-from psycopg_pool import base
-from pydantic import BaseModel
+from langgraph.types import Send
 
 from src.agent.types import KnowledgeBaseItem
 from src.agent.researcher import Researcher
@@ -26,9 +20,6 @@ from src.memory.memory import MemoryManager
 from src.memory.thread import ThreadManager
 from src.agent.prompts import (
     classify_intent_prompt,
-    complement_answer_prompt,
-    deep_rag_prompt,
-    deep_search_prompt,
     filter_documents_prompt,
     format_answer_prompt,
     handle_chat_prompt,
@@ -45,51 +36,10 @@ from src.agent.tools import list_children_tool, rag_search_tool
 from src.utils.paths import get_index_path, get_upload_dir
 from src.utils.logging_config import get_logger
 from src.utils.merger import merge_documents
+from src.agent.types import RAGResult, AgentState, DeepRAGState, DeepSearchState
+from src.utils.embeddings import get_embedding_runner
 
 logger = get_logger(__name__)
-
-class RAGResult(BaseModel):
-    """
-    Result of the RAG agent.
-    """
-    aspect: str
-    documents: list[Document] = []
-    answer: str = ""
-    is_done: bool = False
-
-class AgentState(TypedDict):
-    """
-    State of the agent.
-    """
-    query: str
-    messages: Annotated[List[Dict[str, str]], add_messages]
-    intent: str = None
-    refined_query: str = None   
-    documents: list[Document] | List[Tuple[Document, float]] = None
-    answer: str = None
-    error_context: str = None
-    knowledge_base_item: KnowledgeBaseItem = None   
-    display: str = None # Displayed intermediate messages to the user
-
-class DeepRAGState(AgentState):
-    """
-    State of the deep RAG sub-agent.
-    """      
-    aspects_to_explore: List[str]
-    searched_aspects: Annotated[
-        List[RAGResult], operator.add
-    ]
-
-class DeepSearchState(AgentState):
-    """
-    State of the deep search sub-agent.
-    """
-    aspect: str
-    knowledge_base_item: KnowledgeBaseItem
-    searched_aspects: Annotated[
-        List[RAGResult], operator.add
-    ]  # All researchers write to this key in parallel
-
 
 class RAGAgent:
     def __init__(self, thread_manager: ThreadManager = None, user_id: int = None, on_langgraph_server: bool = False):
@@ -112,8 +62,10 @@ class RAGAgent:
         # Initialize LLM runner based on user ID (uses ApiLLMRunner if user_id is provided)
         if user_id:
             self.llm_runner = get_api_llm_runner(user_id)
+            self.embedding_runner = get_embedding_runner(user_id)
         else:
             self.llm_runner = LLMRunner()
+            self.embedding_runner = None
             
         self.user_id = user_id
         self.thread_manager = thread_manager
@@ -199,7 +151,7 @@ class RAGAgent:
         """
         refined_query = state["refined_query"]
             
-        rag_flow = RAGFlow(state["knowledge_base_item"].path)
+        rag_flow = RAGFlow(state["knowledge_base_item"].path, embedding_runner=self.embedding_runner)
         results = rag_flow.retrieve(self.rag_type, refined_query, k=self.rag_k)
         return {
             "documents": results,

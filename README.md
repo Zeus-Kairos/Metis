@@ -53,11 +53,11 @@ The application uses environment variables for configuration. A template file `.
 
 ### Environment Variables Reference
 
-- **Ollama Configuration**
-  - `OLLAMA_API_KEY` - Required for Ollama cloud model access
-  - `OLLAMA_MODEL` - Model to use (default: qwen3:8b)
-  - `OLLAMA_EMBED_MODEL` - Embedding model to use (default: nomic-embed-text:latest)
-  - `OLLAMA_BASE_URL` - Ollama API base URL (default: http://localhost:11434)
+- **LLM Configuration**
+  - `LLM_API_KEY` - Required for LLM cloud model access
+  - `LLM_MODEL` - Model to use (default: qwen3:8b)
+  - `EMBED_MODEL` - Embedding model to use (default: nomic-embed-text:latest)
+  - `LLM_BASE_URL` - LLM API base URL (default: http://localhost:11434)
 
 - **Logging Configuration**
   - `LOG_LEVEL` - Logging verbosity (INFO, DEBUG, WARNING, ERROR)

@@ -49,10 +49,12 @@ class UserCreate(BaseModel):
 # Pydantic model for user configuration update
 class UserConfigUpdate(BaseModel):
     api_key: Optional[str] = None
-    llm_model: Optional[str] = None
-    embedding_model: Optional[str] = None
+    llm_model: Optional[str] = None   
     model_provider: Optional[str] = None
     api_base_url: Optional[str] = None
+    embedding_provider: Optional[str] = None
+    embedding_api_key: Optional[str] = None
+    embedding_model: Optional[str] = None
 
 app = FastAPI(title="Metis API", version="1.0.0")
 
@@ -137,7 +139,7 @@ def get_indexer(user_id: int, knowledge_base: str) -> Indexer:
     """Get or create an Indexer for the given user and knowledge base."""
     indexer_key = f"{user_id}_{knowledge_base}"
     if indexer_key not in indexers:
-        indexers[indexer_key] = Indexer(get_index_path(user_id, knowledge_base))
+        indexers[indexer_key] = Indexer(user_id, get_index_path(user_id, knowledge_base))
     return indexers[indexer_key]
 
 @asynccontextmanager
@@ -253,11 +255,13 @@ async def update_user_configuration(
         # Call the update_user_configuration method from memory_manager
         updated_config = memory_manager.update_user_configuration(
             user_id=current_user.id,
+            model_provider=config_data.model_provider,           
             api_key=config_data.api_key,
             llm_model=config_data.llm_model,
-            embedding_model=config_data.embedding_model,
-            model_provider=config_data.model_provider,
-            api_base_url=config_data.api_base_url
+            api_base_url=config_data.api_base_url,
+            embedding_provider=config_data.embedding_provider,
+            embedding_api_key=config_data.embedding_api_key,
+            embedding_model=config_data.embedding_model,                     
         )       
         
         # If there's an existing RAGAgent instance for this user, remove it

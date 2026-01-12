@@ -114,7 +114,7 @@ class FileParser:
             }
                 
         except Exception as e:
-            logger.error(f"Error parsing file {file_path}: {str(e)}")
+            logger.exception(f"Error parsing file {file_path}: {str(e)}", stack_info=True)
             return {
                 'success': False,
                 'content': None,

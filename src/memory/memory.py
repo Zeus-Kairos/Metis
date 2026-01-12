@@ -158,11 +158,13 @@ class MemoryManager:
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS user_configure (
                             user_id INTEGER PRIMARY KEY,
-                            api_key VARCHAR(255),
-                            llm_model VARCHAR(255),
-                            embedding_model VARCHAR(255),
                             model_provider VARCHAR(255),
+                            api_key VARCHAR(255),
+                            llm_model VARCHAR(255),                          
                             api_base_url VARCHAR(255),
+                            embedding_provider VARCHAR(255),
+                            embedding_api_key VARCHAR(255),
+                            embedding_model VARCHAR(255),
                             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                         )
                     """)
@@ -261,7 +263,8 @@ class MemoryManager:
             
     def update_user_configuration(self, user_id: int, api_key: Optional[str] = None, 
                                 llm_model: Optional[str] = None, embedding_model: Optional[str] = None, 
-                                model_provider: Optional[str] = None, api_base_url: Optional[str] = None) -> dict:
+                                model_provider: Optional[str] = None, api_base_url: Optional[str] = None,
+                                embedding_provider: Optional[str] = None, embedding_api_key: Optional[str] = None) -> dict:
         """
         Update or insert user configuration.
         
@@ -272,6 +275,8 @@ class MemoryManager:
             embedding_model: Embedding model name
             model_provider: Model provider
             api_base_url: API base URL
+            embedding_provider: Embedding provider
+            embedding_api_key: Embedding API key
             
         Returns:
             The updated user configuration
@@ -282,27 +287,31 @@ class MemoryManager:
                     # Use UPSERT to handle both insert and update cases
                     cur.execute("""
                         INSERT INTO user_configure (
-                            user_id, api_key, llm_model, embedding_model, model_provider, api_base_url
-                        ) VALUES (%s, %s, %s, %s, %s, %s)
+                            user_id, model_provider, api_key, llm_model, api_base_url, embedding_provider, embedding_api_key, embedding_model
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (user_id) DO UPDATE SET
+                            model_provider = EXCLUDED.model_provider,
                             api_key = EXCLUDED.api_key,
                             llm_model = EXCLUDED.llm_model,
-                            embedding_model = EXCLUDED.embedding_model,
-                            model_provider = EXCLUDED.model_provider,
-                            api_base_url = EXCLUDED.api_base_url
+                            api_base_url = EXCLUDED.api_base_url,
+                            embedding_provider = EXCLUDED.embedding_provider,
+                            embedding_api_key = EXCLUDED.embedding_api_key,
+                            embedding_model = EXCLUDED.embedding_model
                         RETURNING *
-                    """, (user_id, api_key, llm_model, embedding_model, model_provider, api_base_url))
+                    """, (user_id, model_provider, api_key, llm_model, api_base_url, embedding_provider, embedding_api_key, embedding_model))
                     
                     updated_config = cur.fetchone()
                     conn.commit()
                     
                     return {
                         "user_id": updated_config[0],
-                        "api_key": updated_config[1],
-                        "llm_model": updated_config[2],
-                        "embedding_model": updated_config[3],
-                        "model_provider": updated_config[4],
-                        "api_base_url": updated_config[5]
+                        "model_provider": updated_config[1],
+                        "api_key": updated_config[2],
+                        "llm_model": updated_config[3],
+                        "api_base_url": updated_config[4],
+                        "embedding_provider": updated_config[5],
+                        "embedding_api_key": updated_config[6],
+                        "embedding_model": updated_config[7]
                     }
         except Exception as e:
             logger.error(f"Error updating user configuration: {e}")
@@ -329,11 +338,13 @@ class MemoryManager:
                     if config:
                         return {
                             "user_id": config[0],
-                            "api_key": config[1],
-                            "llm_model": config[2],
-                            "embedding_model": config[3],
-                            "model_provider": config[4],
-                            "api_base_url": config[5]
+                            "model_provider": config[1],
+                            "api_key": config[2],
+                            "llm_model": config[3],
+                            "api_base_url": config[4],
+                            "embedding_provider": config[5],
+                            "embedding_api_key": config[6],
+                            "embedding_model": config[7]
                         }
                     return None
         except Exception as e:

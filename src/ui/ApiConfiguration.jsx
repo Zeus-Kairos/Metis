@@ -8,7 +8,9 @@ const ApiConfiguration = ({ isOpen, onClose }) => {
     llm_model: '',
     embedding_model: '',
     model_provider: '',
-    api_base_url: ''
+    api_base_url: '',
+    embedding_provider: '',
+    embedding_api_key: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -38,7 +40,9 @@ const ApiConfiguration = ({ isOpen, onClose }) => {
             llm_model: data.config.llm_model || '',
             embedding_model: data.config.embedding_model || '',
             model_provider: data.config.model_provider || '',
-            api_base_url: data.config.api_base_url || ''
+            api_base_url: data.config.api_base_url || '',
+            embedding_provider: data.config.embedding_provider || '',
+            embedding_api_key: data.config.embedding_api_key || ''
           });
         }
       } else {
@@ -74,7 +78,9 @@ const ApiConfiguration = ({ isOpen, onClose }) => {
             llm_model: data.config.llm_model || '',
             embedding_model: data.config.embedding_model || '',
             model_provider: data.config.model_provider || '',
-            api_base_url: data.config.api_base_url || ''
+            api_base_url: data.config.api_base_url || '',
+            embedding_provider: data.config.embedding_provider || '',
+            embedding_api_key: data.config.embedding_api_key || ''
           });
         }
       } else {
@@ -169,19 +175,6 @@ const ApiConfiguration = ({ isOpen, onClose }) => {
               </div>
               
               <div className="api-config-form-group">
-                <label htmlFor="embedding_model">Embedding Model</label>
-                <input
-                  type="text"
-                  id="embedding_model"
-                  name="embedding_model"
-                  value={config.embedding_model}
-                  onChange={handleInputChange}
-                  placeholder="e.g., text-embedding-ada-002"
-                  disabled={isSaving}
-                />
-              </div>
-              
-              <div className="api-config-form-group">
                 <label htmlFor="model_provider">Model Provider</label>
                 <input
                   type="text"
@@ -203,6 +196,61 @@ const ApiConfiguration = ({ isOpen, onClose }) => {
                   value={config.api_base_url}
                   onChange={handleInputChange}
                   placeholder="e.g., https://api.openai.com/v1"
+                  disabled={isSaving}
+                />
+              </div>
+              
+              <div className="api-config-form-group">
+                <label htmlFor="embedding_provider">Embedding Provider</label>
+                <input
+                  type="text"
+                  id="embedding_provider"
+                  name="embedding_provider"
+                  value={config.embedding_provider}
+                  onChange={handleInputChange}
+                  placeholder="e.g., openai"
+                  disabled={isSaving}
+                />
+              </div>
+              
+              <div className="api-config-form-group">
+                <label htmlFor="embedding_api_key">Embedding API Key</label>
+                <div className="api-key-input-container">
+                  <input
+                    type={showApiKey ? "text" : "password"}
+                    id="embedding_api_key"
+                    name="embedding_api_key"
+                    value={config.embedding_api_key}
+                    onChange={handleInputChange}
+                    placeholder="Enter embedding API key"
+                    disabled={isSaving}
+                  />
+                  <div
+                    className="api-key-toggle-btn"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    style={{ cursor: isSaving ? 'not-allowed' : 'pointer', opacity: isSaving ? 0.5 : 1 }}
+                    title={showApiKey ? "Hide API key" : "Show API key"}
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      {showApiKey ? (
+                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24m0 0L9 11m0-7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      ) : (
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      )}
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="api-config-form-group">
+                <label htmlFor="embedding_model">Embedding Model</label>
+                <input
+                  type="text"
+                  id="embedding_model"
+                  name="embedding_model"
+                  value={config.embedding_model}
+                  onChange={handleInputChange}
+                  placeholder="e.g., text-embedding-ada-002"
                   disabled={isSaving}
                 />
               </div>

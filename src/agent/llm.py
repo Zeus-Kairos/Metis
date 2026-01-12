@@ -32,9 +32,9 @@ class LLMRunner:
             base_url: Base URL for the Ollama API (default: "http://localhost:11434")
             chat_temperature: Temperature setting for the chat model (default: 0.0)
         """
-        self.chat_model_name = chat_model_name or os.environ.get("OLLAMA_MODEL", "qwen3:8b")
-        self.embedding_model_name = embedding_model_name or os.environ.get("OLLAMA_EMBED_MODEL", "nomic-embed-text:latest")
-        self.base_url = base_url or os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
+        self.chat_model_name = chat_model_name or os.environ.get("LLM_MODEL", "qwen3:8b")
+        self.embedding_model_name = embedding_model_name or os.environ.get("EMBED_MODEL", "nomic-embed-text:latest")
+        self.base_url = base_url or os.environ.get("LLM_BASE_URL", "http://localhost:11434")
         self.chat_temperature = chat_temperature
         
         # Initialize model instances
