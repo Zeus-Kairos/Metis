@@ -1,144 +1,224 @@
-# Metis: RAG Application for VNA Help Documentation
+# Metis
 
 ## Project Overview
-Metis is a Retrieval-Augmented Generation (RAG) application designed to provide intelligent query responses. The system leverages Large Language Models (LLMs) with vector search capabilities to deliver accurate and contextually relevant answers to user queries.
+
+Metis is an advanced Retrieval-Augmented Generation (RAG) application that enables users to interact with AI using their own knowledge bases and documents. It provides a seamless interface for uploading documents, configuring AI models, and engaging in intelligent conversations powered by state-of-the-art language models.
 
 ### Key Features
-- Natural language query processing and refinement
-- Semantic search over VNA documentation
-- Document chunking and embedding for efficient retrieval
-- Response generation with source attribution
-- Support for different reranking strategies (local models and API-based)
-- Knowledge base indexing and management
-- Configurable logging and error handling
+
+- **Document Management**: Upload, process, and index various document types (PDF, DOCX, PPTX, TXT, MD, HTML, CSV, XLSX)
+- **Configurable AI Models**: Support for multiple LLM and embedding providers with customizable settings
+- **Intelligent RAG System**: Advanced retrieval with agentic RAG workflow
+- **User-Friendly Interface**: Modern React-based UI with chat interface and knowledgebase browser
+- **Secure Authentication**: JWT-based user authentication system
+- **Knowledgebase Organization**: Browse and manage your uploaded documents in customized knowledgebases
+- **Conversation History**: Persistent conversation threads with knowledgebase context
 
 ## Installation
 
 ### Prerequisites
-- Python 3.10 or higher
-- Conda package manager
 
-### Setup Instructions
+- Python 3.10+ with conda environment
+- Node.js 18+ for frontend development
+- PostgreSQL database 
+- Ollama or other LLM provider access
 
-1. **Clone the Repository**
-   ```bash
-   git clone <repository-url>
-   cd Metis
-   ```
+### Backend Setup
 
-2. **Create and Activate Conda Environment**
+1. **Create and activate conda environment**:
    ```bash
    conda create -n metis python=3.13
    conda activate metis
    ```
 
-3. **Install Dependencies**
+2. **Install dependencies**:
    ```bash
+   cd c:\Apps\Metis
    pip install -r requirements.txt
+   ```
+
+3. **Configure environment variables**:
+   ```bash
+   cp .env.example .env
+   # Edit .env file with your configuration
+   ```
+
+4. **Run the backend server**:
+   ```bash
+   python main.py
+   ```
+
+### Frontend Setup
+
+1. **Install npm dependencies**:
+   ```bash
+   cd c:\Apps\Metis\
+   npm install
+   ```
+
+2. **Build and run the frontend**:
+   ```bash
+   npm run dev
    ```
 
 ## Configuration
 
 ### Environment Variables
-The application uses environment variables for configuration. A template file `.env.example` is provided with all required variables:
 
-1. **Copy the example environment file**
-   ```bash
-   copy .env.example .env  # On Windows
-   # OR
-   cp .env.example .env    # On Linux/Mac
-   ```
+The following environment variables are required for the application to function properly:
 
-2. **Edit the `.env` file** to add your personal API keys and configure settings according to your needs.
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_URI` | PostgreSQL database connection string | - |
+| `SECRET_KEY` | Secret key for JWT token generation | - |
+| `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
+| `RAG_TYPE` | RAG retrieval type (simple, query_refined, fusion, rerank) | `fusion` |
+| `RAG_K` | Number of documents to retrieve | `10` |
 
-### Environment Variables Reference
+### AI Model Configuration
 
-- **LLM Configuration**
-  - `LLM_API_KEY` - Required for LLM cloud model access
-  - `LLM_MODEL` - Model to use (default: qwen3:8b)
-  - `EMBED_MODEL` - Embedding model to use (default: nomic-embed-text:latest)
-  - `LLM_BASE_URL` - LLM API base URL (default: http://localhost:11434)
+Metis allows you to configure different AI models for both LLM and embedding services:
 
-- **Logging Configuration**
-  - `LOG_LEVEL` - Logging verbosity (INFO, DEBUG, WARNING, ERROR)
+1. **Access the API Configuration dialog** from the main application
+2. Enter your model provider information
+3. Set API keys and model names for both LLM and embedding services
+4. Configure API base URLs if needed
+5. Save your configuration
 
-- **RAG Configuration**
-  - `RAG_TYPE` - Type of RAG approach to use (fusion, simple, query_refined, rerank)
-  - `RAG_K` - Number of documents to retrieve during search
+### File Upload Configuration
 
-- **LangSmith Configuration**
-  - `LANGSMITH_TRACING` - Enable/disable LangSmith tracing (true/false)
-  - `LANGSMITH_API_KEY` - Your LangSmith API key
-  - `LANGSMITH_ENDPOINT` - LangSmith API endpoint
-  - `LANGSMITH_PROJECT` - Name of your LangSmith project
+Customize file upload settings in the `.env` file:
 
-- **Reranking Configuration**
-  - `JINA_API_KEY` - Required if using Jina API reranker
+- `BASE_UPLOAD_DIR`: Directory for storing uploaded files
+- `SUPPORTED_FORMATS`: Comma-separated list of supported file formats
+- `MAX_FILE_SIZE`: Maximum file size in bytes (default: 100MB)
+- `MAX_FILES_PER_UPLOAD`: Maximum number of files per upload
 
-### Configuration Files
-- **`langgraph.json`** - Contains LangGraph server configuration
-- **`src/utils/logging_config.py`** - Defines logging behavior and verbosity levels
+## Basic Usage
 
-## File Structure
+### 1. User Registration and Login
+
+- Register a new user account or log in with existing credentials
+- Authentication is handled via JWT tokens
+
+### 2. Knowledgebase Management and Document Processing
+
+- Switch to the knowledgebase browser
+- Select or create a knowledgebase
+- Create folder hierarchies within the knowledgebase
+- Upload one or more supported documents
+- Documents will be uploaded, parsed, chunked, and indexed for retrieval
+
+### 3. Configure AI Models
+
+- Click on the user icon in the top left corner
+- Enter your LLM and embedding provider details
+- Save the configuration
+
+### 4. Start a Conversation
+
+- Select an existing conversation or create a new one
+- Type your question in the message input field and send
+- Metis will retrieve relevant information from your documents and generate a response
+
+### 5. Explore Conversation History
+
+- Switch between conversation threads using the sidebar
+- View previous messages and responses
+- Continue conversations from where you left off
+
+
+## Tech Stack
+
+- **Python 3.10+**: Core programming language
+- **FastAPI**: Web framework for building APIs
+- **LangChain**: Framework for developing LLM applications
+- **LangGraph**: For building stateful, multi-actor applications
+- **PostgreSQL**: Database for storing user data and configurations
+- **React 18+**: UI framework
+
+## Project Structure
 
 ```
-Metis/
-├── Docs/                      # Documentation directory
-│   ├── VNA_Help_MD/           # VNA help documentation files
-│   │   ├── Applications/      # Application-specific documentation
-│   │   ├── Tutorials/         # Tutorial documentation
-│   │   └── ...                # Other documentation sections
-│   ├── knowledge_base_index.json  # Index of knowledge base entries
-│   └── vna_help_folder_structure.md  # Documentation structure description
-├── src/                       # Source code directory
-│   ├── agent/                 # Agent components
-│   │   ├── llm.py             # LLM integration and configuration
-│   │   ├── prompts.py         # Prompt templates
-│   │   ├── rag_agent.py       # RAG agent implementation
-│   │   └── tools.py           # Agent tools
-│   ├── rag/                   # RAG components
-│   │   ├── embeddings.py      # Text embedding functionality
-│   │   ├── md_splitter.py     # Markdown document chunking
-│   │   ├── rag_flow.py        # RAG workflow implementation
-│   │   └── vectorstore.py     # Vector database integration
-│   └── utils/                 # Utility functions
-│       ├── html_parser.py     # HTML parsing utilities
-│       ├── knowledge_base_reader.py  # Knowledge base index reader
-│       ├── logging_config.py  # Logging configuration
-│       ├── merger.py          # Document merging utilities
-│       └── reranker.py        # Reranking implementations
-├── agent.py                   # LangGraph server agent entry point
-├── main.py                    # Application main entry point
-├── langgraph.json             # LangGraph server configuration
-├── requirements.txt           # Python dependencies
-└── .gitignore                 # Git ignore file
+src/
+├── agent/              # AI agent components
+│   ├── api_llm.py      # API-based LLM implementation
+│   ├── llm.py          # Core LLM functionality
+│   ├── prompts.py      # Prompt templates
+│   ├── rag_agent.py    # RAG agent implementation
+│   ├── researcher.py   # Researcher agent
+│   └── tools.py        # Agent tools
+├── api/                # Backend API
+│   └── main.py         # FastAPI application
+├── file_process/       # File handling
+│   ├── file_parser.py  # Document parsing
+│   ├── file_splitter.py # Document splitting
+│   └── indexer.py      # Document indexing
+├── memory/             # Data storage
+│   ├── knowledgebase.py # Knowledgebase management
+│   ├── memory.py       # Main memory manager
+│   └── thread.py       # Conversation thread management
+├── rag/                # RAG flow
+│   └── rag_flow.py     # RAG pipeline implementation
+├── ui/                 # Frontend UI
+│   ├── App.jsx         # Main React component
+│   └── main.jsx        # React entry point
+└── utils/              # Utility functions
+    ├── embeddings.py   # Embedding utilities
+    └── logging_config.py # Logging configuration
 ```
 
-## Usage
+## Development
 
-### Starting the Application in console
+### Running Backend Tests
+
 ```bash
-python main.py
+pytest
 ```
 
-### Starting the Application in local LangGraph server
+### Running Frontend Tests
+
 ```bash
-langgraph dev
+cd src/ui
+npm test
 ```
 
-## Components
+### Linting and Formatting
 
-### RAG Flow
-The RAG (Retrieval-Augmented Generation) flow handles the core functionality of retrieving relevant information from the knowledge base and generating responses.
+```bash
+# Backend
+pylint src/
+black src/
 
-### Agent
-The agent orchestrates the workflow, manages state, and decides on appropriate actions based on user queries.
+# Frontend
+cd src/ui
+npm run lint
+```
 
-### Reranking
-The system supports multiple reranking strategies:
-- BGE Reranker
-- Jina Local Model Reranker
-- Jina API Reranker
+## Deployment
 
-### Knowledge Base
-The knowledge base consists of indexed VNA documentation that is used for information retrieval.
+For production deployment, refer to the `DEPLOYMENT_GUIDE.md` file for detailed instructions on setting up the application in a production environment.
+
+## Contributing
+
+Contributions are welcome! Please follow these steps:
+
+1. Fork the repository
+2. Create a new branch for your feature
+3. Make your changes
+4. Run the tests
+5. Submit a pull request
+
+## License
+
+[MIT License](LICENSE)
+
+## Support
+
+For issues, questions, or feature requests, please open an issue on the GitHub repository.
+
+## Acknowledgements
+
+- Built with FastAPI, React, and LangChain
+- Supports various LLM and embedding providers
+- Document processing powered by multiple open-source libraries
