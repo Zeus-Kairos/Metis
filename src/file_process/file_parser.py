@@ -156,6 +156,7 @@ class FileParser:
         os.makedirs(target_image_path, exist_ok=True)
         target_file_path = os.path.join(target_image_path, f"{filename}.pdf")
         shutil.copy(file_path, target_file_path)
+        logger.debug(f"Copied {file_path} to {target_file_path}")
         # image_path = os.path.join(parsed_dir, f"{filename}_images")
                 
         md_text = pymupdf4llm.to_markdown(

@@ -1,4 +1,3 @@
-- Add general embedding model support.
 - assign an independent llm for each researcher.
 - Add evaluation metrics for the RAG agent.
 - Add image support for the RAG agent.

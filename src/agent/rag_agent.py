@@ -404,23 +404,28 @@ class RAGAgent:
             graph = self.builder.compile(checkpointer=InMemorySaver())
             
             # Streaming mode: yield chunks as they become available                
-            for mode, chunk in graph.stream(initial_state, 
+            for subgraph, mode, chunk in graph.stream(initial_state, 
                                             config=config, 
                                             subgraphs=True,
-                                            stream_mode=["updates", "messages"]):
+                                            stream_mode=["updates", "messages"]):                   
                 if mode == "updates":
                     for node, state in chunk.items():
-                        if node in self.update_dict:
-                            yield {
-                                    "stage": self.update_dict[node],
-                                }
+                        if "display" in state and state["display"]:
+                            yield { "display": state["display"] }
                 elif mode == "messages":
                     message, meta = chunk
-                    if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer"]:
+                    if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "deep_retrieve", "synthesize_answer", "reference_check"]:
                         last_assistant_message = message.content   
-                        yield {
-                            "response": last_assistant_message,
-                        }
+                        # if subgraph:
+                        #     logger.info(f"{subgraph}: {message}: {meta}")
+                        if meta["langgraph_node"] in ["deep_retrieve", "synthesize_answer"]:
+                            yield {
+                                "display": last_assistant_message,
+                            }
+                        else:
+                            yield {
+                                "response": last_assistant_message,
+                            }
     
     def get_knowledgebase_item(self, user_id: int, knowledgebase_id: int) -> KnowledgeBaseItem:
         """

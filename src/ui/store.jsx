@@ -628,7 +628,7 @@ const useChatStore = create((set, get) => {
                     
                     // Check for specific error pattern
                     if (errorMsg.includes('Error invoking chat model')) {
-                      displayError = 'Error invoking chat model. Please check your API configuration.';
+                      displayError = `${errorMsg}. Please check your API configuration.`;
                     }
                     
                     // Show error in modal and remove the assistant message with loading effect
@@ -733,7 +733,7 @@ const useChatStore = create((set, get) => {
           
           // Check for specific error pattern
           if (errorMsg.includes('Error invoking chat model')) {
-            displayError = 'Error invoking chat model. Please check your API configuration.';
+            displayError = `${errorMsg}. Please check your API configuration.`;
           }
           
           // Show error in modal instead of adding to conversation
