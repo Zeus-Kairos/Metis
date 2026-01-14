@@ -327,13 +327,14 @@ def reference_check_prompt(state: TypedDict, root_path: str = "") -> str:
     query = state["refined_query"]
     answer = state["answer"] if "answer" in state else ""
     documents = state["documents"]
-    doc_contents = format_references(documents, root_path, with_index=True, index_offset=1)  
+    doc_contents = format_references(documents, root_path, with_index=False)  
 
     return f"""
     You are an assistant that reviews an existing answer against a set of reference documents and adds precise reference markers.
     Task:
     Carefully read the user’s query, the existing answer, and all provided reference documents.
     Verify each factual statement in the answer against the documents.
+    Find out all the documents referenced in the answer, add indices to them.
     For every sentence, paragraph or specific claim that is supported by a document, add an inline reference marker in square brackets, using the format [Document Index].
     If multiple documents support the same sentence or paragraph, include multiple markers, for example: [1][3].
     If a sentence is not clearly supported by any document, leave it unmarked and do not invent or guess references. If a major claim is unsupported or contradicted, briefly flag it in a short note after the sentence, e.g. (unsupported by the provided documents).
