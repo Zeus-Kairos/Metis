@@ -511,7 +511,7 @@ async def create_folder(
     parentPath: str = Body("", description="Parent path"),
     knowledge_base: str = Body("default", description="Knowledge base name")
 ):
-    """Create a new folder in knowledgebase"""
+    """Create a new folder in knowledgebase (idempotent - returns success if folder already exists)"""
     try:       
         # Validate folder name
         if not name or name.strip() == "":
@@ -523,21 +523,33 @@ async def create_folder(
         # Create the new folder path
         new_folder_path = os.path.join(parent_dir, name)
         
-        # Create the folder if it doesn't exist
-        if os.path.exists(new_folder_path):
-            raise HTTPException(status_code=400, detail=f"Folder '{name}' already exists")
+        # Check if folder already exists on disk
+        folder_exists_on_disk = os.path.exists(new_folder_path)
         
-        os.makedirs(new_folder_path, exist_ok=True)
+        # Check if folder exists in database by trying to get it
+        # The add_file method uses ON CONFLICT, so it will update if exists
+        # But we want to be idempotent, so if it exists, just return success
+        
+        # Create the folder on disk if it doesn't exist
+        if not folder_exists_on_disk:
+            os.makedirs(new_folder_path, exist_ok=True)
+        
+        # Add folder to database (will update if already exists due to ON CONFLICT)
         parsed_folder_path, folder_name = get_parsed_path(new_folder_path)
         parsed_folder_path = os.path.join(parsed_folder_path, folder_name)
 
-        memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
-            name, new_folder_path, parsed_folder_path, current_user.id, knowledge_base, type="folder", parentFolder=parent_dir)
+        try:
+            memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
+                name, new_folder_path, parsed_folder_path, current_user.id, knowledge_base, type="folder", parentFolder=parent_dir)
+        except Exception as db_error:
+            # If folder already exists in database, that's okay (idempotent)
+            # Log but don't fail
+            logger.debug(f"Folder may already exist in database: {db_error}")
         
         return {
             "success": True,
-            "message": f"Folder '{name}' created successfully",
-            "path": f"{parentPath}/{name}"
+            "message": f"Folder '{name}' created successfully" if not folder_exists_on_disk else f"Folder '{name}' already exists",
+            "path": f"{parentPath}/{name}" if parentPath else name
         }
     except HTTPException:
         raise

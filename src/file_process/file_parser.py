@@ -26,6 +26,59 @@ class FileParser:
         self.html_converter.body_width = 0  # No line wrapping
         self.markdownable_parser = MarkItDown(enable_plugins=False)
     
+    def _read_file_with_encoding(self, file_path: str) -> str:
+        """
+        Read a text file trying multiple encodings in order of likelihood.
+        
+        Args:
+            file_path: Path to the file to read
+            
+        Returns:
+            File content as string
+            
+        Raises:
+            UnicodeDecodeError: If all encodings fail
+        """
+        # Try encodings in order of likelihood
+        encodings = [
+            'utf-8',           # Most common modern encoding
+            'windows-1252',    # Common for Windows files, especially HTML (handles byte 0xa0)
+            'iso-8859-1',      # Latin-1, common fallback
+        ]
+        
+        last_error = None
+        for encoding in encodings:
+            try:
+                with open(file_path, 'r', encoding=encoding) as f:
+                    content = f.read()
+                logger.debug(f"Successfully read {file_path} with encoding: {encoding}")
+                return content
+            except UnicodeDecodeError as e:
+                last_error = e
+                logger.debug(f"Failed to read {file_path} with encoding {encoding}: {e}")
+                continue
+            except Exception as e:
+                # For other errors (like file not found), re-raise immediately
+                logger.error(f"Error reading file {file_path}: {e}")
+                raise
+        
+        # If all encodings failed, try utf-8 with error handling as last resort
+        logger.warning(f"All encodings failed for {file_path}, trying utf-8 with error replacement")
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+            logger.warning(f"Read {file_path} with utf-8 and error replacement (some characters may be lost)")
+            return content
+        except Exception as e:
+            logger.error(f"Final attempt to read {file_path} failed: {e}")
+            raise UnicodeDecodeError(
+                'utf-8',
+                b'',
+                0,
+                1,
+                f"Could not decode file {file_path} with any encoding. Last error: {last_error}"
+            ) from last_error
+    
     def detect_file_type(self, file_path: str) -> str:
         """
         Detect file type based on extension.
@@ -67,16 +120,13 @@ class FileParser:
             
             parsed_content = None
             if file_type == 'markdown':
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
+                content = self._read_file_with_encoding(file_path)
                 parsed_content = self._parse_markdown(content)
             elif file_type == 'text':
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
+                content = self._read_file_with_encoding(file_path)
                 parsed_content = self._parse_text(content)
             elif file_type == 'html':
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
+                content = self._read_file_with_encoding(file_path)
                 parsed_content = self._parse_html(content)
             elif file_type == 'pdf':
                 parsed_content = self._parse_pdf(file_path)

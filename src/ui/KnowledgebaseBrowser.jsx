@@ -44,6 +44,7 @@ const KnowledgebaseBrowser = () => {
   
   // Cache for directory contents - key is path, value is the fetched data
   const [directoryCache, setDirectoryCache] = useState({});
+  const [isDragging, setIsDragging] = useState(false);
   
   // Ref to access the latest directoryCache without triggering re-renders
   const directoryCacheRef = React.useRef(directoryCache);
@@ -597,6 +598,315 @@ const KnowledgebaseBrowser = () => {
     }
   }, [uploadResults]);
 
+  // Helper function to recursively process folder entries
+  const processEntry = async (entry, basePath = '', fileList = [], folderList = []) => {
+    if (entry.isFile) {
+      return new Promise((resolve) => {
+        entry.file((file) => {
+          // Create a File object with webkitRelativePath to preserve folder structure
+          const relativePath = basePath ? `${basePath}/${file.name}` : file.name;
+          const fileWithPath = new File([file], relativePath, { type: file.type });
+          fileList.push(fileWithPath);
+          resolve();
+        });
+      });
+    } else if (entry.isDirectory) {
+      folderList.push(basePath ? `${basePath}/${entry.name}` : entry.name);
+      const reader = entry.createReader();
+      const entries = [];
+      
+      return new Promise((resolve) => {
+        const readEntries = () => {
+          reader.readEntries((batch) => {
+            if (batch.length === 0) {
+              // Process all entries in parallel
+              Promise.all(entries.map(subEntry => 
+                processEntry(subEntry, basePath ? `${basePath}/${entry.name}` : entry.name, fileList, folderList)
+              )).then(() => resolve());
+            } else {
+              entries.push(...batch);
+              readEntries();
+            }
+          });
+        };
+        readEntries();
+      });
+    }
+  };
+
+  // Process dropped items (files and folders)
+  const processDroppedItems = async (items) => {
+    const fileList = [];
+    const folderList = [];
+    
+    // Process all items
+    await Promise.all(Array.from(items).map((item) => {
+      const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : 
+                    (item.getAsEntry ? item.getAsEntry() : null);
+      
+      if (entry) {
+        return processEntry(entry, '', fileList, folderList);
+      } else {
+        // Fallback to file API for browsers that don't support entries
+        const file = item.getAsFile();
+        if (file) {
+          fileList.push(file);
+        }
+      }
+    }));
+    
+    return { fileList, folderList };
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set isDragging to false if the cursor is completely leaving the drop zone
+    if (e.currentTarget.contains(e.relatedTarget)) {
+      return;
+    }
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    try {
+      const items = e.dataTransfer.items;
+      
+      // Check if we have folder support (DataTransferItem with webkitGetAsEntry)
+      if (items && items.length > 0 && (items[0].webkitGetAsEntry || items[0].getAsEntry)) {
+        // Process folders and files
+        const { fileList, folderList } = await processDroppedItems(items);
+        
+        if (folderList.length === 0 && fileList.length === 0) {
+          return;
+        }
+        
+        setIsLoading(true);
+        setError('');
+        
+        try {
+          const activeKB = knowledgebases.find(kb => kb.is_active);
+          if (!activeKB) {
+            throw new Error('No active knowledgebase found');
+          }
+          
+          const fullPath = currentPath.join('/').replace(/^\//, '');
+          
+          // Deduplicate folder list and create folders first (in order, from root to deepest)
+          const uniqueFolders = [...new Set(folderList)];
+          const sortedFolders = uniqueFolders.sort((a, b) => {
+            const depthA = a.split('/').length;
+            const depthB = b.split('/').length;
+            return depthA - depthB;
+          });
+          
+          for (const folderPath of sortedFolders) {
+            const pathParts = folderPath.split('/');
+            let currentFolderPath = fullPath;
+            
+            // Create each folder in the path if it doesn't exist
+            for (let i = 0; i < pathParts.length; i++) {
+              const folderName = pathParts[i];
+              const parentPath = currentFolderPath;
+              const newFolderPath = currentFolderPath ? `${currentFolderPath}/${folderName}` : folderName;
+              
+              try {
+                // Check if folder already exists by trying to create it
+                const createResponse = await fetchWithAuth(`/api/knowledgebase/${activeKB.id}/folder`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    name: folderName,
+                    parentPath: parentPath,
+                    knowledge_base: currentKnowledgebase,
+                  }),
+                });
+                
+                if (!createResponse.ok) {
+                  const errorData = await createResponse.json().catch(() => ({}));
+                  // If folder already exists, that's okay, continue
+                  if (!errorData.detail || !errorData.detail.includes('already exists')) {
+                    console.warn(`Failed to create folder ${folderName}:`, errorData.detail || 'Unknown error');
+                  }
+                }
+              } catch (err) {
+                console.warn(`Error creating folder ${folderName}:`, err.message);
+              }
+              
+              currentFolderPath = newFolderPath;
+            }
+          }
+          
+          // Now upload files with their relative paths
+          if (fileList.length > 0) {
+            setSelectedFiles(fileList);
+            setShowUploadDialog(true);
+            // Auto-start upload after a short delay to allow the dialog to render
+            setTimeout(() => {
+              uploadFilesWithStreamForFolders(fileList, fullPath);
+            }, 100);
+          } else {
+            // Only folders were dropped, refresh the view
+            fetchDirectoryContents(fullPath, true);
+            refreshFileBrowser(fullPath);
+            setIsLoading(false);
+          }
+        } catch (err) {
+          setError(err.message);
+          setIsLoading(false);
+        }
+      } else {
+        // Fallback to file-only handling
+        const droppedFiles = Array.from(e.dataTransfer.files);
+        if (droppedFiles.length > 0) {
+          setSelectedFiles(droppedFiles);
+          setShowUploadDialog(true);
+          // Auto-start upload after a short delay to allow the dialog to render
+          setTimeout(() => {
+            uploadFilesWithStream();
+          }, 100);
+        }
+      }
+    } catch (err) {
+      setError(`Error processing dropped items: ${err.message}`);
+    }
+  };
+  
+  // Upload files with folder structure support
+  const uploadFilesWithStreamForFolders = async (files, baseDirectory) => {
+    if (files.length === 0) return;
+
+    setIsUploading(true);
+    setUploadResults([]);
+    setError('');
+    
+    // Scroll dialog body to bottom after a short delay to ensure UI updates
+    setTimeout(() => {
+      if (uploadDialogBodyRef.current) {
+        uploadDialogBodyRef.current.scrollTop = uploadDialogBodyRef.current.scrollHeight;
+      }
+    }, 100);
+    
+    try {
+      const activeKB = knowledgebases.find(kb => kb.is_active);
+      if (!activeKB) {
+        throw new Error('No active knowledgebase found');
+      }
+      
+      // Group files by their directory path
+      const filesByDirectory = {};
+      files.forEach((file) => {
+        // Extract directory path from file name (which contains the relative path)
+        const relativePath = file.name;
+        const pathParts = relativePath.split('/');
+        const fileName = pathParts.pop();
+        const fileDirectory = pathParts.join('/');
+        const targetDirectory = fileDirectory ? `${baseDirectory}/${fileDirectory}` : baseDirectory;
+        
+        if (!filesByDirectory[targetDirectory]) {
+          filesByDirectory[targetDirectory] = [];
+        }
+        
+        // Create a new File object with just the filename for upload
+        const fileForUpload = new File([file], fileName, { type: file.type });
+        filesByDirectory[targetDirectory].push(fileForUpload);
+      });
+      
+      // Upload files directory by directory
+      for (const [directory, directoryFiles] of Object.entries(filesByDirectory)) {
+        const formData = new FormData();
+        formData.append('knowledge_base', currentKnowledgebase);
+        formData.append('directory', directory);
+        
+        directoryFiles.forEach((file) => {
+          formData.append('files', file);
+        });
+
+        // Use fetchWithAuth which already handles streaming and FormData correctly
+        const response = await fetchWithAuth('/api/stream-upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          // Add error results for all files in this directory
+          directoryFiles.forEach(file => {
+            setUploadResults(prev => [...prev, {
+              filename: file.name,
+              status: 'failed',
+              error: errorData.detail || 'Upload failed'
+            }]);
+          });
+          continue;
+        }
+
+        // Read the response as a stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        // Process the stream line by line
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Split buffer by newlines
+          const lines = buffer.split('\n');
+          // Keep the last incomplete line in buffer
+          buffer = lines.pop();
+
+          // Process each complete line
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const result = JSON.parse(line);
+                setUploadResults(prev => [...prev, result]);
+              } catch (parseError) {
+                console.error('Error parsing upload result:', parseError);
+              }
+            }
+          }
+        }
+      }
+
+      // Force refresh after all files are processed
+      fetchDirectoryContents(baseDirectory, true);
+      refreshFileBrowser(baseDirectory);
+      
+      // Close dialog automatically after all files are processed
+      setTimeout(() => {
+        setShowUploadDialog(false);
+        setSelectedFiles([]);
+        setUploadResults([]);
+      }, 1000); // Short delay to allow users to see the final results
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   return (
     <div className="knowledgebase-browser">
       <div className="kb-header">
@@ -869,12 +1179,26 @@ const KnowledgebaseBrowser = () => {
       )}
 
       {/* Directory Contents */}
-      <div className="kb-contents">
+      <div 
+        className={`kb-contents ${isDragging ? 'dragging-over' : ''}`}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {isLoading ? (
           <div className="kb-loading">Loading...</div>
         ) : (
           <div className="kb-section">
-            {fileItems.length === 0 ? (
+            {isDragging && (
+              <div className="kb-drag-overlay">
+                <div className="kb-drag-message">
+                  <div className="kb-drag-icon">📁</div>
+                  <div className="kb-drag-text">Drop files or folders to upload</div>
+                </div>
+              </div>
+            )}
+            {fileItems.length === 0 && !isDragging ? (
               <div className="kb-empty">No items found</div>
             ) : (
               <div className="kb-items">

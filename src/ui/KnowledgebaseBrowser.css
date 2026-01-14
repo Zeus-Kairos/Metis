@@ -943,6 +943,57 @@
 }
 
 /* Responsive adjustments */
+/* Drag and Drop Styles */
+.kb-contents.dragging-over {
+  background-color: rgba(76, 29, 149, 0.05);
+  border: 2px dashed rgba(76, 29, 149, 0.4);
+  border-radius: 8px;
+}
+
+.kb-drag-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 3px rgba(76, 29, 149, 0.4);
+}
+
+.kb-drag-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 32px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+}
+
+.kb-drag-icon {
+  font-size: 64px;
+  color: rgba(76, 29, 149, 0.6);
+}
+
+.kb-drag-text {
+  font-size: 24px;
+  font-weight: 600;
+  color: rgba(76, 29, 149, 0.8);
+  text-align: center;
+}
+
+/* Make kb-section relative to position the overlay correctly */
+.kb-section {
+  position: relative;
+  margin-bottom: 24px;
+}
+
 @media (max-width: 768px) {
   .kb-items {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -962,5 +1013,13 @@
     width: 100%;
     overflow-x: auto;
     flex-wrap: nowrap;
+  }
+  
+  .kb-drag-text {
+    font-size: 18px;
+  }
+  
+  .kb-drag-icon {
+    font-size: 48px;
   }
 }
