@@ -152,7 +152,7 @@ class RAGAgent:
         """
         refined_query = state["refined_query"]
             
-        rag_flow = RAGFlow(state["knowledge_base_item"].path, embedding_runner=self.embedding_runner)
+        rag_flow = RAGFlow(state["knowledge_base_item"].index_path, embedding_runner=self.embedding_runner)
         results = rag_flow.retrieve(self.rag_type, refined_query, k=self.rag_k)
         return {
             "documents": results,

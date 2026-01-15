@@ -196,7 +196,7 @@ The following environment variables are required for the application to function
 | `DB_URI` | PostgreSQL database connection string | - |
 | `SECRET_KEY` | Secret key for JWT token generation | - |
 | `LOG_LEVEL` | Logging level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
-| `RAG_TYPE` | RAG retrieval type (simple, query_refined, fusion, rerank) | `fusion` |
+| `RAG_TYPE` | RAG retrieval type (simple, query_refined, fusion, rerank, agentic) | `agentic` |
 | `RAG_K` | Number of documents to retrieve | `10` |
 
 ### AI Model Configuration
