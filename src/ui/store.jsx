@@ -232,6 +232,24 @@ const useChatStore = create((set, get) => {
             isInitializing: false,
             authChecked: true
           });
+          
+          // If we have an active thread, call the /api/thread/set-active API to update the backend
+          if (activeThreadId && userId) {
+            try {
+              await fetchWithAuth(`/api/thread/set-active?user_id=${userId}&thread_id=${activeThreadId}`, {
+                method: 'POST'
+              });
+            } catch (error) {
+              console.error('Error setting active thread at initialization:', error);
+              // Continue with initialization even if API call fails
+            }
+          }
+          
+          // Fetch thread history for all threads to ensure proper previews
+          for (const thread of threads) {
+            const threadId = thread.thread_id || thread.id;
+            await get().fetchThreadHistory(threadId);
+          }
         } else {
           // No threads exist - create a new thread automatically
           await get().createConversation();
@@ -243,21 +261,6 @@ const useChatStore = create((set, get) => {
             isInitializing: false,
             authChecked: true
           });
-        }
-        
-        // If we have an active thread, call the /api/thread/set-active API to update the backend
-        if (activeThreadId && userId) {
-          try {
-            await fetchWithAuth(`/api/thread/set-active?user_id=${userId}&thread_id=${activeThreadId}`, {
-              method: 'POST'
-            });
-            
-            // Fetch thread history after setting active thread
-            await get().fetchThreadHistory(activeThreadId);
-          } catch (error) {
-            console.error('Error setting active thread at initialization:', error);
-            // Continue with initialization even if API call fails
-          }
         }
         
       } catch (err) {

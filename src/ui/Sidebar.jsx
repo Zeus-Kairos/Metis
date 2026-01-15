@@ -106,7 +106,7 @@ const Sidebar = ({ isOpen, onToggle, onMenuItemClick }) => {
 
   const getPreview = (messages) => {
     // Find the last message from the user
-    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user');
+    const lastUserMessage = [...messages].reverse().find(msg => msg.role === 'user' && msg.content && msg.content.trim());
     
     if (lastUserMessage) {
       // Truncate to one line and limit length
