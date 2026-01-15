@@ -10,18 +10,28 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
 - **Configurable AI Models**: Support for multiple LLM and embedding providers with customizable settings
 - **Intelligent RAG System**: Advanced retrieval with agentic RAG workflow
 - **User-Friendly Interface**: Modern React-based UI with chat interface and knowledgebase browser
-- **Secure Authentication**: JWT-based user authentication system
 - **Knowledgebase Organization**: Browse and manage your uploaded documents in customized knowledgebases
+- **Secure Authentication**: JWT-based user authentication system
 - **Conversation History**: Persistent conversation threads with knowledgebase context
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.10+ with conda environment
-- Node.js 18+ for frontend development
-- PostgreSQL database 
-- Ollama or other LLM provider access
+- [MiniConda](https://www.anaconda.com/docs/getting-started/miniconda/install)
+- [Node.js 18+](https://nodejs.org/en/download)
+- [PostgreSQL database](https://www.postgresql.org/download/)
+- [Ollama](https://ollama.com/download) or other LLM provider access
+- Git (for cloning the repository)
+
+### Clone the Repository
+
+1. **Create project directory and clone the code**:
+   ```bash
+   mkdir -p c:\Apps\Metis
+   cd c:\Apps
+   git clone https://github.com/Zeus-Kairos/Metis.git
+   ```
 
 ### Backend Setup
 
@@ -37,13 +47,62 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
    pip install -r requirements.txt
    ```
 
-3. **Configure environment variables**:
+3. **Set up PostgreSQL database**:
+   
+   #### On Linux/macOS
+   ```bash
+   # Make the script executable
+   chmod +x setup_db.sh
+   
+   # Run the database setup script
+   ./setup_db.sh -U postgres -W -d metis_db
+   ```
+   
+   #### On Windows
+   
+   **Option 1: Using Git Bash** (recommended if you have Git installed)
+   ```bash
+   # Run the script directly in Git Bash
+   ./setup_db.sh -U postgres -W -d metis_db
+   ```
+   
+   **Option 2: Using Windows Subsystem for Linux (WSL)**
+   ```bash
+   # Run from WSL terminal
+   ./setup_db.sh -U postgres -W -d metis_db
+   ```
+   
+   **Option 3: Using PowerShell (Recommended)**
+   ```powershell
+   # If you encounter execution policy issues, run this first in an elevated PowerShell:
+   # Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+   
+   # Run the PowerShell setup script with password prompt
+   .\setup_db.ps1 -User postgres -PromptPassword -DatabaseName metis_db
+   
+   # Optional: Specify host and port explicitly
+   # .\setup_db.ps1 -DbHost localhost -Port 5432 -User postgres -PromptPassword -DatabaseName metis_db
+   ```
+   
+   **Option 4: Manual PowerShell Commands**
+   ```powershell
+   # Add PostgreSQL bin directory to PATH (adjust version as needed)
+   $env:PATH += ";C:\Program Files\PostgreSQL\16\bin"
+   
+   # Create database and enable vector extension
+   psql -h localhost -p 5432 -U postgres -c "CREATE DATABASE metis_db"
+   psql -h localhost -p 5432 -U postgres -d metis_db -c "CREATE EXTENSION IF NOT EXISTS vector"
+   ```
+   
+   **Note**: Ensure PostgreSQL is installed and `psql` is in your PATH. For Windows, PostgreSQL usually installs to `C:\Program Files\PostgreSQL\<version>\bin`.
+
+4. **Configure environment variables**:
    ```bash
    cp .env.example .env
-   # Edit .env file with your configuration
+   # Edit .env file with your configuration, including the DB_URI from the database setup
    ```
 
-4. **Run the backend server**:
+5. **Run the backend server**:
    ```bash
    python main.py
    ```
