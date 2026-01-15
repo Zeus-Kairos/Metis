@@ -24,7 +24,73 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
 - [Ollama](https://ollama.com/download) or other LLM provider access
 - Git (for cloning the repository)
 
-### Clone the Repository
+### Windows (PowerShell) One-Command Install (Recommended)
+
+Download the latest installer script:
+
+- **`install.ps1`**: [`https://raw.githubusercontent.com/Zeus-Kairos/Metis/main/install.ps1`](https://raw.githubusercontent.com/Zeus-Kairos/Metis/main/install.ps1)
+
+Save it into the folder where you want to install or manage Metis (for example, `c:\Apps\Metis`), then from that folder run:
+
+```powershell
+# If you encounter execution policy issues, run this first in an elevated PowerShell:
+# Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+.\install.ps1 -DbUser postgres -PromptDbPassword -DatabaseName metis_db
+```
+
+Customizing the Conda env name:
+
+```powershell
+.\install.ps1 -EnvName metis-dev -DbUser postgres -PromptDbPassword -DatabaseName metis_db
+```
+
+Installing into a custom path (repo root):
+
+```powershell
+# Run the script from anywhere, but point it at your repo root folder:
+.\install.ps1 -InstallPath C:\Apps\Metis -DbUser postgres -PromptDbPassword -DatabaseName metis_db
+```
+
+What it does:
+- Installs backend deps (via Conda + `pip install -r requirements.txt`, or system Python if `-SkipConda`)
+- Installs frontend deps (`npm install`, unless `-SkipFrontend` is used)
+- Sets up the PostgreSQL database + `vector` extension (using `psql` directly, unless `-SkipDb` is used)
+- Creates a local `.env` file if missing (with a generated `SECRET_KEY` and a `DB_URI` based on your DB args)
+
+#### `install.ps1` flags (full list)
+
+- **Repository / path**
+  - **`-InstallPath <path>`**: Target Metis repo root. If it doesn’t exist, the folder is created; if it isn’t a repo yet, the script will clone into it.
+  - **`-RepoUrl <url>`**: Git URL to clone when `InstallPath` is not already a repo. Default: `https://github.com/Zeus-Kairos/Metis.git`.
+  - **`-SkipClone`**: Do not clone even if `InstallPath` doesn’t look like a repo; instead, fail with an error.
+
+- **Conda / Python**
+  - **`-EnvName <name>`**: Conda environment name to create/use (default: `metis`).
+  - **`-PythonVersion <version>`**: Python version for the Conda env (default: `3.13`).
+  - **`-SkipConda`**: Skip Conda entirely and use the system `python` + `pip`.
+
+- **Database (PostgreSQL)**
+  - **`-SkipDb`**: Skip database creation and `vector` extension setup.
+  - **`-DbHost <host>`**: Database host (default: `localhost`).
+  - **`-DbPort <port>`**: Database port (default: `5432`).
+  - **`-DbUser <user>`**: Database user (default: `postgres`).
+  - **`-DbPassword <password>`**: Database password (optional; if omitted, use `-PromptDbPassword`).
+  - **`-DatabaseName <name>`**: Database name to create/use (default: `metis_db`).
+  - **`-PromptDbPassword`**: Prompt interactively for the PostgreSQL password.
+
+- **Frontend**
+  - **`-SkipFrontend`**: Skip `npm install`.
+
+- **Environment file**
+  - **`-ForceEnvOverwrite`**: Overwrite an existing `.env` instead of leaving it untouched.
+
+- **Verbosity**
+  - **`-Verbose`**: PowerShell common parameter; when supplied, `pip` runs with `-v` for more detailed install logs.
+
+### Step-by-Step Installation (Advanced / Cross-Platform)
+
+#### Clone the Repository
 
 1. **Create project directory and clone the code**:
    ```bash
@@ -33,7 +99,7 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
    git clone https://github.com/Zeus-Kairos/Metis.git
    ```
 
-### Backend Setup
+#### Backend Setup (Manual)
 
 1. **Create and activate conda environment**:
    ```bash
@@ -49,7 +115,7 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
 
 3. **Set up PostgreSQL database**:
    
-   #### On Linux/macOS
+   ##### On Linux/macOS
    ```bash
    # Make the script executable
    chmod +x setup_db.sh
@@ -58,7 +124,7 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
    ./setup_db.sh -U postgres -W -d metis_db
    ```
    
-   #### On Windows
+   ##### On Windows
    
    **Option 1: Using Git Bash** (recommended if you have Git installed)
    ```bash
@@ -98,7 +164,7 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
 
 4. **Configure environment variables**:
    ```bash
-   cp .env.example .env
+   # Create a .env file (the installer script can do this for you)
    # Edit .env file with your configuration, including the DB_URI from the database setup
    ```
 
@@ -107,7 +173,7 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
    python main.py
    ```
 
-### Frontend Setup
+#### Frontend Setup (Manual)
 
 1. **Install npm dependencies**:
    ```bash

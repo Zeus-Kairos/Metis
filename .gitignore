@@ -69,6 +69,8 @@ __pycache__/
 *.so
 .Python
 
+.trae/
+
 # Documentation files
 Docs/
 
