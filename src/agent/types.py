@@ -33,7 +33,7 @@ class AgentState(TypedDict):
     messages: Annotated[List[Dict[str, str]], add_messages]
     intent: str = None
     refined_query: str = None   
-    documents: list[Document] | List[Tuple[Document, float]] = None
+    documents: list[Document] | List[Tuple[Document, float]] = []
     answer: str = None
     error_context: str = None
     knowledge_base_item: KnowledgeBaseItem = None   
@@ -47,6 +47,7 @@ class DeepRAGState(AgentState):
     searched_aspects: Annotated[
         List[RAGResult], operator.add
     ]
+    reused_aspects: List[str]
 
 class DeepSearchState(AgentState):
     """

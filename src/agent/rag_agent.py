@@ -21,6 +21,7 @@ from src.memory.thread import ThreadManager
 from src.agent.prompts import (
     classify_intent_prompt,
     filter_documents_prompt,
+    find_relative_aspects_prompt,
     format_answer_prompt,
     handle_chat_prompt,
     plan_rag_prompt,
@@ -208,6 +209,38 @@ class RAGAgent:
             "aspects_to_explore": aspects_to_explore,
             "display": f"\nExplore aspects:\n{"\n".join(aspects_to_explore)}\n",
         }
+    
+    def _find_reused_aspects(self, state: DeepRAGState) -> DeepRAGState:
+        """
+        Find the reused aspects.
+        """
+        related_aspect_indices = []
+        if "searched_aspects" in state and len(state["searched_aspects"]) > 0:
+            searched_aspects = state["searched_aspects"]
+            prompt = find_relative_aspects_prompt(state)
+            response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+            try:
+                related_aspect_indices = list(map(int, response.content.strip().split(",")))
+                reused_aspects = [searched_aspects[index].aspect for index in related_aspect_indices]
+            except ValueError:
+                reused_aspects = []
+            return {
+                "reused_aspects": reused_aspects,
+            }
+
+        return {
+            "searched_aspects": [],
+        }
+
+    def _collect_plan(self, state: DeepRAGState) -> DeepRAGState:
+        """
+        Collect the plan.
+        """
+        aspects_to_explore = state["aspects_to_explore"]
+        reused_aspects = state["reused_aspects"] if "reused_aspects" in state else []
+        return {
+            "aspects_to_explore": [aspect for aspect in aspects_to_explore if aspect not in reused_aspects],
+        }
 
     # Conditional edge function to create llm_call workers that each write a section of the report
     def _assign_researchers(self, state: DeepRAGState):
@@ -245,12 +278,20 @@ class RAGAgent:
     def _synthesize_answer(self, state: DeepRAGState) -> DeepRAGState:
         """
         Synthesize the answer.
-        """
+        """   
         searched_aspects = state["searched_aspects"]
-        all_docs = [doc for aspect in searched_aspects for doc in aspect.documents]
-        documents = merge_documents(all_docs)
+        aspects_to_explore = state["aspects_to_explore"]
+        reused_aspects = state["reused_aspects"] if "reused_aspects" in state else []
+        related_aspects = aspects_to_explore + reused_aspects
+        logger.info(f"[synthesize_answer] Related aspects: {related_aspects}")
 
-        prompt = synthesize_answer_prompt(state)
+        useful_aspects = [aspect for aspect in searched_aspects if aspect.aspect in related_aspects]
+
+        all_docs = [doc for aspect in useful_aspects for doc in aspect.documents]
+        documents = merge_documents(all_docs)      
+        
+        query = state["refined_query"]
+        prompt = synthesize_answer_prompt(query, useful_aspects)
         response = self.llm_runner.invoke([SystemMessage(content=prompt)])
         return {
             "documents": documents,
@@ -301,6 +342,8 @@ class RAGAgent:
         graph.add_node("handle_chat", self._handle_chat)
         if self.rag_type == RAGType.AGENTIC:
             graph.add_node("plan_rag", self._plan_rag)
+            graph.add_node("find_reused_aspects", self._find_reused_aspects)
+            graph.add_node("collect_plan", self._collect_plan)
             graph.add_node("deep_search", self._deep_search)       
             graph.add_node("synthesize_answer", self._synthesize_answer)
             graph.add_node("reference_check", self._reference_check)
@@ -321,10 +364,13 @@ class RAGAgent:
         graph.add_edge("handle_chat", END)
         if self.rag_type == RAGType.AGENTIC:
             graph.add_edge("refine_query", "plan_rag")
+            graph.add_edge("refine_query", "find_reused_aspects")
+            graph.add_edge("plan_rag", "collect_plan")
+            graph.add_edge("find_reused_aspects", "collect_plan")
             graph.add_conditional_edges(
-                "plan_rag", self._assign_researchers, ["deep_search"]
+                "collect_plan", self._assign_researchers, ["deep_search"]
             )
-            graph.add_edge("deep_search", "synthesize_answer")
+            graph.add_edge("deep_search", "synthesize_answer")            
             graph.add_edge("synthesize_answer", "reference_check")
             graph.add_edge("reference_check", END)
         else:

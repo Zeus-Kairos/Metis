@@ -7,6 +7,7 @@ from langchain_core.messages.utils import (
     count_tokens_approximately  
 )
 
+from src.agent.types import RAGResult
 from src.utils.document_handler import format_documents, format_references  
 
 logger = logging.getLogger(__name__)
@@ -216,6 +217,24 @@ def plan_rag_prompt(state: TypedDict) -> str:
     Aspects:
     """
 
+def find_relative_aspects_prompt(state: TypedDict) -> str:
+    """
+    Find relative aspects prompt.
+    """
+    query = state["refined_query"]
+    history_aspects = [aspect.aspect for aspect in state["searched_aspects"]]
+
+    return f"""
+    You are a helpful assistant to help find aspects related to the user query.
+    Based on the user query and the given aspects, find out the aspects that are related to the user query.
+    Return the indices of the reused aspects in a comma-separated list, without any additional explanations.
+
+    User Query: {query}
+    Aspects: {history_aspects}
+
+    Related Aspects Indices:
+    """
+
 def deep_search_prompt(state: TypedDict) -> str:
     """
     Deep Search prompt.
@@ -290,15 +309,12 @@ def deep_rag_prompt(state: TypedDict) -> str:
     RAG History: {rag_messages}
     """
 
-def synthesize_answer_prompt(state: TypedDict) -> str:
+def synthesize_answer_prompt(query: str, aspects: List[RAGResult]) -> str:
     """
     Synthesize the answer from all RAG results.
     """
-
-    query = state["refined_query"]
-    searched_aspects = state["searched_aspects"]
     formatted_aspects = ""
-    for aspect in searched_aspects:
+    for aspect in aspects:
         formatted_aspects += f"[Aspect {aspect.aspect}\nAnswer {aspect.answer}]\n"
         
     return f"""
