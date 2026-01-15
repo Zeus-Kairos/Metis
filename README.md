@@ -2,17 +2,16 @@
 
 ## Project Overview
 
-Metis is an advanced Retrieval-Augmented Generation (RAG) application that enables users to interact with AI using their own knowledge bases and documents. It provides a seamless interface for uploading documents, configuring AI models, and engaging in intelligent conversations powered by state-of-the-art language models.
+Metis is an advanced Retrieval-Augmented Generation (RAG) application that enables users to interact with AI using their own documents. It provides a seamless interface for uploading documents, configuring AI models, and Asking questions about your documents. The application is specifically optimized for local, small-scale LLMs, though it also supports high-performance models via API configuration.
 
 ### Key Features
 
 - **Document Management**: Upload, process, and index various document types (PDF, DOCX, PPTX, TXT, MD, HTML, CSV, XLSX)
-- **Configurable AI Models**: Support for multiple LLM and embedding providers with customizable settings
-- **Intelligent RAG System**: Advanced retrieval with agentic RAG workflow
-- **User-Friendly Interface**: Modern React-based UI with chat interface and knowledgebase browser
 - **Knowledgebase Organization**: Browse and manage your uploaded documents in customized knowledgebases
-- **Secure Authentication**: JWT-based user authentication system
-- **Conversation History**: Persistent conversation threads with knowledgebase context
+- **Local Optimization**: Optimized for local deployment with small-scale LLMs (e.g., Ollama)
+- **Intelligent RAG System**: Advanced retrieval with agentic RAG workflow
+- **Configurable AI Models**: Support for multiple LLM and embedding providers with customizable settings
+- **User-Friendly Interface**: Modern React-based UI with chat interface and knowledgebase browser
 
 ## Installation
 
@@ -292,37 +291,6 @@ src/
     ├── embeddings.py   # Embedding utilities
     └── logging_config.py # Logging configuration
 ```
-
-## Development
-
-### Running Backend Tests
-
-```bash
-pytest
-```
-
-### Running Frontend Tests
-
-```bash
-cd src/ui
-npm test
-```
-
-### Linting and Formatting
-
-```bash
-# Backend
-pylint src/
-black src/
-
-# Frontend
-cd src/ui
-npm run lint
-```
-
-## Deployment
-
-For production deployment, refer to the `DEPLOYMENT_GUIDE.md` file for detailed instructions on setting up the application in a production environment.
 
 ## Contributing
 
