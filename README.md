@@ -28,7 +28,7 @@ Metis is an advanced Retrieval-Augmented Generation (RAG) application that enabl
 
 Download the latest installer script:
 
-- **`install.ps1`**: [`https://raw.githubusercontent.com/Zeus-Kairos/Metis/main/install.ps1`](https://raw.githubusercontent.com/Zeus-Kairos/Metis/main/install.ps1)
+- **`install.ps1`**: [`https://github.com/Zeus-Kairos/Metis/raw/main/install.ps1`](https://github.com/Zeus-Kairos/Metis/raw/main/install.ps1)
 
 Save it into the folder where you want to install or manage Metis (for example, `c:\Apps\Metis`), then from that folder run:
 
