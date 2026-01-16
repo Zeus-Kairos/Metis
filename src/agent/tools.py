@@ -78,7 +78,7 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
     children_items = knowledgebase_manager.get_files_by_parent(kb_id, parent_folder)
     
     
-    logger.info(f"[list_children_tool] {children_items} Children Items Listed")
+    logger.info(f"[list_children_tool] len({children_items}) Children Items Listed")
 
     display_folder = get_relative_path_from_origin(parent_folder)
     message = f"\nChildren listed in {display_folder}:\n"
@@ -141,7 +141,8 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 update={
                     "searched_path": searched_path,
                     "messages": [ToolMessage(content=f"No documents found for query: '{query}' on path: {display_folder}", tool_call_id=tool_call_id)],
-                    "retrieve_tries": retrieve_tries + 1
+                    "retrieve_tries": retrieve_tries + 1,
+                    "is_done": False,
                 }
             )
         filtered_docs = filter_documents(query, docs)
@@ -150,7 +151,8 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 update={
                     "searched_path": searched_path,
                     "messages": [ToolMessage(content=f"No documents found for query: '{query}' on path: {display_folder}", tool_call_id=tool_call_id)],
-                    "retrieve_tries": retrieve_tries + 1
+                    "retrieve_tries": retrieve_tries + 1,
+                    "is_done": False,
                 }
             )
         documents = runtime.state["documents"] if "documents" in runtime.state else []

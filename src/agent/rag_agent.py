@@ -112,7 +112,7 @@ class RAGAgent:
             return {
                 "intent": intent,
                 "messages": [{"role": "user", "content": state["query"]}],
-                "knowledge_base_item": self.get_knowledgebase_item(self.user_id, 1),
+                "knowledge_base_item": self.get_knowledgebase_item(self.user_id, 31),
             }
             
         return {
@@ -260,15 +260,18 @@ class RAGAgent:
         aspect = state["aspect"]
         knowledgebase_item = state["knowledge_base_item"]
         researcher = Researcher(self.llm_runner)
-        output = researcher.graph.invoke({
+        output = researcher.graph.invoke(
+            {
             "aspect": aspect,
             "knowledge_base_item": knowledgebase_item,
-        })
+            },
+            config={"recursion_limit": 50},
+        )
         result = RAGResult(
             aspect=aspect,
-            documents=output["documents"],
-            answer=output["answer"],
-            is_done=output["is_done"],
+            documents=output["documents"] if "documents" in output else [],
+            answer=output["answer"] if "answer" in output else "",
+            is_done=output["is_done"] if "is_done" in output else False,
         )
 
         return {
