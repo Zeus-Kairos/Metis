@@ -1,9 +1,5 @@
 import os
-from typing import Tuple
 import dotenv
-from src.utils.logging_config import get_logger
-
-logger = get_logger(__name__)
 
 # Load environment variables
 dotenv.load_dotenv()

@@ -2,7 +2,7 @@ import os
 import asyncio
 from typing import List, Dict, Any, AsyncGenerator
 from fastapi import UploadFile
-from src.file_process.utils import SUPPORTED_FORMATS
+from src.file_process.constants import SUPPORTED_FORMATS
 from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.indexer import Indexer
 from src.file_process.file_splitter import FileSplitter
