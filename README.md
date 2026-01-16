@@ -4,6 +4,8 @@
 
 Metis is an advanced Retrieval-Augmented Generation (RAG) application that enables users to interact with AI using their own documents. It provides a seamless interface for uploading documents, configuring AI models, and Asking questions about your documents. The application is specifically optimized for local, small-scale LLMs, though it also supports high-performance models via API configuration.
 
+![Metis Query Demo](Metis_Query.gif)
+
 ### Key Features
 
 - **Document Management**: Upload, process, and index various document types (PDF, DOCX, PPTX, TXT, MD, HTML, CSV, XLSX)
