@@ -69,7 +69,9 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
     Args:
         parent_folder (str): The parent folder to filter items.
     Returns:
-        Children folders and files with description.
+        Children folders and files with description, e.g.
+        [folder] folder1: An examaple folder 
+        [file] file1.pdf: An example file 
     """
     logger.info(f"[list_children_tool] Parent Folder: {parent_folder}")
 

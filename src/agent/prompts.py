@@ -261,6 +261,7 @@ def deep_search_prompt(state: TypedDict) -> str:
     Constraints:
     - The search_path must include the knowledge base root folder.
     - Base on the RAG history, try diverse queries and search paths that have not been explored.
+    - **CRITICAL:** When passing a value to search_path or parent_folder, use ONLY the path string. Do not include the colon or the description text.
 
     Topic: {aspect}
     Knowledge Base Description: {knowledgebase_description}
