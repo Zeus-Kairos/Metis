@@ -8,7 +8,8 @@ from langchain_core.messages.utils import (
 )
 
 from src.agent.types import RAGResult
-from src.utils.document_handler import format_documents, format_references  
+from src.utils.document_handler import format_documents, format_references
+from src.utils.message_formatter import format_messages  
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +242,8 @@ def deep_search_prompt(state: TypedDict) -> str:
     """
     aspect = state["aspect"]
     messages = state["messages"]
+    formatted_messages = format_messages(messages)
+    rag_history = "\n".join(formatted_messages)
     
     knowledgebase_description = state["knowledge_base_item"].description
     knowledgebase_root_path = state["knowledge_base_item"].root_path
@@ -266,7 +269,7 @@ def deep_search_prompt(state: TypedDict) -> str:
     Topic: {aspect}
     Knowledge Base Description: {knowledgebase_description}
     Knowledge Base Root Folder: {knowledgebase_root_path}   
-    RAG History: {messages}
+    RAG History: {rag_history}
     """
 
 def deep_rag_prompt(state: TypedDict) -> str:
