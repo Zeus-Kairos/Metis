@@ -19,7 +19,7 @@ class FileSplitter:
         md_header_splits  = self.markdown_splitter.split_text(text)
         documents = []
         chunk_index = 0
-        file_id = metadata.get("file_id", "")
+        file_id = metadata.get("file_id", 0)
         for split in md_header_splits:
             split_docs = self.text_splitter.split_documents([split])
             for doc in split_docs:
