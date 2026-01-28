@@ -201,16 +201,10 @@ class FileParser:
         Parse PDF content using PyPDF2.
         """
         parsed_dir, filename = get_parsed_path(file_path)
-        # copy the file to parsed_dir
-        target_image_path = os.path.join(parsed_dir, f"{filename}_images")
-        os.makedirs(target_image_path, exist_ok=True)
-        target_file_path = os.path.join(target_image_path, f"{filename}.pdf")
-        shutil.copy(file_path, target_file_path)
-        logger.debug(f"Copied {file_path} to {target_file_path}")
-        # image_path = os.path.join(parsed_dir, f"{filename}_images")
+        image_path = os.path.join(parsed_dir, f"{filename}_images")
                 
         md_text = pymupdf4llm.to_markdown(
-            doc=target_file_path,  # The file, either as a file path or a PyMuPDF Document.
+            doc=file_path,  # The file, either as a file path or a PyMuPDF Document.
             headers=False,  # Optional, disables header detection logic.
             footer=False,  # Optional, disables footer detection logic.
             page_chunks=False,  # If True, output is a list of page-specific dictionaries. Set to False for single string.
@@ -218,9 +212,9 @@ class FileParser:
             hdr_info=True,  # Optional, disables header detection logic.
             write_images=True,  # Saves images found in the document as files.
             # embed_images=True,  - Embeds images directly as base64 in markdown.
-            # image_size_limit=0.05,  # Exclude small images below this size threshold.
+            image_size_limit=0.05,  # Exclude small images below this size threshold.
             dpi=150,  # Image resolution in dots per inch, if write_images=True.
-            # image_path=image_path,  # Directory to save images if write_images=True.
+            image_path=image_path,  # Directory to save images if write_images=True.
             image_format="png",  # Image file format, e.g., "png" or "jpg".
             force_text=True,  # Include text overlapping images/graphics.
             margins=0,  # Specify page margins for text extraction.
@@ -231,9 +225,6 @@ class FileParser:
             ignore_code=False,  # If True, avoids special formatting for mono-spaced text.
             extract_words=False,  # Adds word-level data to each page dictionary.
         )
-
-        # remove the copied pdf file from the image path
-        os.remove(target_file_path)
 
         # # Clean up image links without descriptions
         # md_text, removed_images = self._clean_image_links(md_text)

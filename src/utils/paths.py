@@ -59,7 +59,7 @@ def get_parsed_path(original_file_path: str) -> Tuple[str, str]:
             filename_with_ext = filepath_with_ext.split(os.sep)[-1]
             filename, original_ext = os.path.splitext(filename_with_ext)
             
-            return parsed_dir, filename.replace(" ", "_")
+            return parsed_dir, filename.replace(" ", "_")[:50]
         except ValueError as e:
             logger.error(f"Error extracting path components from {original_file_path}: {str(e)}")
             # Return a default value instead of None to avoid unpacking errors
