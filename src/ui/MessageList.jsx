@@ -85,6 +85,8 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
             width: 'fit-content',
             minWidth: '50px',
             boxSizing: 'border-box',
+            // Prevent long lines from overflowing
+            wordBreak: 'break-all',         
           }}
         >
           <div 
