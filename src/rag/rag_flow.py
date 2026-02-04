@@ -8,7 +8,6 @@ from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS
 from src.rag.bm25_scores import BM25Scorer
 from src.utils.embeddings import EmbeddingRunner, get_active_embedding_runner
-from src.utils.reranker import JinaAPIReranker, JinaReRanker, BgeReRanker
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -120,26 +119,26 @@ class RAGFlow:
             sorted_results = [all_docs[i] for i in sorted_indices[:k]]
         return sorted_results
 
-    def rerank_retrieve(self, query: str, k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
-        """
-        Retrieve the top k documents for the query using reranked retriever.
+    # def rerank_retrieve(self, query: str, k: int=5, return_scores: bool=True) -> List[Document] | List[Tuple[Document, float]]:
+    #     """
+    #     Retrieve the top k documents for the query using reranked retriever.
 
-        Args:
-            query (str): The query string.
-            k (int, optional): The number of documents to retrieve. Defaults to 5.
+    #     Args:
+    #         query (str): The query string.
+    #         k (int, optional): The number of documents to retrieve. Defaults to 5.
         
-        Returns:
-            List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
-        """
-        results = self.vectorstore.similarity_search(query, k=k*2)
+    #     Returns:
+    #         List[Document] | List[Tuple[Document, float]]: The list of documents or tuples of documents and scores.
+    #     """
+    #     results = self.vectorstore.similarity_search(query, k=k*2)
 
-        reranker = JinaReRanker()
-        reranked_results = reranker.rerank(query, results)
-        reranked_results = reranked_results[:k]
-        if return_scores:
-            return reranked_results
-        else:
-            return [doc for doc, _ in reranked_results]
+    #     reranker = JinaReRanker()
+    #     reranked_results = reranker.rerank(query, results)
+    #     reranked_results = reranked_results[:k]
+    #     if return_scores:
+    #         return reranked_results
+    #     else:
+    #         return [doc for doc, _ in reranked_results]
 
     def filtered_retrieve(self, query: str, filter: Dict[str, Any], k: int=5, return_scores: bool=False) -> List[Document] | List[Tuple[Document, float]]:
         """

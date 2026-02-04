@@ -1,3 +1,7 @@
+- add parameter controls for chunking
+- predefined workflow for general questions, like "What is the knowledge base about?".
+- bind conversation to knowledge base.
+- parse big pdf files by pages.
 - assign an independent llm for each researcher.
 - Add evaluation metrics for the RAG agent.
 - Add image support for the RAG agent.

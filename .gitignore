@@ -115,3 +115,12 @@ jspm_packages/
 .env.test.local
 .env.production.local
 .env.local
+
+# install
+packaged_backend/
+installer_output/
+metis_installer.iss
+setup_postgres.ps1
+run_metis.bat
+installer_test_plan.md
+INSTALLATION_GUIDE.md
