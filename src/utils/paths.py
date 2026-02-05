@@ -5,7 +5,8 @@ from src.utils.logging_config import get_logger
 logger = get_logger(__name__)
 
 # Base upload directory from environment or use default
-BASE_UPLOAD_DIR = os.getenv("BASE_UPLOAD_DIR", "uploads")
+# Use AppData\Local for uploads since Program Files is read-only
+BASE_UPLOAD_DIR = os.getenv("BASE_UPLOAD_DIR", os.path.join(os.environ.get("LOCALAPPDATA"), "Metis", "uploads"))
 
 def get_upload_dir(user_id: int, knowledge_base: str, directory: str) -> str:
     """Generate a unique upload directory for the given user_id.

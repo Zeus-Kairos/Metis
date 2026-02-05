@@ -7,7 +7,11 @@ import uvicorn
 from src.utils.logging_config import setup_logging
 from dotenv import load_dotenv
 
-load_dotenv()
+# Get the directory where main.py is located
+script_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Load .env file from the script directory
+load_dotenv(os.path.join(script_dir, '.env'))
 
 log_level = setup_logging()
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import useChatStore from './store';
+import useChatStore, { fetchWithAuth } from './store';
 import './Login.css';
 
 const Login = () => {
@@ -18,8 +18,7 @@ const Login = () => {
 
     try {
       // Call the login endpoint to get JWT token
-      // Using relative URL to support both HTTP and HTTPS
-      const response = await fetch('/api/token', {
+      const response = await fetchWithAuth('/api/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
@@ -60,8 +59,7 @@ const Login = () => {
 
     try {
       // Call the signup endpoint to create a new user
-      // Using relative URL to support both HTTP and HTTPS
-      const response = await fetch('/api/users', {
+      const response = await fetchWithAuth('/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -83,7 +81,7 @@ const Login = () => {
 
       // After successful signup, automatically log in the user
       // Call the login endpoint to get JWT token
-      const loginResponse = await fetch('/api/token', {
+      const loginResponse = await fetchWithAuth('/api/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded'
