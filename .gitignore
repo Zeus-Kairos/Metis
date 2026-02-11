@@ -119,6 +119,5 @@ jspm_packages/
 # install
 packaged_backend/
 installer_output/
-setup_postgres.ps1
 INSTALLATION_GUIDE.md
 prerequisites/

@@ -34,14 +34,13 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked; OnlyBelowVersion: 0,6.1
+Name: "downloadpython"; Description: "Download and install Python 3.13.12"; GroupDescription: "Prerequisites"; Flags: unchecked
+Name: "downloadpostgres"; Description: "Download and install PostgreSQL 18.0"; GroupDescription: "Prerequisites"; Flags: unchecked
 
 [Files]
-; Prerequisites
-Source: "prerequisites\python-3.13.12-amd64.exe"; DestDir: "{tmp}"; Flags: ignoreversion
-Source: "prerequisites\postgresql-18.0-2-windows-x64.exe"; DestDir: "{tmp}"; Flags: ignoreversion
 
 ; Backend files
-Source: "packaged_backend\*"; DestDir: "{app}\backend"; Flags: recursesubdirs ignoreversion
+Source: "packaged_backend\*"; DestDir: "{app}\backend"; Flags: recursesubdirs ignoreversion; Excludes: "*.pyc"
 
 ; Frontend files
 Source: "dist\*"; DestDir: "{app}\frontend"; Flags: recursesubdirs ignoreversion
@@ -58,14 +57,14 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\run_metis.bat"; Tasks: desktopicon
 
 [Run]
-; Install Python
-Filename: "{tmp}\python-3.13.12-amd64.exe"; Parameters: "/quiet InstallAllUsers=1 PrependPath=1"; Description: "Installing Python..."; Flags: runascurrentuser waituntilterminated
+; Download and install Python
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.13.12/python-3.13.12-amd64.exe' -OutFile '{tmp}\python-3.13.12-amd64.exe'; & '{tmp}\python-3.13.12-amd64.exe' /quiet InstallAllUsers=1 PrependPath=1"; Description: "Downloading and installing Python..."; Tasks: downloadpython; Flags: runascurrentuser waituntilterminated
 
-; Install PostgreSQL
-Filename: "{tmp}\postgresql-18.0-2-windows-x64.exe"; Parameters: "--mode unattended --superpassword postgres --serverport 5432"; Description: "Installing PostgreSQL..."; Flags: runascurrentuser waituntilterminated
+; Download and install PostgreSQL
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command Invoke-WebRequest -Uri 'https://get.enterprisedb.com/postgresql/postgresql-18.0-2-windows-x64.exe' -OutFile '{tmp}\postgresql-18.0-2-windows-x64.exe'; & '{tmp}\postgresql-18.0-2-windows-x64.exe' --mode unattended --superpassword postgres --serverport 5432"; Description: "Downloading and installing PostgreSQL..."; Tasks: downloadpostgres; Flags: runascurrentuser waituntilterminated
 
 ; Set up PostgreSQL database
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File \'{app}\setup_postgres.ps1\'"; Description: "Setting up PostgreSQL database..."; Flags: runasoriginaluser waituntilterminated
+Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -File ""{app}\setup_postgres.ps1"""; Description: "Setting up PostgreSQL database..."; Flags: runasoriginaluser waituntilterminated
 
 ; Start Metis application
 Filename: "{app}\run_metis.bat"; Description: "Starting Metis application..."; Flags: nowait postinstall shellexec

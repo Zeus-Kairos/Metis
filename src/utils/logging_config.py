@@ -3,14 +3,6 @@ import logging
 from logging.config import dictConfig
 from typing import Optional
 
-# Explicitly load .env file if it exists
-try:
-    from dotenv import load_dotenv
-    load_dotenv()
-except ImportError:
-    # dotenv not installed, but we'll continue anyway
-    pass
-
 def setup_logging(log_level: Optional[str] = None):
     """
     Set up application logging configuration
