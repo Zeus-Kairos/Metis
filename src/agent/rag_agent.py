@@ -33,7 +33,6 @@ from src.agent.prompts import (
 from src.rag.rag_flow import RAGFlow, RAGType
 from src.agent.llm import LLMRunner
 from src.agent.api_llm import get_api_llm_runner
-from src.agent.tools import list_children_tool, rag_search_tool
 from src.utils.paths import get_index_path, get_upload_dir
 from src.utils.logging_config import get_logger
 from src.utils.merger import merge_documents
@@ -432,7 +431,7 @@ class RAGAgent:
                                                 stream_mode=["updates", "messages"]):                   
                     if mode == "updates":
                         for node, state in chunk.items():
-                            if "display" in state and state["display"]:
+                            if state and "display" in state and state["display"]:
                                 yield { "display": state["display"] }
 
                     elif mode == "messages":
@@ -449,6 +448,7 @@ class RAGAgent:
                                 yield {
                                     "response": last_assistant_message,
                                 }
+                yield { "run_id": config["run_id"] }
         else:
             graph = self.builder.compile(checkpointer=InMemorySaver())
             
@@ -461,6 +461,7 @@ class RAGAgent:
                     for node, state in chunk.items():
                         if "display" in state and state["display"]:
                             yield { "display": state["display"] }
+                    logger.info(f"subgraph: {subgraph}")
                 elif mode == "messages":
                     message, meta = chunk
                     if message.content and meta["langgraph_node"] in ["handle_chat", "format_answer", "deep_retrieve", "synthesize_answer", "reference_check"]:
@@ -475,6 +476,7 @@ class RAGAgent:
                             yield {
                                 "response": last_assistant_message,
                             }
+            yield { "run_id": config["run_id"] }
     
     def get_knowledgebase_item(self, user_id: int, knowledgebase_id: int) -> KnowledgeBaseItem:
         """

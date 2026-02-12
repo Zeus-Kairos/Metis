@@ -1,7 +1,8 @@
+from ast import Str
 import logging
 from typing import Dict, List, Tuple, TypedDict
 from langchain_core.documents import Document
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_core.messages.utils import (  
     trim_messages,  
     count_tokens_approximately  

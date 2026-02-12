@@ -1,6 +1,7 @@
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from langsmith import uuid7, Client
 from pydantic import BaseModel
 import os
 import json
@@ -46,6 +47,10 @@ class ChatRequest(BaseModel):
     user_id: int
     thread_id: str
     knowledgebase_id: int
+
+class FeedbackRequest(BaseModel):
+    run_id: str   
+    feedback: str
 
 # Thread-related endpoints
 @router.delete("/thread/{user_id}/{thread_id}")
@@ -151,6 +156,7 @@ async def chat_endpoint(request: ChatRequest):
     try:
         # Get RAG settings from environment variables
         config = thread_manager.get_config_for_user(user_id, thread_id)
+        config["run_id"] = str(uuid7())
         
         # Get or create RAGAgent for this user
         user_rag_agent = get_rag_agent(user_id)
@@ -169,6 +175,9 @@ async def chat_endpoint(request: ChatRequest):
                             elif key == "response":
                                 # Send response chunk
                                 yield f"data: {json.dumps({key: value})}\n\n"
+                            elif key == "run_id":
+                                # Send run_id chunk
+                                yield f"data: {json.dumps({key: value})}\n\n"
                 
                 # Send done signal
                 yield f"data: {json.dumps({"done": True})}\n\n"
@@ -185,3 +194,17 @@ async def chat_endpoint(request: ChatRequest):
     except Exception as e:
         logger.exception(f"Chat endpoint error: {str(e)}", stack_info=True)
         raise HTTPException(status_code=500, detail=str(e)) 
+
+@router.post("/feedback")
+async def feedback_endpoint(request: FeedbackRequest):
+    run_id = request.run_id
+    feedback = request.feedback
+
+    ls_client = Client()
+    ls_client.create_feedback(
+        run_id,
+        key="binary-feedback",
+        value=feedback,
+    )
+
+    logger.info(f"Received feedback for run_id {run_id}: {feedback}")

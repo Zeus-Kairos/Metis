@@ -12,6 +12,7 @@ from src.agent.prompts import deep_search_prompt
 from src.agent.tools import list_children_tool, rag_search_tool
 from src.utils.logging_config import get_logger
 
+
 logger = get_logger(__name__)
 
 MAX_RETRIEVE_TRIES = 3
@@ -47,8 +48,8 @@ class Researcher:
                 "messages": [AIMessage(content="Max retrieve tries reached")],
             }
 
-        prompt = deep_search_prompt(state)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)], [list_children_tool, rag_search_tool])
+        system_prompt = deep_search_prompt(state)
+        response = self.llm_runner.invoke([SystemMessage(content=system_prompt)], [list_children_tool, rag_search_tool])    
         if response.content.strip():
             logger.info(f"[deep_search] Response: {response.content.strip()}")
         return {

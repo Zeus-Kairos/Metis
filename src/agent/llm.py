@@ -3,6 +3,7 @@ import os
 import inspect
 from typing import List, Sequence
 from langchain.tools import BaseTool
+from langchain_core.language_models import BaseChatModel
 import requests
 from langchain_core.messages import AIMessage
 from langchain_ollama import ChatOllama, OllamaEmbeddings
@@ -90,7 +91,7 @@ class LLMRunner:
             self._embedding_model = None
     
     @property
-    def chat_model(self) -> ChatOllama:
+    def chat_model(self) -> BaseChatModel:
         """
         Get the initialized chat model instance.
         

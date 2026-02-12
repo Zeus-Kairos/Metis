@@ -604,6 +604,9 @@ const useChatStore = create((set, get) => {
             }]
           });
 
+          // Track run_id from the stream
+          let run_id = null;
+          
           // Process the stream
           while (true) {
             const { done, value } = await reader.read();
@@ -624,6 +627,9 @@ const useChatStore = create((set, get) => {
                     // Append the display content, keeping all intermediate information
                     const displayContent = typeof jsonData.display === 'string' ? jsonData.display : String(jsonData.display);
                     partialDisplay += displayContent;
+                  } else if (jsonData.run_id) {
+                    // Capture run_id from the stream
+                    run_id = jsonData.run_id;
                   } else if (jsonData.error) {
                     // Handle error from SSE
                     const errorMsg = jsonData.error;
@@ -676,7 +682,8 @@ const useChatStore = create((set, get) => {
                 updatedMessages[assistantMessageIndex] = { 
                   ...updatedMessages[assistantMessageIndex], 
                   content: partialContent,
-                  display: partialDisplay
+                  display: partialDisplay,
+                  run_id: run_id // Store run_id with the message
                 };
               }
               
@@ -702,7 +709,8 @@ const useChatStore = create((set, get) => {
             if (assistantMessageIndex !== -1) {
               updatedMessages[assistantMessageIndex] = { 
                 ...updatedMessages[assistantMessageIndex], 
-                complete: true // Set complete flag to true when streaming is done
+                complete: true, // Set complete flag to true when streaming is done
+                run_id: run_id // Ensure run_id is stored with the completed message
               };
             }
             
@@ -853,6 +861,34 @@ const useChatStore = create((set, get) => {
         authChecked: true,
         error: null
       });
+    },
+    
+    // Send feedback for a message
+    sendFeedback: async (run_id, feedback) => {
+      try {
+        // Call the feedback endpoint
+        const response = await fetchWithAuth('/api/feedback', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            run_id,
+            feedback
+          }),
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to send feedback: ${response.status}`);
+        }
+        
+        console.log('Feedback sent successfully:', { run_id, feedback });
+        return true;
+      } catch (error) {
+        console.error('Error sending feedback:', error);
+        set({ error: 'Failed to send feedback: ' + error.message });
+        return false;
+      }
     }
   };
 });

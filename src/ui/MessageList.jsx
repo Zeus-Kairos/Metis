@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useMemo } from 'react';
 import MarkdownRenderer from './MarkdownRenderer';
+import useChatStore from './store';
 
 const MessageList = ({ messages, isLoading = false, isInitializing = false }) => {
   // Use messages from props which are passed from ChatContainer
@@ -10,6 +11,8 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
   const displayRefs = useRef({});
   // State to track which display messages are expanded
   const [expandedDisplays, setExpandedDisplays] = React.useState({});
+  // State to track feedback selections for each message (using run_id as key)
+  const [feedbackSelections, setFeedbackSelections] = React.useState({});
   
   // Toggle display expansion for a specific message
   const toggleDisplay = (messageIndex) => {
@@ -184,6 +187,102 @@ const MessageList = ({ messages, isLoading = false, isInitializing = false }) =>
                     }}
                   />
                 ))}
+              </div>
+            )}
+            
+            {/* Feedback buttons for assistant messages with run_id */}
+            {message.role === 'assistant' && message.complete && message.run_id && (
+              <div className="feedback-buttons" style={{ 
+                display: 'flex',
+                gap: '8px',
+                marginTop: '8px',
+                justifyContent: 'flex-start',
+                alignItems: 'center'
+              }}>
+                <button 
+                  className="feedback-button thumb-up" 
+                  onClick={() => {
+                    const currentSelection = feedbackSelections[message.run_id];
+                    const newSelection = currentSelection === 'positive' ? null : 'positive';
+                    setFeedbackSelections(prev => ({
+                      ...prev,
+                      [message.run_id]: newSelection
+                    }));
+                    if (newSelection) {
+                      useChatStore.getState().sendFeedback(message.run_id, 'positive');
+                    } else if (newSelection === null) {
+                      useChatStore.getState().sendFeedback(message.run_id, 'none');
+                    }
+                  }}
+                  style={{
+                    background: feedbackSelections[message.run_id] === 'positive' ? '#e8f5e8' : 'transparent',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '4px',
+                    padding: '6px 12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '14px',
+                    color: feedbackSelections[message.run_id] === 'positive' ? '#2e7d32' : '#5F6368',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (feedbackSelections[message.run_id] !== 'positive') {
+                      e.target.style.backgroundColor = '#f0f0f0';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (feedbackSelections[message.run_id] !== 'positive') {
+                      e.target.style.backgroundColor = 'transparent';
+                    }
+                  }}
+                >
+                  👍
+                  <span>Useful</span>
+                </button>
+                <button 
+                  className="feedback-button thumb-down" 
+                  onClick={() => {
+                    const currentSelection = feedbackSelections[message.run_id];
+                    const newSelection = currentSelection === 'negative' ? null : 'negative';
+                    setFeedbackSelections(prev => ({
+                      ...prev,
+                      [message.run_id]: newSelection
+                    }));
+                    if (newSelection) {
+                      useChatStore.getState().sendFeedback(message.run_id, 'negative');
+                    } else if (newSelection === null) {
+                      useChatStore.getState().sendFeedback(message.run_id, 'none');
+                    }
+                  }}
+                  style={{
+                    background: feedbackSelections[message.run_id] === 'negative' ? '#ffebee' : 'transparent',
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '4px',
+                    padding: '6px 12px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    fontSize: '14px',
+                    color: feedbackSelections[message.run_id] === 'negative' ? '#c62828' : '#5F6368',
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (feedbackSelections[message.run_id] !== 'negative') {
+                      e.target.style.backgroundColor = '#f0f0f0';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (feedbackSelections[message.run_id] !== 'negative') {
+                      e.target.style.backgroundColor = 'transparent';
+                    }
+                  }}
+                >
+                  👎
+                  <span>Not useful</span>
+                </button>
               </div>
             )}
           </div>
