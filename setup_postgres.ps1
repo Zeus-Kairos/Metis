@@ -33,11 +33,10 @@ $dbName = $defaultDbName
 $dbUser = $defaultDbUser
 $dbPort = $defaultDbPort
 
-# Generate a random password with safe characters (alphanumeric + limited symbols)
-$safeChars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*'
-$dbPassword = -join ($safeChars.ToCharArray() | Get-Random -Count 16)
-Write-Host "Generated random password: $dbPassword"
-"Generated random password for user $dbUser" | Out-File -FilePath $logFile -Append
+# Use fixed password for database user
+$dbPassword = "metis_password_2026"
+Write-Host "Using fixed password for database user"
+"Using fixed password for user $dbUser" | Out-File -FilePath $logFile -Append
 
 Write-Host ""
 Write-Host "Creating database and user..."
@@ -129,6 +128,15 @@ DB_URI=postgresql://$dbUser`:$dbPassword@localhost`:$dbPort/$dbName
 # JWT Authentication
 SECRET_KEY=$secretKey
 
+# Metis local configuration
+LLM_PROVIDER=ollama
+LLM_API_KEY=your_api_key
+LLM_MODEL=gpt-oss:20b-cloud
+LLM_BASE_URL=http://localhost:11434
+EMBED_PROVIDER=ollama
+EMBED_API_KEY=your_api_key
+EMBED_MODEL=nomic-embed-text:latest
+
 # File Upload Configuration
 BASE_UPLOAD_DIR=$uploadDir
 SUPPORTED_FORMATS=.txt,.pdf,.md,.docx,.pptx,.xlsx,.html,.csv
@@ -139,7 +147,7 @@ MAX_FILES_PER_UPLOAD=20
 LOG_LEVEL=INFO
 
 # RAG Configuration
-RAG_TYPE=fusion
+RAG_TYPE=agentic
 RAG_K=10"
 
 # Get the directory where the script is located
