@@ -181,8 +181,12 @@ const useChatStore = create((set, get) => {
           }
         }
         
-        // Step 3: Get all threads for the user
-        const threadsResponse = await fetchWithAuth(`/api/threads/${userId}`);
+        // Step 3: Get active knowledgebase ID
+        const activeKB = knowledgebases.find(kb => kb.is_active);
+        const knowledgebaseId = activeKB ? activeKB.id : (knowledgebases.length > 0 ? knowledgebases[0].id : 1);
+        
+        // Step 4: Get all threads for the user and knowledgebase
+        const threadsResponse = await fetchWithAuth(`/api/threads/${userId}/${knowledgebaseId}`);
         
         if (!threadsResponse.ok) {
           throw new Error(`Failed to get threads: ${threadsResponse.status}`);
@@ -293,7 +297,77 @@ const useChatStore = create((set, get) => {
           const kbsResponse = await fetchWithAuth('/api/knowledgebase');
           if (kbsResponse.ok) {
             const kbsData = await kbsResponse.json();
-            set({ knowledgebases: kbsData.knowledgebases || [] });
+            const updatedKnowledgebases = kbsData.knowledgebases || [];
+            set({ knowledgebases: updatedKnowledgebases });
+            
+            // Get user_id from state
+            const { user_id } = get();
+            if (user_id) {
+              // Get the new active knowledgebase
+              const activeKB = updatedKnowledgebases.find(kb => kb.is_active);
+              const knowledgebaseId = activeKB ? activeKB.id : kbId;
+              
+              // Fetch threads for the new active knowledgebase
+              const threadsResponse = await fetchWithAuth(`/api/threads/${user_id}/${knowledgebaseId}`);
+              if (threadsResponse.ok) {
+                const threadsData = await threadsResponse.json();
+                const threads = threadsData.threads || [];
+                
+                // Create conversations object from threads
+                const conversations = {};
+                let activeThreadId = null;
+                
+                // Process threads if any exist
+                if (threads.length > 0) {
+                  threads.forEach((thread) => {
+                    conversations[thread.thread_id || thread.id] = {
+                      threadId: thread.thread_id || thread.id,
+                      title: thread.title,
+                      messages: [],
+                      createdAt: thread.created_at || new Date().toISOString(),
+                      updatedAt: thread.updated_at || new Date().toISOString()
+                    };
+                  });
+                  
+                  // Set active thread with priority to thread where is_active is true
+                  // If no thread has is_active=true, use the first thread
+                  const activeThread = threads.find(thread => thread.is_active === true);
+                  activeThreadId = activeThread 
+                    ? (activeThread.thread_id || activeThread.id)
+                    : (threads[0].thread_id || threads[0].id);
+                  
+                  // Update state with conversations and active thread
+                  set({ 
+                    conversations,
+                    activeThreadId
+                  });
+                  
+                  // If we have an active thread, call the /api/thread/set-active API to update the backend
+                  if (activeThreadId) {
+                    try {
+                      await fetchWithAuth(`/api/thread/set-active?user_id=${user_id}&thread_id=${activeThreadId}`, {
+                        method: 'POST'
+                      });
+                    } catch (error) {
+                      console.error('Error setting active thread:', error);
+                      // Continue even if API call fails
+                    }
+                  }
+                  
+                  // Fetch thread history for all threads to ensure proper previews
+                  for (const thread of threads) {
+                    const threadId = thread.thread_id || thread.id;
+                    await get().fetchThreadHistory(threadId);
+                  }
+                } else {
+                  // No threads exist - create a new thread automatically
+                  // First, update the conversations state to an empty object
+                  set({ conversations: {} });
+                  // Then create a new conversation
+                  await get().createConversation();
+                }
+              }
+            }
           }
         }
       } catch (error) {
@@ -372,8 +446,13 @@ const useChatStore = create((set, get) => {
         // Generate a default title
         const defaultTitle = `Conversation ${new Date().toLocaleString()}`;
         
+        // Get active knowledgebase ID
+        const { knowledgebases } = get();
+        const activeKB = knowledgebases.find(kb => kb.is_active);
+        const knowledgebaseId = activeKB ? activeKB.id : (knowledgebases.length > 0 ? knowledgebases[0].id : 1);
+        
         // Call the backend API to create a new thread
-        const response = await fetchWithAuth(`/api/thread/create?user_id=${user_id}&title=${encodeURIComponent(defaultTitle)}`, {
+        const response = await fetchWithAuth(`/api/thread/${user_id}/${knowledgebaseId}?title=${encodeURIComponent(defaultTitle)}`, {
           method: 'POST'
         });
         
@@ -467,8 +546,16 @@ const useChatStore = create((set, get) => {
       const { user_id } = get();
       if (user_id) {
         try {
-          const response = await fetchWithAuth(`/api/thread/rename?user_id=${user_id}&thread_id=${threadId}&title=${encodeURIComponent(newTitle)}`, {
-            method: 'PUT'
+          const response = await fetchWithAuth(`/api/thread/title`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              user_id,
+              thread_id: threadId,
+              title: newTitle
+            })
           });
 
           if (!response.ok) {

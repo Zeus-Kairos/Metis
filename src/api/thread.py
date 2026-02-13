@@ -66,35 +66,20 @@ def delete_thread(user_id: int, thread_id: str):
     logger.debug(f"Thread {thread_id} deleted successfully for user {user_id}")
     return {"status": "success", "message": f"Thread {thread_id} deleted successfully"}
 
-@router.delete("/threads/{user_id}")
-def delete_all_threads(user_id: int):
-    """Delete all threads for a user"""
-    logger.debug(f"Deleting all threads for user {user_id}")
-    thread_manager.remove_thread(user_id, None)
-
-    rag_agent = get_rag_agent(user_id)
-    threads = thread_manager.get_threads_for_user(user_id)
-    for thread in threads:     
-        # Delete all checkpoints associated with the thread 
-        rag_agent.delete_thread(thread)
-
-    logger.debug(f"All threads deleted successfully for user {user_id}")
-    return {"status": "success", "message": f"All threads of user {user_id} deleted successfully"}
-
-@router.post("/thread/create")
-def create_thread(user_id: int, title: Optional[str] = None):
+@router.post("/thread/{user_id}/{knowledgebase_id}")
+def create_thread(user_id: int, knowledgebase_id: int, title: Optional[str] = None):
     """Create a new conversation thread for a user"""
-    logger.debug(f"Creating new thread for user {user_id} with title {title}")
-    thread_id = thread_manager.create_thread(user_id, title)
+    logger.debug(f"Creating new thread for user {user_id} with knowledgebase {knowledgebase_id} with title {title}")
+    thread_id = thread_manager.create_thread(user_id, knowledgebase_id, title)
     logger.debug(f"Created thread {thread_id} for user {user_id}")
     return {"status": "success", "thread_id": thread_id, "title": title or f"Thread {thread_id[:8]}"}
 
-@router.get("/threads/{user_id}")
-def get_user_threads(user_id: int):
-    """Get all conversation threads for a user"""
-    logger.debug(f"Fetching threads for user {user_id}")
-    threads = thread_manager.get_threads_for_user(user_id)
-    logger.debug(f"Found {len(threads)} threads for user {user_id}")
+@router.get("/threads/{user_id}/{knowledgebase_id}")
+def get_user_threads(user_id: int, knowledgebase_id: int):
+    """Get all conversation threads for a user and knowledgebase."""
+    logger.debug(f"Fetching threads for user {user_id} with knowledgebase {knowledgebase_id}")
+    threads = thread_manager.get_threads_for_user(user_id, knowledgebase_id)
+    logger.debug(f"Found {len(threads)} threads for user {user_id} with knowledgebase {knowledgebase_id}")
     return {"status": "success", "threads": threads}
 
 @router.post("/thread/set-active")

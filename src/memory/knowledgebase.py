@@ -44,22 +44,20 @@ class KnowledgebaseManager:
                             CONSTRAINT knowledgebase_user_id_name_key UNIQUE (user_id, name)
                         )
                     """)
-                    
-                    # Create kb_thread table for knowledgebase-thread mapping (one-to-many)
+
+                    # Create threads table
                     cur.execute("""
-                        CREATE TABLE IF NOT EXISTS kb_thread (
+                        CREATE TABLE IF NOT EXISTS threads (
+                            thread_id VARCHAR(255) PRIMARY KEY,
+                            user_id INTEGER NOT NULL,
                             knowledgebase_id INTEGER NOT NULL,
-                            thread_id VARCHAR(255) NOT NULL,
-                            PRIMARY KEY (knowledgebase_id, thread_id),
-                            FOREIGN KEY (knowledgebase_id) REFERENCES knowledgebase(id) ON DELETE CASCADE,
-                            FOREIGN KEY (thread_id) REFERENCES threads(thread_id) ON DELETE CASCADE,
-                            UNIQUE (thread_id)  -- Ensure each thread maps to at most one knowledgebase
+                            title VARCHAR(255) NOT NULL DEFAULT 'New Chat',
+                            is_active BOOLEAN NOT NULL DEFAULT true,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                            FOREIGN KEY (knowledgebase_id) REFERENCES knowledgebase(id) ON DELETE CASCADE
                         )
-                    """)
-                    
-                    # Create index on kb_thread.knowledgebase_id for efficient queries
-                    cur.execute("""
-                        CREATE INDEX IF NOT EXISTS idx_kb_thread_knowledgebase_id ON kb_thread(knowledgebase_id)
                     """)
                     
                     # Create files table for storing document files

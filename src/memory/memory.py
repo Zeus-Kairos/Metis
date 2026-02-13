@@ -134,25 +134,7 @@ class MemoryManager:
                     if not cur.fetchone():
                         cur.execute("""
                             ALTER TABLE users ADD CONSTRAINT users_email_key UNIQUE (email);
-                        """)
-                                        
-                    # Create threads table
-                    cur.execute("""
-                        CREATE TABLE IF NOT EXISTS threads (
-                            thread_id VARCHAR(255) PRIMARY KEY,
-                            user_id INTEGER NOT NULL,
-                            title VARCHAR(255) NOT NULL DEFAULT 'New Chat',
-                            is_active BOOLEAN NOT NULL DEFAULT true,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                        )
-                    """)
-                    
-                    # Create index on threads.user_id
-                    cur.execute("""
-                        CREATE INDEX IF NOT EXISTS idx_threads_user_id ON threads(user_id)
-                    """)
+                        """)                                                    
                     
                     # Create user_configure table
                     cur.execute("""

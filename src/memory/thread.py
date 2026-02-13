@@ -128,12 +128,13 @@ class ThreadManager:
             "updated_at": datetime.now().isoformat()
         }
 
-    def create_thread(self, user_id: int, thread_title: Optional[str] = None) -> str:
+    def create_thread(self, user_id: int, knowledgebase_id: int, thread_title: Optional[str] = None) -> str:
         """
         Create a new thread for the user.
         
         Args:
             user_id: User identifier
+            knowledgebase_id: Knowledgebase identifier
             thread_title: Optional thread title
             
         Returns:
@@ -162,9 +163,10 @@ class ThreadManager:
                     
                     # Insert new thread
                     cur.execute(
-                        "INSERT INTO threads (thread_id, user_id, title, is_active) VALUES (%s, %s, %s, %s)",
-                        (thread_id, user_id, thread_title or DEFAULT_THREAD_TITLE, True)
+                        "INSERT INTO threads (thread_id, user_id, knowledgebase_id, title, is_active) VALUES (%s, %s, %s, %s, %s)",
+                        (thread_id, user_id, knowledgebase_id, thread_title or DEFAULT_THREAD_TITLE, True)
                     )
+
                     conn.commit()
                     return thread_id
         else:
@@ -190,23 +192,24 @@ class ThreadManager:
             
             return thread_id
 
-    def get_threads_for_user(self, user_id: int) -> List[Dict[str, Any]]:
+    def get_threads_for_user(self, user_id: int, knowledgebase_id: int) -> List[Dict[str, Any]]:
         """
-        Get all threads for a user.
+        Get all threads for a user and knowledgebase.
         
         Args:
             user_id: User identifier
+            knowledgebase_id: Knowledgebase identifier
             
         Returns:
             List of threads with metadata
         """
         if self.connection_pool:
-            # Use database to get threads
+            # Use database to get threads for the user
             with self.connection_pool.connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "SELECT thread_id, title, is_active, created_at, updated_at FROM threads WHERE user_id = %s ORDER BY created_at DESC",
-                        (user_id,)
+                        "SELECT thread_id, title, is_active, created_at, updated_at FROM threads WHERE user_id = %s AND knowledgebase_id = %s ORDER BY created_at DESC",
+                        (user_id, knowledgebase_id,)
                     )
                     threads = []
                     for row in cur.fetchall():
