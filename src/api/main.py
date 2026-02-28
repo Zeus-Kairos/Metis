@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from contextlib import asynccontextmanager
 
 from src.file_process.indexer import Indexer
-from src.utils.paths import get_index_path, get_upload_dir, get_parsed_path
+from src.utils.paths import get_index_path, get_upload_dir
 from src.file_process.pipeline import FileProcessingPipeline
 from src.file_process.parallel_pipeline import ParallelFileProcessingPipeline
 from src.memory.memory import MemoryManager
@@ -534,13 +534,9 @@ async def create_folder(
         if not folder_exists_on_disk:
             os.makedirs(new_folder_path, exist_ok=True)
         
-        # Add folder to database (will update if already exists due to ON CONFLICT)
-        parsed_folder_path, folder_name = get_parsed_path(new_folder_path)
-        parsed_folder_path = os.path.join(parsed_folder_path, folder_name)
-
         try:
             memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
-                name, new_folder_path, parsed_folder_path, current_user.id, knowledge_base, type="folder", parentFolder=parent_dir)
+                name, new_folder_path, "", current_user.id, knowledge_base, type="folder", parentFolder=parent_dir)
         except Exception as db_error:
             # If folder already exists in database, that's okay (idempotent)
             # Log but don't fail
@@ -577,11 +573,6 @@ async def delete_folder(
 
         # Delete the folder and its contents
         shutil.rmtree(folder_path)
-        parsed_folder_path, folder_name = get_parsed_path(folder_path)
-        parsed_folder_path = os.path.join(parsed_folder_path, folder_name)
-        logger.info(f"Deleting parsed folder: {parsed_folder_path}")
-        if os.path.exists(parsed_folder_path):
-            shutil.rmtree(parsed_folder_path)
         
         # Get all file IDs under this folder path before files are deleted from database
         file_ids = memory_manager.knowledgebase_manager.get_files_by_path_prefix(folder_path)
@@ -626,13 +617,6 @@ async def delete_file(
         
         # Delete the file from filesystem
         os.remove(full_file_path)
-        parsed_file_path, filename = get_parsed_path(full_file_path)
-        if parsed_file_path:
-            for item in glob.glob(os.path.join(parsed_file_path, filename + "*")):
-                if os.path.isdir(item):
-                    shutil.rmtree(item)
-                else:
-                    os.remove(item)
         
         file_id = memory_manager.knowledgebase_manager.delete_file_by_path(full_file_path)
         indexer = get_indexer(current_user.id, knowledge_base)

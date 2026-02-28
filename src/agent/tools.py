@@ -101,6 +101,17 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
         }
     )
 
+@tool("file_toc")
+def file_toc(filepath: str, runtime: ToolRuntime, tool_call_id: Annotated[str, InjectedToolCallId]) -> str:
+    """
+    Get the table of contents of a file.
+    Args:
+        filepath (str): The filepath to get the table of contents.
+    Returns:
+        The table of contents of the file.
+    """
+    return f"[Table of Contents]\n1. Section 1\n2. Section 2\n3. Section 3"
+
 @tool("rag_search")
 def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
     """

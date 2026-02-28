@@ -18,7 +18,7 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 DefaultDirName={userappdata}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
@@ -57,11 +57,11 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\run_metis.bat"; Tasks: desktopicon
 
 [Run]
-; Download and install Python
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.13.12/python-3.13.12-amd64.exe' -OutFile '{tmp}\python-3.13.12-amd64.exe'; & '{tmp}\python-3.13.12-amd64.exe' /quiet InstallAllUsers=1 PrependPath=1"; Description: "Downloading and installing Python..."; Tasks: downloadpython; Flags: runascurrentuser waituntilterminated
+; Install Python (from downloaded installer)
+Filename: "{tmp}\python-installer.exe"; Parameters: "/quiet InstallAllUsers=1 PrependPath=1"; StatusMsg: "Installing Python..."; Check: IsTaskSelected('downloadpython') and FileExists(ExpandConstant('{tmp}\python-installer.exe')); Flags: runascurrentuser waituntilterminated
 
-; Download and install PostgreSQL
-Filename: "powershell.exe"; Parameters: "-ExecutionPolicy Bypass -Command Invoke-WebRequest -Uri 'https://get.enterprisedb.com/postgresql/postgresql-18.0-2-windows-x64.exe' -OutFile '{tmp}\postgresql-18.0-2-windows-x64.exe'; & '{tmp}\postgresql-18.0-2-windows-x64.exe' --mode unattended --superpassword postgres --serverport 5432"; Description: "Downloading and installing PostgreSQL..."; Tasks: downloadpostgres; Flags: runascurrentuser waituntilterminated
+; Install PostgreSQL (from downloaded installer)
+Filename: "{tmp}\postgresql-installer.exe"; Parameters: "--mode unattended --superpassword postgres --serverport 5432"; StatusMsg: "Installing PostgreSQL..."; Check: IsTaskSelected('downloadpostgres') and FileExists(ExpandConstant('{tmp}\postgresql-installer.exe')); Flags: runascurrentuser waituntilterminated
 
 ; Set up PostgreSQL database
 ; Create database if it doesn't exist
@@ -89,6 +89,7 @@ Filename: "{app}\run_metis.bat"; Description: "Starting Metis application..."; F
 var
   PostgreSQLBinPath: string;
   PostgresPassword: string;
+  DownloadPage: TDownloadWizardPage;
 
 // Configuration: Set your PostgreSQL postgres user password here
 // This will be used for database creation and configuration
@@ -158,6 +159,9 @@ end;
 
 procedure InitializeWizard;
 begin
+  // Create the download page
+  DownloadPage := CreateDownloadPage('Downloading Prerequisites', 'Please wait while setup downloads required components...', nil);
+
   if not IsPostgreSQLInstalled then
   begin
     // Debug message to show what path was detected
@@ -236,6 +240,45 @@ begin
     // Also create .env in the application directory
     if DirExists(ExpandConstant('{app}')) then
       SaveStringToFile(ExpandConstant('{app}') + '\.env', EnvContent, False);
+  end;
+end;
+
+// Windows API function declaration for downloading files
+function NextButtonClick(CurPageID: Integer): Boolean;
+var
+  MustDownload: Boolean; // Add a flag to track if downloads are needed
+begin
+  Result := True;
+  MustDownload := False;
+
+  if CurPageID = wpReady then begin
+    DownloadPage.Clear;
+
+    // Add Python to queue if task is selected
+    if IsTaskSelected('downloadpython') then
+      DownloadPage.Add('https://www.python.org/ftp/python/3.13.2/python-3.13.2-amd64.exe', 'python-installer.exe', '');
+      MustDownload := True;
+      
+    // Add PostgreSQL to queue if task is selected
+    if IsTaskSelected('downloadpostgres') then
+      DownloadPage.Add('https://get.enterprisedb.com/postgresql/postgresql-18.0-2-windows-x64.exe', 'postgresql-installer.exe', '');
+      MustDownload := True;
+    
+    if MustDownload then begin
+      DownloadPage.Show;
+      try
+        try
+          DownloadPage.Download;
+        except
+          // Handle download errors (timeout, 404, no internet)
+          if not DownloadPage.AbortedByUser then
+            MsgBox('Download failed: ' + GetExceptionMessage, mbError, MB_OK);
+          Result := False;
+        end;
+      finally
+        DownloadPage.Hide;
+      end;
+    end;
   end;
 end;
 

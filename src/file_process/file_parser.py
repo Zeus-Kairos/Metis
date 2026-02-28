@@ -4,6 +4,7 @@ import shutil
 import re
 from typing import List, Dict, Any, Optional, Tuple
 from markitdown import MarkItDown
+from bs4 import BeautifulSoup
 import html2text
 import pymupdf.layout
 import pymupdf4llm
@@ -20,10 +21,6 @@ class FileParser:
     """
     
     def __init__(self):
-        self.html_converter = html2text.HTML2Text()
-        self.html_converter.ignore_links = False
-        self.html_converter.ignore_images = False
-        self.html_converter.body_width = 0  # No line wrapping
         self.markdownable_parser = MarkItDown(enable_plugins=False)
     
     def _read_file_with_encoding(self, file_path: str) -> str:
@@ -192,16 +189,27 @@ class FileParser:
     
     def _parse_html(self, content: str) -> str:
         """
-        Parse HTML content using html2text.
-        """
-        return self.html_converter.handle(content)
+        Parse HTML content using BeautifulSoup4 to handle malformed HTML, then convert to text using html2text.
+        Creates a new HTML2Text instance for each call to ensure thread safety.
+        """        
+        # Use BeautifulSoup to handle malformed HTML
+        soup = BeautifulSoup(content, 'html.parser')
+        # Get the cleaned HTML
+        cleaned_html = str(soup)
+        
+        # Create a new HTML2Text instance for each call to ensure thread safety
+        converter = html2text.HTML2Text()
+        converter.ignore_links = False
+        converter.ignore_images = False
+        converter.body_width = 0  # No line wrapping
+        
+        # Convert to markdown using html2text
+        return converter.handle(cleaned_html)
 
     def _parse_pdf(self, file_path: str) -> str:
         """
         Parse PDF content using PyPDF2.
         """
-        parsed_dir, filename = get_parsed_path(file_path)
-        image_path = os.path.join(parsed_dir, f"{filename}_images")
                 
         md_text = pymupdf4llm.to_markdown(
             doc=file_path,  # The file, either as a file path or a PyMuPDF Document.
@@ -210,12 +218,12 @@ class FileParser:
             page_chunks=False,  # If True, output is a list of page-specific dictionaries. Set to False for single string.
             show_progress=True,  # Displays a progress bar during processing.
             hdr_info=True,  # Optional, disables header detection logic.
-            write_images=True,  # Saves images found in the document as files.
-            # embed_images=True,  - Embeds images directly as base64 in markdown.
+            write_images=False,  # Saves images found in the document as files.
+            embed_images=True,  # Embeds images directly as base64 in markdown.
             image_size_limit=0.05,  # Exclude small images below this size threshold.
             dpi=150,  # Image resolution in dots per inch, if write_images=True.
-            image_path=image_path,  # Directory to save images if write_images=True.
-            image_format="png",  # Image file format, e.g., "png" or "jpg".
+            # image_path=image_path,  # Directory to save images if write_images=True.
+            # image_format="png",  # Image file format, e.g., "png" or "jpg".
             force_text=True,  # Include text overlapping images/graphics.
             margins=0,  # Specify page margins for text extraction.
             # page_width=612,  # Desired page width for reflowable documents.

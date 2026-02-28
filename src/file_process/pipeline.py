@@ -67,7 +67,7 @@ class FileProcessingPipeline:
                         file_id = self.memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
                             filename=filename,
                             filepath=file_path,
-                            parsed_path=parse_result["parsed_file"],
+                            parsed_content=parse_result["content"],
                             user_id=user_id,
                             knowledgebase_name=knowledge_base,
                             file_size=file_size,

@@ -98,7 +98,7 @@ class ParallelFileProcessingPipeline:
                 return file_result
             
             # Step 2: Parse the file (run sync method in thread pool)
-            parse_result = await asyncio.to_thread(self.file_parser.parse_file, file_path, save=True)
+            parse_result = await asyncio.to_thread(self.file_parser.parse_file, file_path, save=False)
             
             if parse_result["success"]:
                 file_result["parsed"] = True
@@ -110,7 +110,7 @@ class ParallelFileProcessingPipeline:
                     file_id = self.memory_manager.knowledgebase_manager.add_file_by_knowledgebase_name(
                         filename=filename,
                         filepath=file_path,
-                        parsed_path=parse_result["parsed_file"],
+                        parsed_content=parse_result["content"],
                         user_id=user_id,
                         knowledgebase_name=knowledge_base,
                         file_size=file_size,
@@ -134,6 +134,8 @@ class ParallelFileProcessingPipeline:
                 logger.info(f"File split into {len(documents)} documents: {filename}")
                 
                 # Step 5: Index chunks (run sync method in thread pool)
+                logger.info(f"longest chunk: {max([len(doc.page_content) for doc in documents])}")
+                
                 vectorstore = await asyncio.to_thread(self.indexer.index_chunks, {file_id: documents})
                 file_result["chunks_count"] = len(documents)
                 logger.info(f"File indexed successfully: {filename}, chunks: {len(documents)}")
@@ -153,6 +155,6 @@ class ParallelFileProcessingPipeline:
             else:
                 file_result["status"] = "failed"
                 file_result["error"] = f"Unexpected error during processing: {str(e)}"
-            logger.error(f"Unexpected error processing file {filename}: {e}")
+            logger.exception(f"Unexpected error processing file {filename}: {e}", stack_info=True)
         
         return file_result
