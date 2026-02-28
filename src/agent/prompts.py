@@ -350,36 +350,62 @@ def reference_check_prompt(state: TypedDict, root_path: str = "") -> str:
     documents = state["documents"]
     doc_contents = format_references(documents, root_path, with_index=False)  
 
-    return f"""
-    You are an assistant that reviews an existing answer against a set of reference documents and adds precise reference markers.
-    Task:
-    Carefully read the user’s query, the existing answer, and all provided reference documents.
-    Verify each factual statement in the answer against the documents.
-    Find out all the documents referenced in the answer, add indices to them.
-    For every sentence, paragraph or specific claim that is supported by a document, add an inline reference marker in square brackets, using the format [Document Index].
-    If multiple documents support the same sentence or paragraph, include multiple markers, for example: [1][3].
-    If a sentence is not clearly supported by any document, leave it unmarked and do not invent or guess references. If a major claim is unsupported or contradicted, briefly flag it in a short note after the sentence, e.g. (unsupported by the provided documents).
-    Do not change any word of the original answer. Only:
-        Insert or adjust reference markers.
-    Verify the accuracy of the information in the answer against the documents.
-    If the answer contradicts the documents, flag it with a note.
-    At the end, add a short “References” list that maps each marker (e.g. [index]:Source Path) to the corresponding document index/identifier.
+    # return f"""
+    # You are an assistant that reviews an existing answer against a set of reference documents and adds precise reference markers.
+    # Task:
+    # Carefully read the user’s query, the existing answer, and all provided reference documents.
+    # Verify each factual statement in the answer against the documents.
+    # Find out all the documents referenced in the answer, add indices to them.
+    # For every sentence, paragraph or specific claim that is supported by a document, add an inline reference marker in square brackets, using the format [Document Index].
+    # If multiple documents support the same sentence or paragraph, include multiple markers, for example: [1][3].
+    # If a sentence is not clearly supported by any document, leave it unmarked and do not invent or guess references. If a major claim is unsupported or contradicted, briefly flag it in a short note after the sentence, e.g. (unsupported by the provided documents).
+    # Do not change any word of the original answer. Only:
+    #     Insert or adjust reference markers.
+    # Verify the accuracy of the information in the answer against the documents.
+    # If the answer contradicts the documents, flag it with a note.
+    # At the end, add a short “References” list that maps each marker (e.g. [index]:Source Path) to the corresponding document index/identifier.
 
-    Input:
-        The user query
-        The original answer
-        A list of reference documents with their index and any available metadata (file path), e.g.
-            [1]: Source Path 1
-            [2]: Source Path 2
+    # Input:
+    #     The user query
+    #     The original answer
+    #     A list of reference documents with their index and any available metadata (file path), e.g.
+    #         [1]: Source Path 1
+    #         [2]: Source Path 2
 
-    Output:
-    The answer with inline reference markers inserted in the text exactly where the supporting information is used.
-    Keep the structure, headings, and formatting of the original answer as much as possible.
-    “References” section must be in format [index]: Source Path.
-    If multiple sources have same Source Path, combine them, e.g. [1][2][5]: Source Path
+    # Output:
+    # The answer with inline reference markers inserted in the text exactly where the supporting information is used.
+    # Keep the structure, headings, and formatting of the original answer as much as possible.
+    # “References” section must be in format [index]: Source Path.
+    # If multiple sources have same Source Path, combine them, e.g. [1][2][5]: Source Path
     
 
-    User Query: {query}
-    Original Answer: {answer}
-    Reference Documents: {doc_contents}
+    # User Query: {query}
+    # Original Answer: {answer}
+    # Reference Documents: {doc_contents}
+    # """
+
+    return f"""
+    Role: You are a meticulous Fact-Checking Assistant. Your task is to verify an "Original Answer" against "Reference Documents" and insert precise, sequential reference markers.
+
+    Instructions:
+    1. Verification: Compare every claim in the "Original Answer" against the "Reference Documents." If a claim contradicts the documents, flag it with a note: (Contradicts [Source ID]). If a claim is unsupported, flag it: (Unsupported).
+    2. Sequential Re-indexing: Assign a new, continuous numeric index (starting from [1]) to the documents in the order they are first cited in the answer.   
+      - Example: The first document you cite should be [1], the second [2], and so on.
+    3. Inline Marking: Insert the index immediately after the supported claim, sentence, or paragraph (e.g., [1] or [1][2]).
+    4. Integrity: Do not change any wording of the original answer. Only insert markers and discrepancy flags.
+    5. References Section: At the end, provide a "References" list.
+      - Format: [New Index]: Original Source Path/Identifier
+      - If multiple original snippets share the same Source Path, group them under a single index.
+
+    Input Data:
+    - User Query: {query}
+    - Original Answer: {answer}
+    - Reference Documents: {doc_contents}
+
+    Output Format:
+    [The Original Answer with markers]
+
+    References
+    [1]: Source Path A
+    [2]: Source Path B
     """
