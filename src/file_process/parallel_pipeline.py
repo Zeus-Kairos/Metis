@@ -132,10 +132,13 @@ class ParallelFileProcessingPipeline:
                 }
                 documents = await asyncio.to_thread(self.file_splitter.split_text, content, metadata)
                 logger.info(f"File split into {len(documents)} documents: {filename}")
-                
-                # Step 5: Index chunks (run sync method in thread pool)
-                logger.info(f"longest chunk: {max([len(doc.page_content) for doc in documents])}")
-                
+
+                # Generate Table of Contents
+                toc = await asyncio.to_thread(self.file_splitter.generate_toc, documents)
+                file_result["toc"] = toc
+                self.memory_manager.knowledgebase_manager.add_toc(file_id, toc)
+
+                # Step 5: Index chunks (run sync method in thread pool)               
                 vectorstore = await asyncio.to_thread(self.indexer.index_chunks, {file_id: documents})
                 file_result["chunks_count"] = len(documents)
                 logger.info(f"File indexed successfully: {filename}, chunks: {len(documents)}")

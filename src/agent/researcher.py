@@ -9,7 +9,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 
 from src.agent.types import KnowledgeBaseItem
 from src.agent.prompts import deep_search_prompt
-from src.agent.tools import list_children_tool, rag_search_tool
+from src.agent.tools import list_children_tool, rag_search_tool, file_toc
 from src.utils.logging_config import get_logger
 
 
@@ -49,7 +49,7 @@ class Researcher:
             }
 
         system_prompt = deep_search_prompt(state)
-        response = self.llm_runner.invoke([SystemMessage(content=system_prompt)], [list_children_tool, rag_search_tool])    
+        response = self.llm_runner.invoke([SystemMessage(content=system_prompt)], [list_children_tool, rag_search_tool, file_toc])    
         if response.content.strip():
             logger.info(f"[deep_search] Response: {response.content.strip()}")
         return {
@@ -62,7 +62,7 @@ class Researcher:
         """
         graph = StateGraph(ResearcherState)
         graph.add_node("research", self._research)
-        graph.add_node("deep_retrieve", ToolNode([list_children_tool, rag_search_tool]))
+        graph.add_node("deep_retrieve", ToolNode([list_children_tool, rag_search_tool, file_toc]))
 
         graph.add_edge(START, "research")
         graph.add_conditional_edges(

@@ -110,7 +110,22 @@ def file_toc(filepath: str, runtime: ToolRuntime, tool_call_id: Annotated[str, I
     Returns:
         The table of contents of the file.
     """
-    return f"[Table of Contents]\n1. Section 1\n2. Section 2\n3. Section 3"
+
+    # Normalize filepath to use consistent path separators
+    normalized_filepath = filepath.replace("/", os.sep).replace("\\", os.sep)
+    
+    knowledgebase_manager = MemoryManager().knowledgebase_manager
+    toc = knowledgebase_manager.get_toc(normalized_filepath)
+    if toc is None:
+        message = f"No ToC found for {filepath}."
+    else:
+        message = f"ToC for {filepath}:\n{toc}"
+    return Command(
+        update={
+            "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
+            "display": message
+        }
+    )
 
 @tool("rag_search")
 def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:

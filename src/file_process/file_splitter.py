@@ -64,9 +64,80 @@ class FileSplitter:
                         "chunk_id": f"{file_id}_{chunk_index}",
                         "chunk_type": chunk_type,
                         **doc.metadata,
-                        **chunk_meta,                         
+                        **chunk_meta,                          
                         **metadata
                     })
             chunk_index += 1
             documents.append(document)
         return documents, chunk_index
+
+    def generate_toc(self, documents: list[Document]) -> str:
+        """Generate Table of Contents from documents with header metadata.
+        
+        Args:
+            documents: List of Document objects with header metadata
+            
+        Returns:
+            Formatted ToC string
+        """
+        # Collect header paths in original order (using a list to preserve order)
+        header_paths = []
+        seen_paths = set()
+        for doc in documents:
+            # Get all header keys and sort them by level
+            header_keys = []
+            for key in doc.metadata:
+                if key.startswith("Header "):
+                    try:
+                        level = int(key.split(" ")[1])
+                        header_keys.append((level, key))
+                    except (ValueError, IndexError):
+                        pass
+            
+            # Sort header keys by level
+            header_keys.sort(key=lambda x: x[0])
+            
+            # Build path from sorted headers
+            path = []
+            for _, key in header_keys:
+                header_value = doc.metadata.get(key)
+                if header_value:
+                    path.append(header_value)
+                else:
+                    break  # Stop if any header level is missing
+            
+            if path:
+                path_tuple = tuple(path)
+                if path_tuple not in seen_paths:
+                    header_paths.append(path_tuple)
+                    seen_paths.add(path_tuple)
+        
+        # Use the paths in their original order
+        sorted_paths = header_paths
+        
+        # Build hierarchical structure
+        toc_structure = {}
+        for path in sorted_paths:
+            current = toc_structure
+            for header in path:
+                if header not in current:
+                    current[header] = {}
+                current = current[header]
+        
+        # Generate ToC string
+        def build_toc_string(structure, level=0):
+            toc_lines = []
+            indent = "    " * level
+            for header, children in structure.items():
+                # Create anchor: lowercase, spaces to hyphens, remove special chars
+                # anchor = header.lower().replace(" ", "-").replace(".", "").replace(",", "").replace("?", "").replace("!", "")
+                if children:
+                    toc_lines.append(f"{indent}- [{header}]")
+                    toc_lines.extend(build_toc_string(children, level + 1))
+                else:
+                    toc_lines.append(f"{indent}- [{header}]")
+                    # toc_lines.append(f"{indent}- [{header}](#{anchor})")
+            return toc_lines
+        
+        toc_lines = build_toc_string(toc_structure)
+        return "\n".join(toc_lines)

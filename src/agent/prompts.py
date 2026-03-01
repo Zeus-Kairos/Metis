@@ -259,13 +259,14 @@ def deep_search_prompt(state: TypedDict) -> str:
       - You have a list_children tool to list all children with description of a folder in the knowledge base.
       - You have a retrieval tool to find relevant documents in a specific folder in the knowledge base.
       - Decide a proper query to retrieve relevant information to the topic.
-      - Use the list_children tool to explore the knowledge base and decide where to search. Use relative path to specify the search_path.
+      - Use the list_children tool to explore the knowledge base and decide where to search. Use relative path to specify the search_path and filepath.
+      - Use the file_toc tool to get the table of contents of a file.
       - Use the retrieval tool to search for relevant information with the query and the search_path.
 
     Constraints:
     - The search_path must include the knowledge base root folder.
     - Base on the RAG history, try diverse queries and search paths that have not been explored.
-    - **CRITICAL:** When passing a value to search_path or parent_folder, use ONLY the path string. Do not include the colon or the description text.
+    - **CRITICAL:** When passing a value to search_path, filepath or parent_folder, use ONLY the path string. Do not include the colon or the description text.
 
     Topic: {aspect}
     Knowledge Base Description: {knowledgebase_description}

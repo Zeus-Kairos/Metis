@@ -78,6 +78,14 @@ class KnowledgebaseManager:
                             CHECK (type != 'file' OR file_size IS NOT NULL)
                         )
                     """)
+
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS toc (
+                            file_id INTEGER PRIMARY KEY,
+                            toc TEXT NOT NULL,
+                            FOREIGN KEY (file_id) REFERENCES files(file_id) ON DELETE CASCADE
+                        )
+                    """)
                     
                     # Create index on files.knowledgebase_id for efficient queries
                     cur.execute("""
@@ -563,12 +571,15 @@ class KnowledgebaseManager:
             file_id if deletion was successful, None otherwise
         """
         try:
+            # Normalize filepath to use consistent path separators
+            normalized_filepath = filepath.replace("/", os.sep).replace("\\", os.sep)
+            
             with self.connection_pool.connection() as conn:
                 with conn.cursor() as cur:
                     # Delete the file and return file_id and knowledgebase_id
                     cur.execute(
                         "DELETE FROM files WHERE filepath = %s RETURNING file_id, knowledgebase_id",
-                        (filepath,)
+                        (normalized_filepath,)
                     )
                     deleted_file = cur.fetchone()
                     
@@ -776,3 +787,60 @@ class KnowledgebaseManager:
         except Exception as e:
             logger.error(f"Error updating multiple descriptions: {e}")
             raise
+
+    def add_toc(self, file_id: int, toc: str) -> bool:
+        """
+        Add a Table of Contents for a file.
+        
+        Args:
+            file_id: ID of the file
+            toc: Table of Contents string
+            
+        Returns:
+            True if addition was successful, False otherwise
+        """
+        try:
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Insert the TOC into the toc table
+                    cur.execute(
+                        "INSERT INTO toc (file_id, toc) VALUES (%s, %s)",
+                        (file_id, toc)
+                    )
+                    conn.commit()
+                    return True
+        except Exception as e:
+            logger.error(f"Error adding Table Contents: {e}")
+            raise
+
+    def get_toc(self, filepath: str) -> str:
+        """
+        Get the Table of Contents for a file.
+        
+        Args:
+            filepath: Path of the file
+            
+        Returns:
+            Table of Contents string for the file, or None if not found
+        """
+        try:
+            import os
+            # Normalize filepath to use consistent path separators
+            normalized_filepath = filepath.replace("/", os.sep).replace("\\", os.sep)
+            
+            with self.connection_pool.connection() as conn:
+                with conn.cursor() as cur:
+                    # Join files and toc tables to get TOC by filepath
+                    cur.execute(
+                        "SELECT toc.toc FROM toc JOIN files ON toc.file_id = files.file_id WHERE files.filepath = %s",
+                        (normalized_filepath,)
+                    )
+                    toc = cur.fetchone()
+                    if toc:
+                        return toc[0]
+                    else:
+                        return None
+        except Exception as e:
+            logger.error(f"Error getting Table Contents: {e}")
+            raise
+
