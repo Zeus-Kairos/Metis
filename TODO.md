@@ -1,4 +1,4 @@
-- add parameter controls for chunking
+- each researcher only summarize instead of synthesizing the information.
 - predefined workflow for general questions, like "What is the knowledge base about?".
 - parse big pdf files by pages.
 - assign an independent llm for each researcher.

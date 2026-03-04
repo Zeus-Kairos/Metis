@@ -5,6 +5,7 @@ from langchain_core.embeddings import Embeddings
 from langchain_ollama import OllamaEmbeddings
 from langchain_openai import OpenAIEmbeddings    
 from langchain_huggingface import HuggingFaceEmbeddings 
+from src.utils.qwen3_vl_embedding import Qwen3VLEmbeddings
 import requests
 from src.memory.memory import MemoryManager
 from src.utils.logging_config import get_logger
@@ -72,6 +73,11 @@ class EmbeddingRunner:
                 model=self.embedding_model_name,
             )
             logger.info(f"Initialized OllamaEmbeddings model: {self.embedding_model_name}")
+        elif self.embedding_provider == "qwen3_vl":
+            self._embedding_model = Qwen3VLEmbeddings(
+                model_name=self.embedding_model_name
+            )
+            logger.info(f"Initialized Qwen3VLEmbeddings model: {self.embedding_model_name}")
         else:
             self._embedding_model = None
             logger.warning(f"Embedding provider {self.embedding_provider} is not supported.")
