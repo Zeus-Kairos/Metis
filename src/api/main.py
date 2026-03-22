@@ -21,7 +21,6 @@ from src.memory.memory import MemoryManager
 from src.utils.logging_config import get_logger
 from src.api.thread import router as thread_router
 from src.api.thread import rag_agents
-from src.agent.api_llm import api_llm_runners
 
 logger = get_logger(__name__)
 
@@ -59,9 +58,20 @@ class UserConfigUpdate(BaseModel):
 app = FastAPI(title="Metis API", version="1.0.0")
 
 # Configure CORS
+# NOTE: When allow_credentials=True, wildcard origins are not valid for browsers.
+# Use explicit origins (configurable via CORS_ORIGINS env var).
+cors_origins_env = os.getenv("CORS_ORIGINS", "").strip()
+if cors_origins_env:
+    cors_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+else:
+    cors_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -271,6 +281,7 @@ async def update_user_configuration(
             logger.info(f"Removed existing RAGAgent for user {current_user.id} to apply updated configuration")
         
         # Remove the existing ApiLLMRunner instance for this user
+        from src.agent.api_llm import api_llm_runners
         if current_user.id in api_llm_runners:
             del api_llm_runners[current_user.id]
             logger.info(f"Removed existing ApiLLMRunner for user {current_user.id} to apply updated configuration")

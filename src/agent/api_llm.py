@@ -1,10 +1,6 @@
 import logging
 import os
-import inspect
-from typing import List, Sequence, Optional, Union
-from langchain.tools import BaseTool
-import requests
-from langchain.chat_models import init_chat_model
+from typing import Union
 from src.memory.memory import MemoryManager
 from src.agent.llm import LLMRunner
 
@@ -70,6 +66,7 @@ class ApiLLMRunner(LLMRunner):
             return
         
         try:
+            from langchain.chat_models import init_chat_model
             self._chat_model = init_chat_model(
                 model_provider=self.model_provider,
                 model=self.llm_model,

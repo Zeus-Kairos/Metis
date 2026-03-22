@@ -2,10 +2,6 @@ import logging
 import os
 from typing import List
 from langchain_core.embeddings import Embeddings
-from langchain_ollama import OllamaEmbeddings
-from langchain_openai import OpenAIEmbeddings    
-from langchain_huggingface import HuggingFaceEmbeddings 
-from src.utils.qwen3_vl_embedding import Qwen3VLEmbeddings
 import requests
 from src.memory.memory import MemoryManager
 from src.utils.logging_config import get_logger
@@ -58,22 +54,26 @@ class EmbeddingRunner:
         Initialize the embedding model instance.
         """
         if self.embedding_provider == "openai":
+            from langchain_openai import OpenAIEmbeddings
             self._embedding_model = OpenAIEmbeddings(
                 model=self.embedding_model_name,
                 api_key=self.embedding_api_key
             )
             logger.info(f"Initialized OpenAIEmbeddings model: {self.embedding_model_name}")
         elif self.embedding_provider == "hf":
+            from langchain_huggingface import HuggingFaceEmbeddings
             self._embedding_model = HuggingFaceEmbeddings(
                 model_name=self.embedding_model_name
             )
             logger.info(f"Initialized HuggingFaceEmbeddings model: {self.embedding_model_name}")
         elif self.embedding_provider == "ollama":
+            from langchain_ollama.embeddings import OllamaEmbeddings
             self._embedding_model = OllamaEmbeddings(
                 model=self.embedding_model_name,
             )
             logger.info(f"Initialized OllamaEmbeddings model: {self.embedding_model_name}")
         elif self.embedding_provider == "qwen3_vl":
+            from src.utils.qwen3_vl_embedding import Qwen3VLEmbeddings
             self._embedding_model = Qwen3VLEmbeddings(
                 model_name=self.embedding_model_name
             )

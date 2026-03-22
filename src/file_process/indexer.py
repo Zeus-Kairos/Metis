@@ -2,13 +2,11 @@ import os
 import faiss
 import threading
 from langchain_core.documents import Document
-import numpy as np
-from typing import Any, Dict, List
+from typing import Dict, List
 from langchain_community.vectorstores import FAISS
 from langchain_community.docstore.in_memory import InMemoryDocstore
-from langchain_ollama import OllamaEmbeddings
 from src.utils.logging_config import get_logger
-from src.utils.embeddings import EmbeddingRunner, get_embedding_runner
+from src.utils.embeddings import get_embedding_runner
 
 logger = get_logger(__name__)
 

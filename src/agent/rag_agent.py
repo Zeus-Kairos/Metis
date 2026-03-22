@@ -1,21 +1,15 @@
-from dataclasses import dataclass
 import json
-import logging
 import os
-from re import search
 import re
-from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
+from typing import Any, Dict, Generator, List
 
-from langchain.tools import InjectedToolCallId, ToolRuntime, tool
-from langchain_core.documents import Document
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.types import Send
 
 from src.agent.types import KnowledgeBaseItem
-from src.agent.researcher import Researcher
 from src.memory.memory import MemoryManager 
 from src.memory.thread import ThreadManager
 from src.agent.prompts import (
@@ -31,8 +25,6 @@ from src.agent.prompts import (
     synthesize_answer_prompt,
 )
 from src.rag.rag_flow import RAGFlow, RAGType
-from src.agent.llm import LLMRunner
-from src.agent.api_llm import get_api_llm_runner
 from src.utils.paths import get_index_path, get_upload_dir
 from src.utils.logging_config import get_logger
 from src.utils.merger import merge_documents
@@ -59,15 +51,9 @@ class RAGAgent:
         self.rag_type = rag_type    
         self.rag_k = int(os.getenv("RAG_K", 10))      
         
-        # Initialize LLM runner based on user ID (uses ApiLLMRunner if user_id is provided)
-        if user_id:
-            self.llm_runner = get_api_llm_runner(user_id)
-            self.embedding_runner = get_embedding_runner(user_id)
-        else:
-            self.llm_runner = LLMRunner()
-            self.embedding_runner = None
-            
         self.user_id = user_id
+        self.llm_runner = None
+        self.embedding_runner = None
         self.thread_manager = thread_manager
         self.knowledgebase_id = 0
         self.knowledgebase_item = None
@@ -87,6 +73,17 @@ class RAGAgent:
             "complement_answer": "Complemented the answer with additional documents.",
         }
 
+    def _get_llm_runner(self):
+        """Lazily create the LLM runner to avoid heavy imports on non-chat endpoints."""
+        if self.llm_runner is None:
+            if self.user_id:
+                from src.agent.api_llm import get_api_llm_runner
+                self.llm_runner = get_api_llm_runner(self.user_id)
+            else:
+                from src.agent.llm import LLMRunner
+                self.llm_runner = LLMRunner()
+        return self.llm_runner
+
     def _build_graph(self):
         """
         Build the graph for the agent.
@@ -101,7 +98,7 @@ class RAGAgent:
 
         prompt = classify_intent_prompt(state)
 
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        response = self._get_llm_runner().invoke([SystemMessage(content=prompt)])
         intent = response.content.strip().lower()
         if intent not in ["rag", "chat"]:
             intent = "chat"
@@ -124,7 +121,7 @@ class RAGAgent:
         """
         system_prompt = handle_chat_prompt(state)
 
-        response = self.llm_runner.invoke([SystemMessage(content=system_prompt)])
+        response = self._get_llm_runner().invoke([SystemMessage(content=system_prompt)])
 
         return {
             "messages": [response],
@@ -138,7 +135,7 @@ class RAGAgent:
             refined_query = state["query"]
         else:
             prompt = refine_query_prompt(state)
-            response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+            response = self._get_llm_runner().invoke([SystemMessage(content=prompt)])
             refined_query = response.content.strip()
         return {
             "refined_query": refined_query,
@@ -150,6 +147,8 @@ class RAGAgent:
         Handle the RAG.
         """
         refined_query = state["refined_query"]
+        if self.embedding_runner is None and self.user_id is not None:
+            self.embedding_runner = get_embedding_runner(self.user_id)
             
         rag_flow = RAGFlow(state["knowledge_base_item"].index_path, embedding_runner=self.embedding_runner)
         results = rag_flow.retrieve(self.rag_type, refined_query, k=self.rag_k)
@@ -168,7 +167,7 @@ class RAGAgent:
             query = state["refined_query"]
             documents = state["documents"]          
             prompt = filter_documents_prompt(query, documents)
-            response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+            response = self._get_llm_runner().invoke([SystemMessage(content=prompt)])
             try:
                 filtered_document_indices = list(map(int, response.content.strip().split(",")))
             except ValueError:
@@ -182,7 +181,7 @@ class RAGAgent:
         Format the answer.
         """
         prompt = format_answer_prompt(state)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        response = self._get_llm_runner().invoke([SystemMessage(content=prompt)])
         
         return {
             "answer": response.content.strip(),
@@ -194,7 +193,7 @@ class RAGAgent:
         Plan the RAG.
         """
         prompt = plan_rag_prompt(state)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        response = self._get_llm_runner().invoke([SystemMessage(content=prompt)])
         try:
             # use regex to extract the JSON array
             match = re.search(r"\[.*\]", response.content.strip().lower(), re.DOTALL)
@@ -217,7 +216,7 @@ class RAGAgent:
         if "searched_aspects" in state and len(state["searched_aspects"]) > 0:
             searched_aspects = state["searched_aspects"]
             prompt = find_relative_aspects_prompt(state)
-            response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+            response = self._get_llm_runner().invoke([SystemMessage(content=prompt)])
             try:
                 related_aspect_indices = list(map(int, response.content.strip().split(",")))
                 reused_aspects = [searched_aspects[index].aspect for index in related_aspect_indices]
@@ -256,9 +255,11 @@ class RAGAgent:
         """
         Handle the deep search.
         """
+        from src.agent.researcher import Researcher
+
         aspect = state["aspect"]
         knowledgebase_item = state["knowledge_base_item"]
-        researcher = Researcher(self.llm_runner)
+        researcher = Researcher(self._get_llm_runner())
         output = researcher.graph.invoke(
             {
             "aspect": aspect,
@@ -294,7 +295,7 @@ class RAGAgent:
         
         query = state["refined_query"]
         prompt = synthesize_answer_prompt(query, useful_aspects)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        response = self._get_llm_runner().invoke([SystemMessage(content=prompt)])
         return {
             "documents": documents,
             "answer": response.content.strip(),
@@ -324,7 +325,7 @@ class RAGAgent:
         """       
         root_path = get_upload_dir(self.user_id, state["knowledge_base_item"].name, "")
         prompt = reference_check_prompt(state, root_path)
-        response = self.llm_runner.invoke([SystemMessage(content=prompt)])
+        response = self._get_llm_runner().invoke([SystemMessage(content=prompt)])
         return {
             "answer": response.content.strip(),
             "messages": [response],

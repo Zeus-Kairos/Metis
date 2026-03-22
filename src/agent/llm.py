@@ -1,12 +1,9 @@
 import logging
 import os
 import inspect
-from typing import List, Sequence
-from langchain.tools import BaseTool
-from langchain_core.language_models import BaseChatModel
+from typing import Any, List, Sequence
 import requests
 from langchain_core.messages import AIMessage
-from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +60,7 @@ class LLMRunner:
             return
 
         try:
+            from langchain_ollama.chat_models import ChatOllama
             self._chat_model = ChatOllama(
                 model=self.chat_model_name,
                 base_url=self.base_url,
@@ -82,6 +80,7 @@ class LLMRunner:
             return
 
         try:
+            from langchain_ollama.embeddings import OllamaEmbeddings
             self._embedding_model = OllamaEmbeddings(
                 model=self.embedding_model_name,
                 base_url=self.base_url,
@@ -91,7 +90,7 @@ class LLMRunner:
             self._embedding_model = None
     
     @property
-    def chat_model(self) -> BaseChatModel:
+    def chat_model(self) -> Any:
         """
         Get the initialized chat model instance.
         
@@ -103,7 +102,7 @@ class LLMRunner:
             self._initialize_chat_model()
         return self._chat_model
 
-    def chat_model_with_tools(self, tools: Sequence[BaseTool]):
+    def chat_model_with_tools(self, tools: Sequence[Any]):
         """
         Get the initialized chat model instance with tools bound.
         
@@ -119,7 +118,7 @@ class LLMRunner:
         return self._chat_model.bind_tools(tools)
     
     @property
-    def embedding_model(self) -> OllamaEmbeddings:
+    def embedding_model(self) -> Any:
         """
         Get the initialized embedding model instance.
         
@@ -137,7 +136,7 @@ class LLMRunner:
         """
         self.tokens = {}
     
-    def invoke(self, messages, tools: Sequence[BaseTool] = None, **kwargs):
+    def invoke(self, messages, tools: Sequence[Any] = None, **kwargs):
         """
         Convenience method to invoke the chat model directly.
         

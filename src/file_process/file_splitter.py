@@ -1,10 +1,10 @@
 from dataclasses import asdict
 from langchain_core.documents import Document
-from langchain_text_splitters import MarkdownHeaderTextSplitter
 from chonkie import Pipeline
 
 class FileSplitter:
     def __init__(self, chunk_size=1000, chunk_overlap=50):
+        from langchain_text_splitters import MarkdownHeaderTextSplitter
         headers_to_split_on = [
             ("#", "Header 1"),
             ("##", "Header 2"),

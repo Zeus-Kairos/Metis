@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 from typing import List
 from langchain_core.documents import Document
-from langchain_text_splitters import MarkdownHeaderTextSplitter
 from collections import defaultdict
 
 class MarkdownSplitter:
@@ -14,6 +13,7 @@ class MarkdownSplitter:
 
     def split_markdown_file(self, file_path: str):
         """Read and split the Markdown file, returning the split results."""
+        from langchain_text_splitters import MarkdownHeaderTextSplitter
         markdown_splitter = MarkdownHeaderTextSplitter(self.headers_to_split_on, strip_headers=False)
         with open(file_path, encoding="utf-8") as f:
             content = f.read()

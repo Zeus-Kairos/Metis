@@ -391,6 +391,14 @@ const KnowledgebaseBrowser = () => {
   };
 
   // Upload files with streaming response (real-time results)
+  const postUploadRequest = async (formData) => {
+    const response = await fetchWithAuth('/api/stream-upload', {
+      method: 'POST',
+      body: formData
+    });
+    return { response, streaming: true };
+  };
+
   const uploadFilesWithStream = async () => {
     if (selectedFiles.length === 0) return;
 
@@ -416,43 +424,53 @@ const KnowledgebaseBrowser = () => {
         formData.append('files', file);
       });
 
-      // Use fetchWithAuth which already handles streaming and FormData correctly
-      const response = await fetchWithAuth('/api/stream-upload', {
-        method: 'POST',
-        body: formData
-      });
+      const { response, streaming } = await postUploadRequest(formData);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        if (response.status === 404) {
+          throw new Error('/api/stream-upload not found on backend.');
+        }
         throw new Error(errorData.detail || 'Upload failed');
       }
 
-      // Read the response as a stream
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
+      if (streaming) {
+        // Read the response as a stream
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-      // Process the stream line by line
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        // Process the stream line by line
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        
-        // Split buffer by newlines
-        const lines = buffer.split('\n');
-        // Keep the last incomplete line in buffer
-        buffer = lines.pop();
+          buffer += decoder.decode(value, { stream: true });
+          
+          // Split buffer by newlines
+          const lines = buffer.split('\n');
+          // Keep the last incomplete line in buffer
+          buffer = lines.pop();
 
-        // Process each complete line
-        for (const line of lines) {
-          if (line.trim()) {
-            try {
-              const result = JSON.parse(line);
-              setUploadResults(prev => [...prev, result]);
-            } catch (parseError) {
-              console.error('Error parsing upload result:', parseError);
+          // Process each complete line
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const result = JSON.parse(line);
+                setUploadResults(prev => [...prev, result]);
+              } catch (parseError) {
+                console.error('Error parsing upload result:', parseError);
+              }
             }
+          }
+        }
+
+        if (buffer.trim()) {
+          try {
+            const result = JSON.parse(buffer);
+            setUploadResults(prev => [...prev, result]);
+          } catch (parseError) {
+            console.error('Error parsing final upload result:', parseError);
           }
         }
       }
@@ -840,11 +858,7 @@ const KnowledgebaseBrowser = () => {
           formData.append('files', file);
         });
 
-        // Use fetchWithAuth which already handles streaming and FormData correctly
-        const response = await fetchWithAuth('/api/stream-upload', {
-          method: 'POST',
-          body: formData
-        });
+        const { response, streaming } = await postUploadRequest(formData);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -853,38 +867,49 @@ const KnowledgebaseBrowser = () => {
             setUploadResults(prev => [...prev, {
               filename: file.name,
               status: 'failed',
-              error: errorData.detail || 'Upload failed'
+                error: response.status === 404 ? '/api/stream-upload not found on backend.' : (errorData.detail || 'Upload failed')
             }]);
           });
           continue;
         }
 
-        // Read the response as a stream
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+        if (streaming) {
+          // Read the response as a stream
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
 
-        // Process the stream line by line
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
+          // Process the stream line by line
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-          buffer += decoder.decode(value, { stream: true });
-          
-          // Split buffer by newlines
-          const lines = buffer.split('\n');
-          // Keep the last incomplete line in buffer
-          buffer = lines.pop();
+            buffer += decoder.decode(value, { stream: true });
+            
+            // Split buffer by newlines
+            const lines = buffer.split('\n');
+            // Keep the last incomplete line in buffer
+            buffer = lines.pop();
 
-          // Process each complete line
-          for (const line of lines) {
-            if (line.trim()) {
-              try {
-                const result = JSON.parse(line);
-                setUploadResults(prev => [...prev, result]);
-              } catch (parseError) {
-                console.error('Error parsing upload result:', parseError);
+            // Process each complete line
+            for (const line of lines) {
+              if (line.trim()) {
+                try {
+                  const result = JSON.parse(line);
+                  setUploadResults(prev => [...prev, result]);
+                } catch (parseError) {
+                  console.error('Error parsing upload result:', parseError);
+                }
               }
+            }
+          }
+
+          if (buffer.trim()) {
+            try {
+              const result = JSON.parse(buffer);
+              setUploadResults(prev => [...prev, result]);
+            } catch (parseError) {
+              console.error('Error parsing final upload result:', parseError);
             }
           }
         }

@@ -35,13 +35,19 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 # Start the API server in a separate thread
 def start_api_server():
     """Start the FastAPI server"""
+    # Disable autoreload in packaged/frozen builds to avoid reloader loops.
+    is_frozen = getattr(sys, "frozen", False)
+    src_dir = os.path.join(os.path.dirname(__file__), "src")
+    reload_enabled = (not is_frozen) and os.path.isdir(src_dir)
+    reload_dirs = [src_dir] if reload_enabled else None
+
     uvicorn.run(
         "src.api.main:app",
         host=API_HOST,
         port=API_PORT,
         log_level=log_level.lower(),
-        reload=True,
-        reload_dirs=["./src"],
+        reload=reload_enabled,
+        reload_dirs=reload_dirs,
     )
 
 if __name__ == "__main__":   

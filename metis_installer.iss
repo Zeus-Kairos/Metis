@@ -6,6 +6,7 @@
 #define MyAppPublisher "Metis Team"
 #define MyAppURL "https://github.com/Zeus-Kairos/Metis"
 #define MyAppExeName "run_metis.exe"
+#define ReleaseDir "release"
 
 [Setup]
 ; NOTE: The value of AppId uniquely identifies this application.
@@ -40,11 +41,13 @@ Name: "downloadpostgres"; Description: "Download and install PostgreSQL 18.0"; G
 
 [Files]
 
-; Backend files
-Source: "packaged_backend\*"; DestDir: "{app}\backend"; Flags: recursesubdirs ignoreversion; Excludes: "*.pyc"
+; Backend runtime artifacts only (build output, no source tree)
+; Expected path: .\release\backend\...
+Source: "{#ReleaseDir}\backend\*"; DestDir: "{app}\backend"; Flags: recursesubdirs ignoreversion; Excludes: "*.py,*.pyw,*.pyc,*.pyo,*.ipynb,tests\*,test\*,__pycache__\*,.git\*,.venv\*,venv\*,*.md,*.rst"
 
-; Frontend files
-Source: "dist\*"; DestDir: "{app}\frontend"; Flags: recursesubdirs ignoreversion
+; Frontend production build only
+; Expected path: .\release\frontend\...
+Source: "{#ReleaseDir}\frontend\*"; DestDir: "{app}\frontend"; Flags: recursesubdirs ignoreversion
 
 ; PostgreSQL setup is now handled in the [Code] section
 
@@ -65,25 +68,31 @@ Filename: "{tmp}\postgresql-installer.exe"; Parameters: "--mode unattended --sup
 
 ; Set up PostgreSQL database
 ; Create database if it doesn't exist
-Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -h localhost -U postgres -t -c ""SELECT 1 FROM pg_database WHERE datname = 'metis_db'"" | findstr /i ""1"" > nul || ""{code:GetPostgreSQLBinPath|}\createdb.exe"" -h localhost -U postgres metis_db"; Check: IsPostgreSQLInstalled; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -w -h localhost -U postgres -t -c ""SELECT 1 FROM pg_database WHERE datname = 'metis_db'"" | findstr /i ""1"" > nul || ""{code:GetPostgreSQLBinPath|}\createdb.exe"" -w -h localhost -U postgres metis_db"; Check: IsPostgreSQLInstalled; Flags: runhidden
 
 ; Create user if it doesn't exist
-Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -h localhost -U postgres -t -c ""SELECT 1 FROM pg_roles WHERE rolname = 'metis_user'"" | findstr /i ""1"" > nul || ""{code:GetPostgreSQLBinPath|}\createuser.exe"" -h localhost -U postgres metis_user"; Check: IsPostgreSQLInstalled; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -w -h localhost -U postgres -t -c ""SELECT 1 FROM pg_roles WHERE rolname = 'metis_user'"" | findstr /i ""1"" > nul || ""{code:GetPostgreSQLBinPath|}\createuser.exe"" -w -h localhost -U postgres metis_user"; Check: IsPostgreSQLInstalled; Flags: runhidden
 
 ; Set user password
-Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -h localhost -U postgres -c ""ALTER USER metis_user WITH PASSWORD 'metis_password_2026'"""; Check: IsPostgreSQLInstalled; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -w -h localhost -U postgres -c ""ALTER USER metis_user WITH PASSWORD 'metis_password_2026'"""; Check: IsPostgreSQLInstalled; Flags: runhidden
 
 ; Grant privileges on database
-Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -h localhost -U postgres -c ""GRANT ALL PRIVILEGES ON DATABASE metis_db TO metis_user"""; Check: IsPostgreSQLInstalled; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -w -h localhost -U postgres -c ""GRANT ALL PRIVILEGES ON DATABASE metis_db TO metis_user"""; Check: IsPostgreSQLInstalled; Flags: runhidden
 
 ; Alter user to have CREATEDB permission
-Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -h localhost -U postgres -c ""ALTER USER metis_user CREATEDB"""; Check: IsPostgreSQLInstalled; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -w -h localhost -U postgres -c ""ALTER USER metis_user CREATEDB"""; Check: IsPostgreSQLInstalled; Flags: runhidden
 
 ; Grant schema privileges
-Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -h localhost -U postgres -d metis_db -c ""GRANT ALL ON SCHEMA public TO metis_user"""; Check: IsPostgreSQLInstalled; Flags: runhidden
+Filename: "cmd.exe"; Parameters: "/c set ""PGPASSWORD={code:GetPostgresPassword}""&&""{code:GetPostgreSQLBinPath|}\psql.exe"" -w -h localhost -U postgres -d metis_db -c ""GRANT ALL ON SCHEMA public TO metis_user"""; Check: IsPostgreSQLInstalled; Flags: runhidden
 
 ; Start Metis application
 Filename: "{app}\run_metis.bat"; Description: "Starting Metis application..."; Flags: nowait postinstall shellexec
+
+[InstallDelete]
+; Ensure stale PyInstaller runtime files are removed on upgrade/reinstall.
+; This prevents mixed package versions in {app}\backend\_internal.
+Type: filesandordirs; Name: "{app}\backend"
+Type: filesandordirs; Name: "{app}\frontend"
 
 [Code]
 var

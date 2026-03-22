@@ -187,6 +187,72 @@ What it does:
    npm run dev
    ```
 
+## Building Windows Installer (No Source Code Included)
+
+This project now supports a release-first installer flow so the installer packages build artifacts, not your raw source tree.
+
+### Prerequisites
+
+- Inno Setup 6 (for `ISCC.exe`)
+- Python 3.10+ (for backend packaging)
+- Node.js 18+ (for frontend build)
+
+### One-command build (recommended)
+
+From repo root:
+
+```powershell
+.\build_installer.ps1 -InstallPyInstaller
+```
+
+What it does:
+- Builds release artifacts into `release\frontend` and `release\backend`
+- Packages backend with PyInstaller to produce `metis_backend.exe`
+- Compiles `metis_installer.iss` with Inno Setup
+- Writes installer binaries to `installer_output\`
+
+Using a Conda env for backend packaging (recommended if you do not want to install build deps into base Python):
+
+```powershell
+.\build_installer.ps1 -CondaEnvName metis -InstallPyInstaller
+```
+
+### Common options
+
+```powershell
+# Build release only (skip Inno Setup compile)
+.\build_installer.ps1 -SkipCompile
+
+# Compile installer only (reuse existing release folder)
+.\build_installer.ps1 -SkipReleaseBuild
+
+# Keep existing release folder content (no clean)
+.\build_installer.ps1 -NoClean
+
+# Use Conda env for backend packaging tools/modules
+.\build_installer.ps1 -CondaEnvName metis
+```
+
+### Manual two-step flow
+
+```powershell
+.\build_release.ps1 -InstallPyInstaller
+.\build_installer.ps1 -SkipReleaseBuild
+```
+
+### Troubleshooting build/runtime issues
+
+- `No module named PyInstaller`:
+  - Run `python -m pip install pyinstaller`
+- `No module named 'faiss'` during build or in packaged backend:
+  - Run `python -m pip install faiss-cpu`
+  - Then rebuild installer so `faiss` is bundled into `metis_backend.exe`
+- Want to avoid installing into base Python:
+  - Use `-CondaEnvName <env>` so packaging runs via `conda run -n <env> python ...`
+  - Example: `.\build_installer.ps1 -CondaEnvName metis -InstallPyInstaller`
+- If `faiss-cpu` cannot be installed on your Python version:
+  - Use Python 3.12 for installer packaging, then rebuild
+
 ## Configuration
 
 ### Environment Variables

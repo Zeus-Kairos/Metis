@@ -7,7 +7,6 @@ import os
 import json
 from src.memory.thread import ThreadManager
 from src.utils.logging_config import get_logger
-from src.agent.rag_agent import RAGAgent
 
 logger = get_logger(__name__)
 
@@ -18,7 +17,7 @@ thread_manager = ThreadManager()
 rag_agents = {}
 
 # Function to get or create a RAGAgent for a specific user
-def get_rag_agent(user_id: int) -> RAGAgent:
+def get_rag_agent(user_id: int):
     """
     Get or create a RAGAgent instance for the specified user.
     
@@ -29,6 +28,7 @@ def get_rag_agent(user_id: int) -> RAGAgent:
         RAGAgent instance for the user
     """
     if user_id not in rag_agents:
+        from src.agent.rag_agent import RAGAgent
         # Create a new RAGAgent instance for this user with their ID
         rag_agents[user_id] = RAGAgent(thread_manager, user_id=user_id)
     return rag_agents[user_id]
