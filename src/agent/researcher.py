@@ -26,7 +26,7 @@ class ResearcherState(TypedDict):
     messages: Annotated[List[Dict[str, str]], add_messages]
     documents: list[Document] = []
     answer: str = ""
-    is_done: bool = False
+    review: Dict[str, str] = {"status": "undone", "reason": "No review yet"}
     searched_path: Dict[str, set[str]] = {}
     retrieve_tries: int = 0
 
@@ -39,7 +39,8 @@ class Researcher:
         """
         Research the aspect.
         """
-        is_done = state["is_done"] if "is_done" in state else False
+        review = state["review"] if "review" in state else {"status": "undone", "reason": "No review yet"}
+        is_done = review["status"] == "done"
         retrieve_tries = state["retrieve_tries"] if "retrieve_tries" in state else 0
         logger.info(f"[research] aspect: {state['aspect']}, retrieve_tries: {retrieve_tries}")
         if is_done or retrieve_tries >= MAX_RETRIEVE_TRIES:

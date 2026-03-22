@@ -119,6 +119,28 @@ def filter_documents_prompt(query: str, documents: List[Document] | List[Tuple[D
     Filtered Documents Indices:
     """
 
+def summarize_documents_prompt(query: str, documents: List[Document]) -> str:
+    """
+    Summarize the documents.
+    """
+    doc_contents = format_documents(documents, with_index=False)  
+    return f"""
+    System Role: You are a knowledge synthesis engine.
+
+    Goal: Create a unified summary from the provided documents based on the user query.
+
+    Instructions:
+    - Extract: Pull out key facts, data points, or arguments relevant to the query.
+    - Consolidate: Merge overlapping info from different documents to avoid repetition.
+    - Filter: Discard any introductory text, legal disclaimers, or metadata that doesn't help answer the query.
+    - Output Format: Use bullet points for key findings followed by a brief 2-3 sentence concluding synthesis.
+
+    User Query: {query}
+    Documents: {doc_contents}
+    
+    Summary:
+    """
+
 def format_answer_prompt(state: TypedDict) -> str:
     """
     Format the answer.
@@ -177,13 +199,20 @@ def review_answer_prompt(query: str, answer: str) -> str:
     You are a Precise Content Auditor specializing in Information Gap Analysis. Your task is to evaluate the alignment between User Query and a generated Answer.
 
     Task Instructions:
-        Coverage Audit: 
+        Analyze: 
            - Check if the user query is fully addressed in the "Answer." 
-           - If the query is fully addressed, return "done".
-           - Otherwise, return "undone".
+        Evaluation Logic:
+           - If the query is fully satisfied, set status to "done"
+           - If there are missing requirements or partial answers, set status to "undone" and provide a concise explanation in the reason field.
 
-        Constraints:
-           - ONLY output word "done" or "undone", without any additional text.
+    Output Format:
+        Return the result strictly as a JSON string with the following keys:
+        - status: "done" or "undone"
+        - reason: A brief description of the gap (null if status is "done")
+        
+    Constraints:
+        - Provide ONLY the JSON string.
+        - Do not include Markdown code blocks or additional text.
 
     User Query: {query}
     Answer: {answer}
@@ -249,30 +278,52 @@ def deep_search_prompt(state: TypedDict) -> str:
     knowledgebase_description = state["knowledge_base_item"].description
     knowledgebase_root_path = state["knowledge_base_item"].root_path
 
-    return f"""
-    You are a helpful assistant to help retrieve the most relevant information from the knowledge base.   
+    if "review" in state and state["review"]["status"] == "undone":
+        return f"""
+        Role: You are an Advanced Retrieval Agent specializing in Recursive Information Gathering. Your goal is to fill specific knowledge gaps identified in a previous quality audit.   
 
-    Task:
-      - Based on the topic, search for relevant information in the knowledge base.
+        Task:
+          - Analyze the Gap: Review the Audit Status and Audit Reason. Identify exactly what information is missing or insufficient in the current context.
+          - Pivot Strategy: Based on the RAG History, do not revisit paths or queries that have already failed. Use the Audit Reason to formulate a more surgical search query.
+          - Explore & Retrieve:
+            - Use list_children to find folders you haven't explored yet that might contain the missing data.
+            - Use file_toc to inspect file structures before pulling content.
+            - Use retrieval with a refined query that specifically targets the "undone" aspect.
+        Constraints:
+          - The search_path must include the knowledge base root folder.
+          - **CRITICAL:** When passing a value to search_path, filepath or parent_folder, use ONLY the path string. Do not include the colon or the description text.
+        Context:
+          - Topic: {aspect}
+          - Knowledge Base Root: {knowledgebase_root_path}
+          - Knowledge Base Description: {knowledgebase_description}
+          - RAG History (Prior Attempts): {rag_history}
+          - Audit Feedback (The Gap): {state["review"]["reason"]}
+        """
+    else:
+        return f"""
+        Role: You are a helpful assistant to help retrieve the most relevant information from the knowledge base.   
 
-    How to use tools:
-      - You have a list_children tool to list all children with description of a folder in the knowledge base.
-      - You have a retrieval tool to find relevant documents in a specific folder in the knowledge base.
-      - Decide a proper query to retrieve relevant information to the topic.
-      - Use the list_children tool to explore the knowledge base and decide where to search. Use relative path to specify the search_path and filepath.
-      - Use the file_toc tool to get the table of contents of a file.
-      - Use the retrieval tool to search for relevant information with the query and the search_path.
+        Task:
+          - Based on the topic, search for relevant information in the knowledge base.
 
-    Constraints:
-    - The search_path must include the knowledge base root folder.
-    - Base on the RAG history, try diverse queries and search paths that have not been explored.
-    - **CRITICAL:** When passing a value to search_path, filepath or parent_folder, use ONLY the path string. Do not include the colon or the description text.
+        How to use tools:
+          - You have a list_children tool to list all children with description of a folder in the knowledge base.
+          - You have a retrieval tool to find relevant documents in a specific folder in the knowledge base.
+          - Decide a proper query to retrieve relevant information to the topic.
+          - Use the list_children tool to explore the knowledge base and decide where to search. Use relative path to specify the search_path and filepath.
+          - Use the file_toc tool to get the table of contents of a file.
+          - Use the retrieval tool to search for relevant information with the query and the search_path.
 
-    Topic: {aspect}
-    Knowledge Base Description: {knowledgebase_description}
-    Knowledge Base Root Folder: {knowledgebase_root_path}   
-    RAG History: {rag_history}
-    """
+        Constraints:
+        - The search_path must include the knowledge base root folder.
+        - Base on the RAG history, try diverse queries and search paths that have not been explored.
+        - **CRITICAL:** When passing a value to search_path, filepath or parent_folder, use ONLY the path string. Do not include the colon or the description text.
+
+        Topic: {aspect}
+        Knowledge Base Description: {knowledgebase_description}
+        Knowledge Base Root Folder: {knowledgebase_root_path}   
+        RAG History: {rag_history}
+        """
 
 def deep_rag_prompt(state: TypedDict) -> str:
     """

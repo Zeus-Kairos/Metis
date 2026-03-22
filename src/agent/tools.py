@@ -8,7 +8,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import ToolMessage, SystemMessage
 from langgraph.types import Command
 
-from src.agent.prompts import filter_documents_prompt, complement_answer_prompt, review_answer_prompt
+from src.agent.prompts import filter_documents_prompt, complement_answer_prompt, review_answer_prompt, summarize_documents_prompt
 from src.agent.api_llm import get_active_llm_runner
 from src.memory.memory import MemoryManager
 from src.rag.rag_flow import RAGFlow
@@ -190,12 +190,12 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
         merged_documents = merge_documents(documents + new_documents)
         
         answer = runtime.state["answer"] if "answer" in runtime.state else ""
-        answer = complement_answer(query, answer, filtered_docs)
+        answer += "\n\n" + summarize_documents(query, new_documents)
 
         review = review_answer(query, answer)       
-        is_done = "done" in review
+        is_done = review["status"] == "done"
 
-        message = f"\n{len(new_documents)} documents found for query: '{query}' on path: {display_folder}\nAnswer Review: {review}\n"
+        message = f"\n{len(new_documents)} documents found for query: '{query}' on path: {display_folder}\nAnswer Review: {review['status']} - {review['reason']}\n"
         
         return Command(
             update={
@@ -203,14 +203,13 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 "documents": merged_documents,
                 "answer": answer,
                 "review": review,
-                "is_done": is_done,
                 "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
                 "retrieve_tries": retrieve_tries + 1,
                 "display": f"Found {len(new_documents)} documents for query: '{query}' on path: {display_folder}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}"
             }
         )
 
-def filter_documents(query: str, docs: List[Document]) -> List[Document]:
+def filter_documents(query: str, docs: List[Document]) -> Dict[str, List[Document]]:
     prompt = filter_documents_prompt(query, docs)
     response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
     try:
@@ -226,6 +225,14 @@ def filter_documents(query: str, docs: List[Document]) -> List[Document]:
             query: [],
         }
 
+def summarize_documents(query: str, docs: List[Document]) -> str:
+    """
+    Summarize the documents.
+    """
+    prompt = summarize_documents_prompt(query, docs)
+    response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
+    return response.content.strip()
+
 def complement_answer(query: str, answer: str, additional_docs: Dict[str, List[Document]]) -> str:
     """
     Complement the answer with the documents.
@@ -235,13 +242,19 @@ def complement_answer(query: str, answer: str, additional_docs: Dict[str, List[D
     
     return response.content.strip()
 
-def review_answer(query: str, answer: str) -> str:
+def review_answer(query: str, answer: str) -> Dict[str, str]:
     """
     Review the answer.
     """
     prompt = review_answer_prompt(query, answer)     
     response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
-    answer_review = response.content.strip().lower()
+    try:
+        answer_review = json.loads(response.content.strip())
+    except json.JSONDecodeError:
+        answer_review = {
+            "status": "error",
+            "reason": "Invalid JSON response",
+        }
     logger.info(f"[review_answer] Review: {answer_review}")
 
     return answer_review
