@@ -7,6 +7,11 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: #0f1115;
@@ -14,9 +19,13 @@ body {
 }
 
 .app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   padding: 16px;
-  max-width: 1400px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
+  overflow: hidden;
 }
 
 .topbar {
@@ -58,12 +67,76 @@ body {
   background: #151922;
   border-radius: 8px;
   padding: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 8px;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
 }
 
 .panel h2 {
   margin: 0 0 10px 0;
   font-size: 1.1rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.main-layout {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 136px 1fr;
+  gap: 12px;
+  align-items: stretch;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.left-tabs {
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 0;
+  position: sticky;
+  top: 12px;
+}
+
+.tab-btn {
+  border: 1px solid #334155;
+  background: #0f1320;
+  color: #e5e7eb;
+  border-radius: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tab-btn.active {
+  background: #1d4ed8;
+  border-color: #2563eb;
+}
+
+.subtabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.subtab-btn {
+  border: 1px solid #334155;
+  background: #0f1320;
+  color: #e5e7eb;
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.subtab-btn.active {
+  background: #1e293b;
+  border-color: #475569;
 }
 
 .filters {
@@ -74,12 +147,19 @@ body {
 
 .filters input,
 .filters select,
+.filters textarea,
 .filters button {
   background: #0f1320;
   color: #e5e7eb;
   border: 1px solid #334155;
   border-radius: 6px;
   padding: 6px 8px;
+}
+
+.reference-input {
+  width: 100%;
+  min-height: 90px;
+  resize: vertical;
 }
 
 .filters button {
@@ -90,14 +170,17 @@ body {
   display: grid;
   gap: 10px;
   grid-template-columns: 36% 64%;
-  min-height: 260px;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
 }
 
 .list {
   border: 1px solid #334155;
   border-radius: 6px;
   overflow: auto;
-  max-height: 480px;
+  max-height: none;
+  min-height: 0;
 }
 
 .detail {
@@ -105,7 +188,8 @@ body {
   border-radius: 6px;
   padding: 8px;
   overflow: auto;
-  max-height: 480px;
+  max-height: none;
+  min-height: 0;
 }
 
 .meta-row {
@@ -194,6 +278,92 @@ body {
 .empty {
   color: #94a3b8;
   padding: 10px;
+}
+
+.table-wrap {
+  border: 1px solid #334155;
+  border-radius: 6px;
+  overflow: auto;
+  margin-bottom: 10px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 720px;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid #334155;
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #1e293b;
+}
+
+.table-textarea {
+  width: 100%;
+  min-height: 56px;
+  resize: vertical;
+  background: #0f1320;
+  color: #e5e7eb;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 6px;
+}
+
+.wrap-cell {
+  max-width: 360px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.traces-table {
+  min-width: 980px;
+}
+
+.row-active td {
+  background: rgba(29, 78, 216, 0.18);
+}
+
+.link-btn {
+  background: transparent;
+  color: #bfdbfe;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.small-btn {
+  margin-right: 6px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border: 1px solid #475569;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.small-btn.danger {
+  background: #3f1d1d;
+  color: #fecaca;
+  border-color: #7f1d1d;
+}
+
+.detail-below {
+  margin-top: 10px;
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 pre {

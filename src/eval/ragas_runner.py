@@ -58,8 +58,9 @@ def _extract_contexts(trace: Dict[str, Any]) -> List[str]:
 
 def _to_ragas_samples(traces: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     samples: List[Dict[str, Any]] = []
-    for trace in traces:
+    for index, trace in enumerate(traces):
         sample = {
+            "trace_index": index,
             "run_id": trace.get("run_id"),
             "question": trace.get("refined_query") or trace.get("query") or "",
             "answer": trace.get("final_answer") or "",
@@ -167,7 +168,39 @@ def _build_ragas_embeddings():
         return OpenAIEmbeddings(**legacy_kwargs), embedding_model
 
 
-def evaluate_traces_file(trace_jsonl_path: str) -> Dict[str, Any]:
+def list_trace_run_ids(trace_jsonl_path: str) -> List[str]:
+    trace_path = Path(trace_jsonl_path)
+    traces = _load_jsonl(trace_path)
+    run_ids = {
+        str(trace.get("run_id")).strip()
+        for trace in traces
+        if isinstance(trace, dict) and trace.get("run_id")
+    }
+    return sorted(run_ids)
+
+
+def list_trace_samples(trace_jsonl_path: str) -> List[Dict[str, Any]]:
+    trace_path = Path(trace_jsonl_path)
+    traces = _load_jsonl(trace_path)
+    samples = _to_ragas_samples(traces)
+    preview: List[Dict[str, Any]] = []
+    for index, sample in enumerate(samples):
+        preview.append(
+            {
+                "trace_index": index,
+                "run_id": sample.get("run_id"),
+                "question": sample.get("question"),
+                "ground_truth": sample.get("ground_truth"),
+            }
+        )
+    return preview
+
+
+def evaluate_traces_file(
+    trace_jsonl_path: str,
+    reference_answer: str | None = None,
+    reference_answers: List[str] | None = None,
+) -> Dict[str, Any]:
     """
     Evaluate traces from a JSONL file and write a local report artifact.
     """
@@ -181,8 +214,44 @@ def evaluate_traces_file(trace_jsonl_path: str) -> Dict[str, Any]:
         from datasets import Dataset
         from ragas import evaluate
         from ragas.metrics import answer_relevancy, faithfulness
+        import ragas.metrics as ragas_metrics
     except ImportError as exc:
         raise RuntimeError("RAGAS dependencies are not installed. Install requirements first.") from exc
+
+    reference_answers_list: List[str] = []
+    if reference_answers is not None:
+        reference_answers_list = [str(answer or "").strip() for answer in reference_answers]
+        if len(reference_answers_list) != len(samples):
+            raise ValueError(
+                f"reference_answers length ({len(reference_answers_list)}) must match sample_count ({len(samples)})."
+            )
+        for index, sample in enumerate(samples):
+            mapped_answer = reference_answers_list[index]
+            if mapped_answer:
+                sample["ground_truth"] = mapped_answer
+        missing = [
+            s.get("trace_index", idx)
+            for idx, s in enumerate(samples)
+            if not (s.get("ground_truth") or "").strip()
+        ]
+        if missing:
+            missing_preview = ", ".join(str(int(i) + 1) for i in missing[:10])
+            raise ValueError(
+                "Missing reference answers for some traces. "
+                f"Provide one per trace row. Missing rows: {missing_preview}{'...' if len(missing) > 10 else ''}"
+            )
+    else:
+        # If ground_truth is already embedded in the trace JSONL, it's fine to omit reference_answers.
+        has_any_ground_truth = any((s.get("ground_truth") or "").strip() for s in samples)
+        if not has_any_ground_truth and len(samples) > 1:
+            raise ValueError(
+                "This trace file contains multiple samples. Provide reference_answers (one per trace) "
+                "or embed ground_truth per trace row in the JSONL."
+            )
+        if reference_answer and len(samples) <= 1:
+            # Backward-compatibility for single-sample evals only.
+            for sample in samples:
+                sample["ground_truth"] = reference_answer
 
     dataset_payload: Dict[str, List[Any]] = {
         "question": [s["question"] for s in samples],
@@ -195,6 +264,16 @@ def evaluate_traces_file(trace_jsonl_path: str) -> Dict[str, Any]:
 
     dataset = Dataset.from_dict(dataset_payload)
     metrics = [faithfulness, answer_relevancy]
+    if has_ground_truth:
+        for metric_name in [
+            "context_precision",
+            "context_recall",
+            "context_entity_recall",
+            "noise_sensitivity",
+        ]:
+            metric_obj = getattr(ragas_metrics, metric_name, None)
+            if metric_obj is not None:
+                metrics.append(metric_obj)
     status = "ok"
     eval_error = None
     per_sample: List[Dict[str, Any]] = []
@@ -250,6 +329,8 @@ def evaluate_traces_file(trace_jsonl_path: str) -> Dict[str, Any]:
         "eval_id": eval_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "source_file": str(trace_path),
+        "reference_answer_provided": bool(reference_answer),
+        "reference_answers_count": sum(1 for ans in reference_answers_list if ans),
         "sample_count": len(samples),
         "status": status,
         "error": eval_error,

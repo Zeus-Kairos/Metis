@@ -22,7 +22,14 @@ from src.memory.memory import MemoryManager
 from src.utils.logging_config import get_logger
 from src.api.thread import router as thread_router
 from src.api.thread import rag_agents
-from src.eval.ragas_runner import delete_evaluation, evaluate_traces_file, get_evaluation, list_evaluations
+from src.eval.ragas_runner import (
+    delete_evaluation,
+    evaluate_traces_file,
+    get_evaluation,
+    list_evaluations,
+    list_trace_run_ids,
+    list_trace_samples,
+)
 from src.trace.run_trace_store import RunTraceFilters, RunTraceStore
 
 logger = get_logger(__name__)
@@ -61,6 +68,12 @@ class UserConfigUpdate(BaseModel):
     embedding_provider: Optional[str] = None
     embedding_api_key: Optional[str] = None
     embedding_model: Optional[str] = None
+
+
+class EvalRunRequest(BaseModel):
+    trace_file: str
+    reference_answer: Optional[str] = None
+    reference_answers: Optional[List[str]] = None
 
 app = FastAPI(title="Metis API", version="1.0.0")
 
@@ -887,14 +900,44 @@ async def list_eval_trace_files(
     return {"success": True, "items": trace_store.list_trace_files()}
 
 
-@app.post("/api/eval/run-offline")
-async def run_eval_offline(
-    trace_file: str = Body(..., embed=True),
+@app.get("/api/eval/trace-runs")
+async def list_eval_trace_runs(
+    trace_file: str = Query(..., description="Trace JSONL file path"),
     current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
 ):
     _ = current_user
     try:
-        result = evaluate_traces_file(trace_file)
+        run_ids = list_trace_run_ids(trace_file)
+        return {"success": True, "trace_file": trace_file, "run_ids": run_ids}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/eval/trace-samples")
+async def list_eval_trace_samples(
+    trace_file: str = Query(..., description="Trace JSONL file path"),
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
+):
+    _ = current_user
+    try:
+        samples = list_trace_samples(trace_file)
+        return {"success": True, "trace_file": trace_file, "samples": samples}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/eval/run-offline")
+async def run_eval_offline(
+    request_data: EvalRunRequest,
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
+):
+    _ = current_user
+    try:
+        result = evaluate_traces_file(
+            request_data.trace_file,
+            reference_answer=request_data.reference_answer,
+            reference_answers=request_data.reference_answers,
+        )
         return {"success": True, "result": result}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
