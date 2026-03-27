@@ -6,12 +6,14 @@ from pydantic import BaseModel
 import os
 import json
 from src.memory.thread import ThreadManager
+from src.trace.run_trace_store import RunTraceStore
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 # Create a thread manager instance
 thread_manager = ThreadManager()
+trace_store = RunTraceStore()
         
 # Create a dictionary to store RAGAgent instances per user
 rag_agents = {}
@@ -148,6 +150,7 @@ async def chat_endpoint(request: ChatRequest):
         
         # Process the message
         def generate_stream():
+            trace_payload = None
             try:
                 for chunk in user_rag_agent.chat(message, user_id=user_id, knowledge_base_id=knowledgebase_id, config=config):
                     for key, value in chunk.items():
@@ -163,7 +166,12 @@ async def chat_endpoint(request: ChatRequest):
                             elif key == "run_id":
                                 # Send run_id chunk
                                 yield f"data: {json.dumps({key: value})}\n\n"
+                            elif key == "trace_payload":
+                                trace_payload = value
                 
+                if trace_payload:
+                    trace_store.append_run_trace(trace_payload)
+
                 # Send done signal
                 yield f"data: {json.dumps({"done": True})}\n\n"
                 
@@ -191,5 +199,6 @@ async def feedback_endpoint(request: FeedbackRequest):
         key="binary-feedback",
         value=feedback,
     )
+    trace_store.update_feedback(run_id, feedback)
 
     logger.info(f"Received feedback for run_id {run_id}: {feedback}")

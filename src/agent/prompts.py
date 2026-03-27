@@ -162,34 +162,6 @@ def format_answer_prompt(state: TypedDict) -> str:
     Assistant:
     """
 
-def complement_answer_prompt(base_query: str, answer: str, documents: Dict[str, List[Document]]) -> str:
-    """
-    Complement the answer.
-    """
-    additional_info = "\n"
-    for query, docs in documents.items():
-        # Handle both list[tuple] and list[Document] formats
-        doc_contents = format_documents(docs, with_index=False)  
-        additional_info += f"Documents about {query}:\n{doc_contents}\n"
-
-    return f"""
-    You are a helpful assistant to generate an answer based on the original answer and additional documents. 
-    You've already provided an answer to the user's query.
-    The additional documents are related to additional aspects to the user's query.
-    rewrite a new answer based on the original answer and the additional information.
-    The answer should be friendly, concise, and relevant to the user's query.
-
-    Constraints:
-    - You can only use the facts in the original answer or the additional documents.
-    - Do not make up any information based on your own knowledge or assumptions.
-
-    Original Query: {base_query}
-    Original Answer: {answer}
-    Additional Documents: {additional_info}
-    
-    Assistant:
-    """
-
 def review_answer_prompt(query: str, answer: str) -> str:
     """
     Review the answer.

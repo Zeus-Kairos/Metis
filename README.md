@@ -319,6 +319,78 @@ Customize file upload settings in the `.env` file:
 - View previous messages and responses
 - Continue conversations from where you left off
 
+## Offline Evaluation and Trace Dashboard
+
+### 1) Configure RAGAS evaluator in `.env`
+
+Set these variables for OpenAI-compatible judge models:
+
+```bash
+RAGAS_OPENAI_API_KEY=your-openai-compatible-api-key
+RAGAS_OPENAI_BASE_URL=https://your-openai-compatible-endpoint/v1
+RAGAS_LLM_MODEL=gpt-4o-mini
+```
+
+### 2) Generate traces
+
+Run normal chats first. Each RAG run is persisted locally as JSONL:
+
+- Traces directory (default): `C:\Users\<user>\AppData\Local\Metis\traces\runs\`
+- One file per day, e.g. `2026-03-27.jsonl`
+
+You can override this location with `METIS_TRACE_DIR`.
+
+### 3) Run offline RAGAS evaluation
+
+From repo root:
+
+```powershell
+python -m src.eval.run_ragas_eval --trace-file "C:\Users\<user>\AppData\Local\Metis\traces\runs\2026-03-27.jsonl"
+```
+
+Output files are written to:
+
+- Eval directory (default): `C:\Users\<user>\AppData\Local\Metis\evals\`
+- File pattern: `eval-*.json`
+
+You can override this location with `METIS_EVAL_DIR`.
+
+### 4) Launch backend APIs for dashboard
+
+From repo root:
+
+```powershell
+python main.py
+```
+
+Dashboard reads these API endpoints:
+
+- `GET /api/eval/runs`
+- `GET /api/eval/runs/{run_id}`
+- `GET /api/eval/results`
+- `GET /api/eval/results/{eval_id}`
+- `GET /api/eval/trace-files` (list local trace JSONL files for dashboard selection)
+- `POST /api/eval/run-offline` (optional, run evaluation via API)
+
+### 5) Launch independent dashboard UI
+
+In a new terminal:
+
+```powershell
+cd c:\Apps\Metis\dashboard-ui
+npm install
+npm run dev
+```
+
+Then open `http://localhost:5174`.
+
+Optional API base override:
+
+```powershell
+$env:VITE_API_BASE="http://127.0.0.1:8000"
+npm run dev
+```
+
 
 ## Tech Stack
 

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import operator
-from typing import Annotated, Dict, Generator, List, Tuple, TypedDict
+from typing import Annotated, Any, Dict, Generator, List, Tuple, TypedDict
 from pydantic import BaseModel
 from langchain_core.documents import Document
 from langgraph.graph.message import add_messages
@@ -38,6 +38,7 @@ class AgentState(TypedDict):
     error_context: str = None
     knowledge_base_item: KnowledgeBaseItem = None   
     display: str = None # Displayed intermediate messages to the user
+    agent_events: Annotated[List[Dict[str, Any]], operator.add]
 
 class DeepRAGState(AgentState):
     """

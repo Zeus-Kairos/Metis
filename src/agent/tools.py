@@ -2,13 +2,14 @@ import json
 import logging
 import os
 import re
+from datetime import datetime, timezone
 from typing import Annotated, Dict, List, Tuple
 from langchain.tools import InjectedToolCallId, tool, ToolRuntime
 from langchain_core.documents import Document
 from langchain_core.messages import ToolMessage, SystemMessage
 from langgraph.types import Command
 
-from src.agent.prompts import filter_documents_prompt, complement_answer_prompt, review_answer_prompt, summarize_documents_prompt
+from src.agent.prompts import filter_documents_prompt, review_answer_prompt, summarize_documents_prompt
 from src.agent.api_llm import get_active_llm_runner
 from src.memory.memory import MemoryManager
 from src.rag.rag_flow import RAGFlow
@@ -17,6 +18,15 @@ from src.utils.logging_config import get_logger
 from src.utils.paths import get_relative_path_from_origin
 
 logger = get_logger(__name__)
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _append_agent_event(runtime: ToolRuntime, event: Dict[str, object]) -> List[Dict[str, object]]:
+    existing = runtime.state["agent_events"] if "agent_events" in runtime.state and runtime.state["agent_events"] else []
+    return [*existing, event]
 
 @tool("retrieve", response_format="content_and_artifact")
 def retrieve_tool(query: str, search_path: str, k: int, runtime: ToolRuntime) -> Tuple[str, dict]:
@@ -55,11 +65,20 @@ def retrieve_tool(query: str, search_path: str, k: int, runtime: ToolRuntime) ->
 
     rag_flow = RAGFlow(runtime.state["knowledge_base_item"].index_path)
     results = rag_flow.filtered_fusion_retrieve(query, filters, k=k)
+    event = {
+        "timestamp": _utc_now_iso(),
+        "tool": "retrieve",
+        "query": query,
+        "search_path": search_path,
+        "retrieved_count": len(results),
+        "filters": filters,
+    }
 
     return ("Documents retrieved", 
         {   "query": query,
             "search_path": search_path,
-            "retrieved_documents": results
+            "retrieved_documents": results,
+            "agent_event": event,
         })
 
 @tool("list_children")
@@ -81,6 +100,12 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
     
     
     logger.info(f"[list_children_tool] len({children_items}) Children Items Listed")
+    agent_events = _append_agent_event(runtime, {
+        "timestamp": _utc_now_iso(),
+        "tool": "list_children",
+        "parent_folder": parent_folder,
+        "children_count": len(children_items),
+    })
 
     display_folder = get_relative_path_from_origin(parent_folder)
     message = f"\nChildren listed in {display_folder}:\n"
@@ -97,7 +122,8 @@ def list_children_tool(parent_folder: str, runtime: ToolRuntime, tool_call_id: A
         update={
             # update the message history
             "messages": [ToolMessage(message, tool_call_id=tool_call_id)],
-            "display": message
+            "display": message,
+            "agent_events": agent_events,
         }
     )
 
@@ -120,10 +146,17 @@ def file_toc(filepath: str, runtime: ToolRuntime, tool_call_id: Annotated[str, I
         message = f"No ToC found for {filepath}."
     else:
         message = f"ToC for {filepath}:\n{toc}"
+    agent_events = _append_agent_event(runtime, {
+        "timestamp": _utc_now_iso(),
+        "tool": "file_toc",
+        "filepath": filepath,
+        "has_toc": toc is not None,
+    })
     return Command(
         update={
             "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
-            "display": message
+            "display": message,
+            "agent_events": agent_events,
         }
     )
 
@@ -164,23 +197,43 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
         logger.info(f"[rag_search_tool] Retrieved {len(docs)} documents for query: {query} on path: {search_path}")
 
         display_folder = get_relative_path_from_origin(search_path)
+        base_event = {
+            "timestamp": _utc_now_iso(),
+            "tool": "rag_search",
+            "query": query,
+            "search_path": search_path,
+            "display_path": display_folder,
+            "k": k,
+        }
         if not docs:
+            agent_events = _append_agent_event(runtime, {
+                **base_event,
+                "status": "no_documents",
+                "retrieved_count": 0,
+            })
             return Command(
                 update={
                     "searched_path": searched_path,
                     "messages": [ToolMessage(content=f"No documents found for query: '{query}' on path: {display_folder}", tool_call_id=tool_call_id)],
                     "retrieve_tries": retrieve_tries + 1,
                     "is_done": False,
+                    "agent_events": agent_events,
                 }
             )
         filtered_docs = filter_documents(query, docs)
         if not filtered_docs:
+            agent_events = _append_agent_event(runtime, {
+                **base_event,
+                "status": "filtered_empty",
+                "retrieved_count": len(docs),
+            })
             return Command(
                 update={
                     "searched_path": searched_path,
                     "messages": [ToolMessage(content=f"No documents found for query: '{query}' on path: {display_folder}", tool_call_id=tool_call_id)],
                     "retrieve_tries": retrieve_tries + 1,
                     "is_done": False,
+                    "agent_events": agent_events,
                 }
             )
         documents = runtime.state["documents"] if "documents" in runtime.state else []
@@ -196,6 +249,14 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
         is_done = review["status"] == "done"
 
         message = f"\n{len(new_documents)} documents found for query: '{query}' on path: {display_folder}\nAnswer Review: {review['status']} - {review['reason']}\n"
+        agent_events = _append_agent_event(runtime, {
+            **base_event,
+            "status": "ok",
+            "retrieved_count": len(docs),
+            "selected_count": len(new_documents),
+            "review_status": review["status"],
+            "review_reason": review["reason"],
+        })
         
         return Command(
             update={
@@ -205,7 +266,8 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 "review": review,
                 "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
                 "retrieve_tries": retrieve_tries + 1,
-                "display": f"Found {len(new_documents)} documents for query: '{query}' on path: {display_folder}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}"
+                "display": f"Found {len(new_documents)} documents for query: '{query}' on path: {display_folder}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}",
+                "agent_events": agent_events,
             }
         )
 
@@ -231,15 +293,6 @@ def summarize_documents(query: str, docs: List[Document]) -> str:
     """
     prompt = summarize_documents_prompt(query, docs)
     response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
-    return response.content.strip()
-
-def complement_answer(query: str, answer: str, additional_docs: Dict[str, List[Document]]) -> str:
-    """
-    Complement the answer with the documents.
-    """       
-    prompt = complement_answer_prompt(query, answer, additional_docs)
-    response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
-    
     return response.content.strip()
 
 def review_answer(query: str, answer: str) -> Dict[str, str]:

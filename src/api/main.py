@@ -7,11 +7,12 @@ from datetime import datetime, timedelta, timezone
 
 from typing import Annotated, List, Optional, Dict, Any
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, Depends, status, Response
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Body, Depends, Query, Request, status, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
 
 from src.file_process.indexer import Indexer
 from src.utils.paths import get_index_path, get_upload_dir
@@ -21,10 +22,16 @@ from src.memory.memory import MemoryManager
 from src.utils.logging_config import get_logger
 from src.api.thread import router as thread_router
 from src.api.thread import rag_agents
+from src.eval.ragas_runner import delete_evaluation, evaluate_traces_file, get_evaluation, list_evaluations
+from src.trace.run_trace_store import RunTraceFilters, RunTraceStore
 
 logger = get_logger(__name__)
 
+# Load .env for uvicorn direct startup paths.
+load_dotenv()
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/token")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/token", auto_error=False)
 
 # Pydantic models for authentication
 class Token(BaseModel):
@@ -67,6 +74,8 @@ else:
     cors_origins = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
     ]
 
 app.add_middleware(
@@ -142,6 +151,7 @@ app.include_router(thread_router)
 
 # Initialize MemoryManager
 memory_manager = MemoryManager()
+trace_store = RunTraceStore()
 
 indexers = {}
 
@@ -194,8 +204,50 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         )
     return None
 
+async def get_current_user_from_bearer_or_cookie(
+    request: Request,
+    token: Annotated[Optional[str], Depends(oauth2_scheme_optional)] = None,
+):
+    """Get current user from bearer token or access_token cookie."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    resolved_token = token or request.cookies.get("access_token")
+    if not resolved_token:
+        raise credentials_exception
+
+    payload = memory_manager.decode_token(resolved_token)
+    if payload is None:
+        raise credentials_exception
+
+    username: str = payload.get("sub")
+    if username is None:
+        raise credentials_exception
+
+    user_dict = memory_manager.get_user_by_username_with_password(username)
+    if not user_dict:
+        raise credentials_exception
+
+    return UserInDB(
+        id=user_dict["id"],
+        username=user_dict["username"],
+        email=user_dict["email"],
+        hashed_password=user_dict["password"],
+        disabled=False,
+    )
+
 async def get_current_active_user(current_user: Annotated[User, Depends(get_current_user)]):
     """Get the current active user."""
+    if current_user.disabled:
+        raise HTTPException(status_code=400, detail="Inactive user")
+    return current_user
+
+async def get_current_active_user_from_bearer_or_cookie(
+    current_user: Annotated[User, Depends(get_current_user_from_bearer_or_cookie)],
+):
     if current_user.disabled:
         raise HTTPException(status_code=400, detail="Inactive user")
     return current_user
@@ -740,6 +792,114 @@ async def stream_upload_files(
         raise HTTPException(status_code=400, detail=str(e))
 
 # Health check endpoint
+@app.get("/api/eval/runs")
+async def list_trace_runs(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    user_id: Optional[int] = Query(default=None),
+    thread_id: Optional[str] = Query(default=None),
+    knowledgebase_id: Optional[int] = Query(default=None),
+    rag_type: Optional[str] = Query(default=None),
+    start_date: Optional[str] = Query(default=None),
+    end_date: Optional[str] = Query(default=None),
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
+):
+    effective_user_id = user_id if user_id is not None else current_user.id
+    filters = RunTraceFilters(
+        user_id=effective_user_id,
+        thread_id=thread_id,
+        knowledgebase_id=knowledgebase_id,
+        rag_type=rag_type,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    return {"success": True, **trace_store.list_runs(page=page, page_size=page_size, filters=filters)}
+
+
+@app.get("/api/eval/runs/{run_id}")
+async def get_trace_run(
+    run_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)],
+):
+    payload = trace_store.get_run(run_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+    if payload.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    return {"success": True, "run": payload}
+
+
+@app.delete("/api/eval/runs/{run_id}")
+async def delete_trace_run(
+    run_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)],
+):
+    payload = trace_store.get_run(run_id)
+    if not payload:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+    if payload.get("user_id") != current_user.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    deleted = trace_store.delete_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Run not found: {run_id}")
+    return {"success": True, "deleted_run_id": run_id}
+
+
+@app.get("/api/eval/results")
+async def list_eval_results(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
+):
+    _ = current_user
+    return {"success": True, **list_evaluations(page=page, page_size=page_size)}
+
+
+@app.get("/api/eval/results/{eval_id}")
+async def get_eval_result(
+    eval_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
+):
+    _ = current_user
+    try:
+        return {"success": True, "result": get_evaluation(eval_id)}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.delete("/api/eval/results/{eval_id}")
+async def delete_eval_result(
+    eval_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
+):
+    _ = current_user
+    deleted = delete_evaluation(eval_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Evaluation not found: {eval_id}")
+    return {"success": True, "deleted_eval_id": eval_id}
+
+
+@app.get("/api/eval/trace-files")
+async def list_eval_trace_files(
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
+):
+    _ = current_user
+    return {"success": True, "items": trace_store.list_trace_files()}
+
+
+@app.post("/api/eval/run-offline")
+async def run_eval_offline(
+    trace_file: str = Body(..., embed=True),
+    current_user: Annotated[User, Depends(get_current_active_user_from_bearer_or_cookie)] = None,
+):
+    _ = current_user
+    try:
+        result = evaluate_traces_file(trace_file)
+        return {"success": True, "result": result}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint to verify API is running."""

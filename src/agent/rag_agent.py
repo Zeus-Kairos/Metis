@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from datetime import datetime, timezone
 from typing import Any, Dict, Generator, List
 
 from langchain_core.messages import SystemMessage
@@ -84,6 +85,15 @@ class RAGAgent:
                 self.llm_runner = LLMRunner()
         return self.llm_runner
 
+    def _event(self, stage: str, detail: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        payload = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "stage": stage,
+        }
+        if detail:
+            payload.update(detail)
+        return payload
+
     def _build_graph(self):
         """
         Build the graph for the agent.
@@ -109,10 +119,12 @@ class RAGAgent:
                 "intent": intent,
                 "messages": [{"role": "user", "content": state["query"]}],
                 "knowledge_base_item": self.get_knowledgebase_item(self.user_id, 31),
+                "agent_events": [self._event("classify_intent", {"intent": intent})],
             }
             
         return {
             "intent": intent,
+            "agent_events": [self._event("classify_intent", {"intent": intent})],
         }
 
     def _handle_chat(self, state: AgentState) -> AgentState:
@@ -125,6 +137,7 @@ class RAGAgent:
 
         return {
             "messages": [response],
+            "agent_events": [self._event("handle_chat")],
         }
     
     def _refine_query(self, state: AgentState) -> AgentState:
@@ -140,6 +153,7 @@ class RAGAgent:
         return {
             "refined_query": refined_query,
             "display": f"{refined_query}\n",
+            "agent_events": [self._event("refine_query", {"refined_query": refined_query})],
         }
 
     def _handle_rag(self, state: AgentState) -> AgentState:
@@ -154,6 +168,7 @@ class RAGAgent:
         results = rag_flow.retrieve(self.rag_type, refined_query, k=self.rag_k)
         return {
             "documents": results,
+            "agent_events": [self._event("handle_rag", {"retrieved_count": len(results)})],
         }
 
     def _filter_documents(self, state: AgentState) -> AgentState:
@@ -162,7 +177,10 @@ class RAGAgent:
         """
         documents = state["documents"]
         if self.rag_type == RAGType.SIMPLE:
-            return {"documents": documents}
+            return {
+                "documents": documents,
+                "agent_events": [self._event("filter_documents", {"selected_count": len(documents)})],
+            }
         else:
             query = state["refined_query"]
             documents = state["documents"]          
@@ -174,6 +192,7 @@ class RAGAgent:
                 filtered_document_indices = list(range(len(documents)))
             return {
                 "documents": [documents[i] for i in filtered_document_indices],
+                "agent_events": [self._event("filter_documents", {"selected_count": len(filtered_document_indices)})],
             }
 
     def _format_answer(self, state: AgentState) -> AgentState:
@@ -186,6 +205,7 @@ class RAGAgent:
         return {
             "answer": response.content.strip(),
             "messages": [response],
+            "agent_events": [self._event("format_answer", {"answer_length": len(response.content.strip())})],
         }
 
     def _plan_rag(self, state: DeepRAGState) -> AgentState:
@@ -206,6 +226,7 @@ class RAGAgent:
         return {
             "aspects_to_explore": aspects_to_explore,
             "display": f"\nExplore aspects:\n{"\n".join(aspects_to_explore)}\n",
+            "agent_events": [self._event("plan_rag", {"aspect_count": len(aspects_to_explore)})],
         }
     
     def _find_reused_aspects(self, state: DeepRAGState) -> DeepRAGState:
@@ -276,6 +297,7 @@ class RAGAgent:
 
         return {
             "searched_aspects": [result],
+            "agent_events": [self._event("deep_search", {"aspect": aspect, "doc_count": len(result.documents), "is_done": result.is_done})],
         }
 
     def _synthesize_answer(self, state: DeepRAGState) -> DeepRAGState:
@@ -300,6 +322,7 @@ class RAGAgent:
             "documents": documents,
             "answer": response.content.strip(),
             "display": f"\n{response.content.strip()}\n",
+            "agent_events": [self._event("synthesize_answer", {"doc_count": len(documents)})],
         }
 
 
@@ -329,6 +352,7 @@ class RAGAgent:
         return {
             "answer": response.content.strip(),
             "messages": [response],
+            "agent_events": [self._event("reference_check", {"answer_length": len(response.content.strip())})],
         }
 
     def _build_base_graph(self) -> StateGraph:
@@ -421,6 +445,20 @@ class RAGAgent:
             "messages": [{"role": "user", "content": query}],
             "knowledge_base_item": knowledgebase_item,
         }
+        final_trace_payload = {
+            "run_id": config.get("run_id") if config else None,
+            "user_id": user_id,
+            "thread_id": config.get("configurable", {}).get("thread_id") if config else None,
+            "knowledgebase_id": knowledge_base_id,
+            "knowledgebase_name": knowledgebase_item.name,
+            "rag_type": self.rag_type.value,
+            "query": query,
+            "refined_query": query,
+            "retrieval": [],
+            "final_answer": "",
+            "reference_annotated_answer": "",
+            "agent_events": [],
+        }
 
         if self.conn_str:
             with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
@@ -434,6 +472,17 @@ class RAGAgent:
                         for node, state in chunk.items():
                             if state and "display" in state and state["display"]:
                                 yield { "display": state["display"] }
+                            if state:
+                                if "refined_query" in state and state["refined_query"]:
+                                    final_trace_payload["refined_query"] = state["refined_query"]
+                                if "documents" in state and state["documents"]:
+                                    final_trace_payload["retrieval"] = state["documents"]
+                                if "answer" in state and state["answer"]:
+                                    final_trace_payload["final_answer"] = state["answer"]
+                                    if node == "reference_check":
+                                        final_trace_payload["reference_annotated_answer"] = state["answer"]
+                                if "agent_events" in state and state["agent_events"]:
+                                    final_trace_payload["agent_events"] = state["agent_events"]
 
                     elif mode == "messages":
                         message, meta = chunk
@@ -449,6 +498,9 @@ class RAGAgent:
                                 yield {
                                     "response": last_assistant_message,
                                 }
+                if not final_trace_payload.get("final_answer"):
+                    final_trace_payload["final_answer"] = last_assistant_message if "last_assistant_message" in locals() else ""
+                yield {"trace_payload": final_trace_payload}
                 yield { "run_id": config["run_id"] }
         else:
             graph = self.builder.compile(checkpointer=InMemorySaver())
@@ -462,6 +514,16 @@ class RAGAgent:
                     for node, state in chunk.items():
                         if "display" in state and state["display"]:
                             yield { "display": state["display"] }
+                        if "refined_query" in state and state["refined_query"]:
+                            final_trace_payload["refined_query"] = state["refined_query"]
+                        if "documents" in state and state["documents"]:
+                            final_trace_payload["retrieval"] = state["documents"]
+                        if "answer" in state and state["answer"]:
+                            final_trace_payload["final_answer"] = state["answer"]
+                            if node == "reference_check":
+                                final_trace_payload["reference_annotated_answer"] = state["answer"]
+                        if "agent_events" in state and state["agent_events"]:
+                            final_trace_payload["agent_events"] = state["agent_events"]
                     logger.info(f"subgraph: {subgraph}")
                 elif mode == "messages":
                     message, meta = chunk
@@ -477,6 +539,9 @@ class RAGAgent:
                             yield {
                                 "response": last_assistant_message,
                             }
+            if not final_trace_payload.get("final_answer"):
+                final_trace_payload["final_answer"] = last_assistant_message if "last_assistant_message" in locals() else ""
+            yield {"trace_payload": final_trace_payload}
             yield { "run_id": config["run_id"] }
     
     def get_knowledgebase_item(self, user_id: int, knowledgebase_id: int) -> KnowledgeBaseItem:
