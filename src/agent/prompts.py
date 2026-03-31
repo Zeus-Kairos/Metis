@@ -123,22 +123,25 @@ def summarize_documents_prompt(query: str, documents: List[Document]) -> str:
     """
     Summarize the documents.
     """
-    doc_contents = format_documents(documents, with_index=False)  
+    doc_contents = format_documents(documents, with_index=True)  
     return f"""
     System Role: You are a knowledge synthesis engine.
 
-    Goal: Create a unified summary from the provided documents based on the user query.
+    Goal: Create per-document summaries from the provided documents based on the user query.
 
     Instructions:
-    - Extract: Pull out key facts, data points, or arguments relevant to the query.
-    - Consolidate: Merge overlapping info from different documents to avoid repetition.
+    - Extract: Pull out key facts, data points, or arguments relevant to the query for EACH document.
     - Filter: Discard any introductory text, legal disclaimers, or metadata that doesn't help answer the query.
-    - Output Format: Use bullet points for key findings followed by a brief 2-3 sentence concluding synthesis.
+    - Output Format: Return a JSON object (dictionary) ONLY.
+      - Keys: the document index exactly as shown in the provided Documents block (use the index as a JSON string key).
+      - Values: a concise summary of that document relevant to the user query.
+      - If a document is not relevant, OMIT it from the JSON output (do not include the key at all).
+    - Valid JSON only: No markdown, no trailing commas, no additional text before or after the JSON.
 
     User Query: {query}
     Documents: {doc_contents}
     
-    Summary:
+    JSON:
     """
 
 def format_answer_prompt(state: TypedDict) -> str:
@@ -344,7 +347,8 @@ def synthesize_answer_prompt(query: str, aspects: List[RAGResult]) -> str:
     """
     formatted_aspects = ""
     for aspect in aspects:
-        formatted_aspects += f"[Aspect {aspect.aspect}\nAnswer {aspect.answer}]\n"
+        formatted_answer = "\n\n".join(aspect.answer.values())
+        formatted_aspects += f"[Aspect {aspect.aspect}\nAnswer {formatted_answer}]\n"
         
     return f"""
     You are a Senior Research Analyst specializing in information synthesis and executive communication.

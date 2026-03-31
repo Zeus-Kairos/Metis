@@ -25,7 +25,7 @@ class ResearcherState(TypedDict):
     knowledge_base_item: KnowledgeBaseItem
     messages: Annotated[List[Dict[str, str]], add_messages]
     documents: list[Document] = []
-    answer: str = ""
+    summaries: Dict[str, str] = {}
     review: Dict[str, str] = {"status": "undone", "reason": "No review yet"}
     searched_path: Dict[str, set[str]] = {}
     retrieve_tries: int = 0

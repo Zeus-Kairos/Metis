@@ -291,7 +291,7 @@ class RAGAgent:
         result = RAGResult(
             aspect=aspect,
             documents=output["documents"] if "documents" in output else [],
-            answer=output["answer"] if "answer" in output else "",
+            answer=output["summaries"] if "summaries" in output else {},
             is_done=output["is_done"] if "is_done" in output else False,
         )
 

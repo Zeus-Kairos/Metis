@@ -220,6 +220,23 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                     "agent_events": agent_events,
                 }
             )
+
+        # new_summaries = summarize_documents(query, docs)
+        # if not new_summaries:
+        #     agent_events = _append_agent_event(runtime, {
+        #         **base_event,
+        #         "status": "summarized_empty",
+        #         "retrieved_count": len(docs),
+        #     })
+        #     return Command(
+        #         update={    
+        #             "searched_path": searched_path,
+        #             "messages": [ToolMessage(content=f"No relevant documents found for query: '{query}' on path: {display_folder}", tool_call_id=tool_call_id)],
+        #             "retrieve_tries": retrieve_tries + 1,
+        #             "agent_events": agent_events,
+        #         }
+        #     )
+
         filtered_docs = filter_documents(query, docs)
         if not filtered_docs:
             agent_events = _append_agent_event(runtime, {
@@ -232,7 +249,6 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                     "searched_path": searched_path,
                     "messages": [ToolMessage(content=f"No documents found for query: '{query}' on path: {display_folder}", tool_call_id=tool_call_id)],
                     "retrieve_tries": retrieve_tries + 1,
-                    "is_done": False,
                     "agent_events": agent_events,
                 }
             )
@@ -242,11 +258,10 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             documents = [doc for doc, _ in documents]
         merged_documents = merge_documents(documents + new_documents)
         
-        answer = runtime.state["answer"] if "answer" in runtime.state else ""
-        answer += "\n\n" + summarize_documents(query, new_documents)
+        summaries = runtime.state["summaries"] if "summaries" in runtime.state else {}
+        summaries.update(summarize_documents(query, new_documents))
 
-        review = review_answer(query, answer)       
-        is_done = review["status"] == "done"
+        review = review_answer(query, "\n\n".join(summaries.values()))       
 
         message = f"\n{len(new_documents)} documents found for query: '{query}' on path: {display_folder}\nAnswer Review: {review['status']} - {review['reason']}\n"
         agent_events = _append_agent_event(runtime, {
@@ -262,7 +277,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             update={
                 "searched_path": searched_path,
                 "documents": merged_documents,
-                "answer": answer,
+                "summaries": summaries,
                 "review": review,
                 "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
                 "retrieve_tries": retrieve_tries + 1,
@@ -287,13 +302,20 @@ def filter_documents(query: str, docs: List[Document]) -> Dict[str, List[Documen
             query: [],
         }
 
-def summarize_documents(query: str, docs: List[Document]) -> str:
+def summarize_documents(query: str, docs: List[Document]) -> Dict[str, str]:
     """
     Summarize the documents.
     """
     prompt = summarize_documents_prompt(query, docs)
     response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
-    return response.content.strip()
+    try:
+        summarized_documents = json.loads(response.content.strip())
+    except json.JSONDecodeError:
+        summarized_documents = {
+            "error": "Invalid JSON response",
+            "response": response.content.strip(),
+        }
+    return summarized_documents
 
 def review_answer(query: str, answer: str) -> Dict[str, str]:
     """

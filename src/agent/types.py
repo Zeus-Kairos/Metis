@@ -22,7 +22,7 @@ class RAGResult(BaseModel):
     """
     aspect: str
     documents: list[Document] = []
-    answer: str = ""
+    answer: Dict[str, str] = {}
     is_done: bool = False
 
 class AgentState(TypedDict):
@@ -34,7 +34,7 @@ class AgentState(TypedDict):
     intent: str = None
     refined_query: str = None   
     documents: list[Document] | List[Tuple[Document, float]] = []
-    answer: str = None
+    answer: Any = None
     error_context: str = None
     knowledge_base_item: KnowledgeBaseItem = None   
     display: str = None # Displayed intermediate messages to the user
