@@ -8,6 +8,7 @@ from langchain_core.messages import SystemMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.types import Send
 
 from src.agent.types import KnowledgeBaseItem
@@ -33,6 +34,10 @@ from src.agent.types import RAGResult, AgentState, DeepRAGState, DeepSearchState
 from src.utils.embeddings import get_embedding_runner
 
 logger = get_logger(__name__)
+
+_CHECKPOINT_SERDE = JsonPlusSerializer(
+    allowed_msgpack_modules=[("src.agent.types", "RAGResult")]
+)
 
 class RAGAgent:
     def __init__(self, thread_manager: ThreadManager = None, user_id: int = None, on_langgraph_server: bool = False):
@@ -63,6 +68,7 @@ class RAGAgent:
         if self.conn_str:
             with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
                 checkpointer.setup()
+                checkpointer.serde = _CHECKPOINT_SERDE
         self.builder = self._build_graph()
 
         self.update_dict = {
@@ -414,10 +420,11 @@ class RAGAgent:
         """
         if self.conn_str:
             with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
+                checkpointer.serde = _CHECKPOINT_SERDE
                 graph = self.builder.compile(checkpointer=checkpointer)
                 return self.thread_manager.get_conversation_history(user_id, thread_id, graph)
         else:      
-            graph = self.builder.compile(checkpointer=InMemorySaver())
+            graph = self.builder.compile(checkpointer=InMemorySaver(serde=_CHECKPOINT_SERDE))
             return self.thread_manager.get_conversation_history(user_id, thread_id, graph)
 
     def delete_thread(self, thread_id: str) -> None:
@@ -426,9 +433,10 @@ class RAGAgent:
         """
         if self.conn_str:
             with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
+                checkpointer.serde = _CHECKPOINT_SERDE
                 checkpointer.delete_thread(thread_id)
         else:      
-            checkpointer=InMemorySaver()
+            checkpointer=InMemorySaver(serde=_CHECKPOINT_SERDE)
             checkpointer.delete_thread(thread_id)
     
     def chat(self, query: str, user_id: int, knowledge_base_id: int, config: Dict[str, Any] = None) -> Generator[Dict[str, Any], None, None]:
@@ -462,6 +470,7 @@ class RAGAgent:
 
         if self.conn_str:
             with PostgresSaver.from_conn_string(self.conn_str) as checkpointer: 
+                checkpointer.serde = _CHECKPOINT_SERDE
                 graph = self.builder.compile(checkpointer=checkpointer)
                 # Streaming mode: yield chunks as they become available          
                 for subgraph, mode, chunk in graph.stream(initial_state, 
@@ -503,7 +512,7 @@ class RAGAgent:
                 yield {"trace_payload": final_trace_payload}
                 yield { "run_id": config["run_id"] }
         else:
-            graph = self.builder.compile(checkpointer=InMemorySaver())
+            graph = self.builder.compile(checkpointer=InMemorySaver(serde=_CHECKPOINT_SERDE))
             
             # Streaming mode: yield chunks as they become available                
             for subgraph, mode, chunk in graph.stream(initial_state, 

@@ -144,6 +144,33 @@ def summarize_documents_prompt(query: str, documents: List[Document]) -> str:
     JSON:
     """
 
+def summarize_single_document_prompt(document: Document, focus_query: str) -> str:
+    """
+    Summarize one document strictly in terms of focus_query. Plain summary text only (no JSON, no markdown fences),
+    or an empty string when nothing in the document substantively relates to the focus.
+    """
+    focus = focus_query.strip()
+    if not focus:
+        raise ValueError("focus_query must be non-empty")
+    return f"""
+    You are a helpful assistant. Read the document below.
+
+    Focus (this is mandatory—the summary must be only about how the document relates to this; ignore everything else):
+    {focus}
+
+    Task: Write a concise summary that answers or supports the Focus using only relevant material from the document.
+    Do not give a general overview of the document; omit sections, facts, and conclusions that do not bear on the Focus.
+    Avoid long verbatim copying.
+
+    If the entire document is irrelevant to the Focus (nothing in it substantively helps address or relate to it),
+    respond with exactly an empty string: no characters, no explanation, no placeholder, no whitespace-only reply.
+
+    Otherwise, only return the summary text, without preamble, headings, markdown code fences, or JSON.
+
+    Document:
+    {document.page_content}
+    """
+
 def format_answer_prompt(state: TypedDict) -> str:
     """
     Format the answer.

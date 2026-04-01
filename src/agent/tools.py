@@ -1,7 +1,9 @@
+import hashlib
 import json
 import logging
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Annotated, Dict, List, Tuple
 from langchain.tools import InjectedToolCallId, tool, ToolRuntime
@@ -9,7 +11,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import ToolMessage, SystemMessage
 from langgraph.types import Command
 
-from src.agent.prompts import filter_documents_prompt, review_answer_prompt, summarize_documents_prompt
+from src.agent.prompts import review_answer_prompt, summarize_single_document_prompt
 from src.agent.api_llm import get_active_llm_runner
 from src.memory.memory import MemoryManager
 from src.rag.rag_flow import RAGFlow
@@ -27,6 +29,58 @@ def _utc_now_iso() -> str:
 def _append_agent_event(runtime: ToolRuntime, event: Dict[str, object]) -> List[Dict[str, object]]:
     existing = runtime.state["agent_events"] if "agent_events" in runtime.state and runtime.state["agent_events"] else []
     return [*existing, event]
+
+
+def _doc_summary_state_key(doc: Document) -> str:
+    return doc.metadata.get("chunk_id", "")
+
+def _summarize_one_doc_for_query(doc: Document, query: str) -> Tuple[Document, str]:
+    prompt = summarize_single_document_prompt(doc, query)
+    response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
+    text = (response.content or "").strip()
+    return (doc, text)
+
+
+def summarize_documents(query: str, docs: List[Document]) -> Tuple[List[Document], Dict[str, str]]:
+    """
+    Summarize each document in order, one at a time (focus = query). Drop docs with empty summary.
+    Same return shape as summarize_documents_parallel_focus.
+    """
+    if not docs:
+        return [], {}
+    summaries: Dict[str, str] = {}
+    kept: List[Document] = []
+    for doc in docs:
+        d, text = _summarize_one_doc_for_query(doc, query)
+        if text:
+            summaries[_doc_summary_state_key(d)] = text
+            kept.append(d)
+    return kept, summaries
+
+
+def summarize_documents_parallel_focus(query: str, docs: List[Document]) -> Tuple[List[Document], Dict[str, str]]:
+    """
+    Summarize each document in parallel (focus = query). Drop docs with empty summary.
+    Returns (kept_documents, summaries_dict, formatted_message_body).
+    """
+    if not docs:
+        return [], {}, ""
+    max_workers = min(len(docs), 10)
+    pairs: List[Tuple[Document, str]] = []
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_doc = {executor.submit(_summarize_one_doc_for_query, d, query): d for d in docs}
+        for fut in as_completed(future_to_doc):
+            doc, text = fut.result()
+            if text:
+                pairs.append((doc, text))
+    summaries: Dict[str, str] = {}
+    kept: List[Document] = []
+    for doc, text in pairs:
+        key = _doc_summary_state_key(doc)
+        summaries[key] = text
+        kept.append(doc)
+    return kept, summaries
+
 
 @tool("retrieve", response_format="content_and_artifact")
 def retrieve_tool(query: str, search_path: str, k: int, runtime: ToolRuntime) -> Tuple[str, dict]:
@@ -221,49 +275,40 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 }
             )
 
-        # new_summaries = summarize_documents(query, docs)
-        # if not new_summaries:
-        #     agent_events = _append_agent_event(runtime, {
-        #         **base_event,
-        #         "status": "summarized_empty",
-        #         "retrieved_count": len(docs),
-        #     })
-        #     return Command(
-        #         update={    
-        #             "searched_path": searched_path,
-        #             "messages": [ToolMessage(content=f"No relevant documents found for query: '{query}' on path: {display_folder}", tool_call_id=tool_call_id)],
-        #             "retrieve_tries": retrieve_tries + 1,
-        #             "agent_events": agent_events,
-        #         }
-        #     )
-
-        filtered_docs = filter_documents(query, docs)
-        if not filtered_docs:
+        # new_documents, new_summaries = summarize_documents_parallel_focus(query, docs)
+        new_documents, new_summaries = summarize_documents(query, docs)
+        if not new_documents:
             agent_events = _append_agent_event(runtime, {
                 **base_event,
-                "status": "filtered_empty",
+                "status": "no_relevant_documents",
                 "retrieved_count": len(docs),
             })
             return Command(
                 update={
                     "searched_path": searched_path,
-                    "messages": [ToolMessage(content=f"No documents found for query: '{query}' on path: {display_folder}", tool_call_id=tool_call_id)],
+                    "messages": [ToolMessage(
+                        content=f"No relevant excerpts for query: '{query}' on path: {display_folder} (retrieved {len(docs)} chunks; all summaries empty or off-focus).",
+                        tool_call_id=tool_call_id,
+                    )],
                     "retrieve_tries": retrieve_tries + 1,
                     "agent_events": agent_events,
                 }
             )
+
         documents = runtime.state["documents"] if "documents" in runtime.state else []
-        new_documents = [doc for sublist in filtered_docs.values() for doc in sublist]
         if documents and isinstance(documents[0], tuple):
             documents = [doc for doc, _ in documents]
         merged_documents = merge_documents(documents + new_documents)
-        
+
         summaries = runtime.state["summaries"] if "summaries" in runtime.state else {}
-        summaries.update(summarize_documents(query, new_documents))
+        summaries.update(new_summaries)
 
-        review = review_answer(query, "\n\n".join(summaries.values()))       
+        review = review_answer(query, "\n\n".join(summaries.values()))
 
-        message = f"\n{len(new_documents)} documents found for query: '{query}' on path: {display_folder}\nAnswer Review: {review['status']} - {review['reason']}\n"
+        message = (
+            f"\n{len(new_documents)} relevant document(s) for query: '{query}' on path: {display_folder}\n"
+            f"Answer Review: {review['status']} - {review['reason']}\n"
+        )
         agent_events = _append_agent_event(runtime, {
             **base_event,
             "status": "ok",
@@ -272,7 +317,7 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
             "review_status": review["status"],
             "review_reason": review["reason"],
         })
-        
+
         return Command(
             update={
                 "searched_path": searched_path,
@@ -281,41 +326,10 @@ def rag_search_tool(query: str, search_path: str, k: int, runtime: ToolRuntime, 
                 "review": review,
                 "messages": [ToolMessage(content=message, tool_call_id=tool_call_id)],
                 "retrieve_tries": retrieve_tries + 1,
-                "display": f"Found {len(new_documents)} documents for query: '{query}' on path: {display_folder}:\n{"\n".join([doc.metadata["file_path"] for doc in new_documents])}",
+                "display": message,
                 "agent_events": agent_events,
             }
         )
-
-def filter_documents(query: str, docs: List[Document]) -> Dict[str, List[Document]]:
-    prompt = filter_documents_prompt(query, docs)
-    response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
-    try:
-        filtered_document_indices = list(map(int, response.content.strip().split(",")))
-    except ValueError:
-        filtered_document_indices = list(range(len(docs)))
-    if len(filtered_document_indices) > 0:
-        return {
-            query: [docs[i] for i in filtered_document_indices],
-        }
-    else:
-        return {
-            query: [],
-        }
-
-def summarize_documents(query: str, docs: List[Document]) -> Dict[str, str]:
-    """
-    Summarize the documents.
-    """
-    prompt = summarize_documents_prompt(query, docs)
-    response = get_active_llm_runner().invoke([SystemMessage(content=prompt)])
-    try:
-        summarized_documents = json.loads(response.content.strip())
-    except json.JSONDecodeError:
-        summarized_documents = {
-            "error": "Invalid JSON response",
-            "response": response.content.strip(),
-        }
-    return summarized_documents
 
 def review_answer(query: str, answer: str) -> Dict[str, str]:
     """
