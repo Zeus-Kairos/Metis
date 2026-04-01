@@ -432,6 +432,15 @@ const useChatStore = create((set, get) => {
       updateActiveThread({ messages: [...get().conversations[get().activeThreadId].messages, message] });
     },
 
+    // True when the active thread has no messages yet (avoid duplicate empty chats from UI "Add")
+    shouldSkipCreatingConversation: () => {
+      const { activeThreadId, conversations } = get();
+      if (!activeThreadId) return false;
+      const current = conversations[activeThreadId];
+      if (!current) return false;
+      return !current.messages || current.messages.length === 0;
+    },
+
     // Create a new conversation thread
     createConversation: async () => {
       try {
@@ -497,8 +506,37 @@ const useChatStore = create((set, get) => {
 
     // Switch between conversation threads
     switchConversation: async (threadId) => {
-      const { user_id } = get();
-      
+      const { user_id, activeThreadId, conversations } = get();
+
+      if (threadId !== activeThreadId && activeThreadId) {
+        const outgoing = conversations[activeThreadId];
+        const outgoingEmpty =
+          !outgoing || !Array.isArray(outgoing.messages) || outgoing.messages.length === 0;
+        if (outgoingEmpty) {
+          if (user_id) {
+            try {
+              const delResponse = await fetchWithAuth(
+                `/api/thread/${user_id}/${activeThreadId}`,
+                { method: 'DELETE' }
+              );
+              if (delResponse.ok) {
+                set((state) => {
+                  const { [activeThreadId]: _removed, ...rest } = state.conversations;
+                  return { conversations: rest };
+                });
+              }
+            } catch (error) {
+              console.error('Error deleting empty conversation when switching:', error);
+            }
+          } else {
+            set((state) => {
+              const { [activeThreadId]: _removed, ...rest } = state.conversations;
+              return { conversations: rest };
+            });
+          }
+        }
+      }
+
       // Only make API call if user_id exists
       if (user_id) {
         try {
@@ -511,11 +549,11 @@ const useChatStore = create((set, get) => {
           // Continue with local state update even if API call fails
         }
       }
-      
+
       set(() => ({
         activeThreadId: threadId
       }));
-      
+
       // Fetch thread history after switching
       await get().fetchThreadHistory(threadId);
     },

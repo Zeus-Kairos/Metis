@@ -17,7 +17,8 @@ const ChatContainer = () => {
     error, 
     user_id,
     initializeApp,
-    createConversation, 
+    createConversation,
+    shouldSkipCreatingConversation,
     conversations,
     activeThreadId,
     setError,
@@ -57,7 +58,11 @@ const ChatContainer = () => {
       setError('User not authenticated. Please refresh the page and try again.');
       return;
     }
-    
+
+    if (shouldSkipCreatingConversation()) {
+      return;
+    }
+
     await createConversation();
   };
 

@@ -75,7 +75,11 @@ const Sidebar = ({ isOpen, onToggle, onMenuItemClick }) => {
       setError('User not authenticated. Please refresh the page and try again.');
       return;
     }
-    
+
+    if (useChatStore.getState().shouldSkipCreatingConversation()) {
+      return;
+    }
+
     await createConversation();
   };
   
@@ -191,22 +195,25 @@ const Sidebar = ({ isOpen, onToggle, onMenuItemClick }) => {
 
       {/* Conversations List */}
       <div className="conversations-list">
-        {conversations && Object.values(conversations).length > 0 && Object.values(conversations).filter(c => c.threadId !== activeThreadId).length > 0 && (
+        {conversations && Object.values(conversations).length > 0 && (
           Object.values(conversations)
-            .filter(conversation => conversation.threadId !== activeThreadId) // Filter out active conversation
-            .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+            .sort((a, b) => {
+              const aActive = a.threadId === activeThreadId;
+              const bActive = b.threadId === activeThreadId;
+              if (aActive !== bActive) return aActive ? -1 : 1;
+              return new Date(b.updatedAt) - new Date(a.updatedAt);
+            })
             .map((conversation) => {
-              // No need for isActive check as we've filtered out active conversation
+              const isActive = conversation.threadId === activeThreadId;
               return (
                 <div
                   key={conversation.threadId}
                   onClick={() => {
-                    // 只有当不是编辑状态时才允许切换对话
-                    if (editingId !== conversation.threadId) {
+                    if (editingId !== conversation.threadId && !isActive) {
                       switchConversation(conversation.threadId);
                     }
                   }}
-                  className="conversation-item"
+                  className={`conversation-item${isActive ? ' active' : ''}`}
                 >
                   <div className="conversation-details">
                     <div className="conversation-header">
